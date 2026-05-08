@@ -1020,13 +1020,13 @@ def recovery_bulk_post():
         if not loan:
             continue
         paid_count = db.execute(
-            "SELECT COUNT(*) FROM recovery_postings WHERE disbursement_id=?", (did,)
+            "SELECT COUNT(*) FROM recovery_postings WHERE disbursement_id=? AND installment_no > 0", (did,)
         ).fetchone()[0]
         if paid_count >= loan['total_installments']:
             continue
         # Skip if already posted on this date
         already = db.execute(
-            "SELECT id FROM recovery_postings WHERE disbursement_id=? AND posting_date=?",
+            "SELECT id FROM recovery_postings WHERE disbursement_id=? AND posting_date=? AND installment_no > 0",
             (did, posting_date)
         ).fetchone()
         if already:
@@ -1205,13 +1205,13 @@ def _posting_loans(db, date_filter, center_filter):
         SELECT ld.*, la.application_no, la.center_id,
                m.full_name as member_name, m.member_code,
                c.center_name, c.center_code, c.meeting_week,
-               (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id) as paid_count
+               (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0) as paid_count
         FROM loan_disbursements ld
         LEFT JOIN loan_applications la ON ld.application_id=la.id
         LEFT JOIN members m ON la.member_id=m.id
         LEFT JOIN centers c ON la.center_id=c.id
         WHERE ld.status='Disbursed'
-        AND (SELECT COUNT(*) FROM recovery_postings rp2 WHERE rp2.disbursement_id=ld.id) > 0
+        AND (SELECT COUNT(*) FROM recovery_postings rp2 WHERE rp2.disbursement_id=ld.id AND rp2.installment_no > 0) > 0
         AND substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2)
             < substr(:date,7,4)||'-'||substr(:date,4,2)||'-'||substr(:date,1,2)
     """
@@ -1725,7 +1725,7 @@ def arrears_collect(aeid):
     principal_inst = round(amount / tenure, 2)
     interest_inst = round(total_interest / tenure, 2)
     inst_amount = principal_inst + interest_inst
-    paid_count = db.execute("SELECT COUNT(*) FROM recovery_postings WHERE disbursement_id=?", (ae['disbursement_id'],)).fetchone()[0]
+    paid_count = db.execute("SELECT COUNT(*) FROM recovery_postings WHERE disbursement_id=? AND installment_no > 0", (ae['disbursement_id'],)).fetchone()[0]
     db.execute("""
         INSERT INTO recovery_postings
         (disbursement_id,posting_date,installment_no,due_amount,paid_amount,
