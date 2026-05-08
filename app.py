@@ -1600,16 +1600,16 @@ def arrears_collection_list():
                m.full_name as member_name, m.member_code,
                c.center_name, c.center_code, c.meeting_week,
                lt.interest_rate, lt.interest_type,
-               (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id) as paid_count
+               (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0) as paid_count
         FROM loan_disbursements ld
         LEFT JOIN loan_applications la ON ld.application_id=la.id
         LEFT JOIN members m ON la.member_id=m.id
         LEFT JOIN centers c ON la.center_id=c.id
         LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
         WHERE ld.status='Disbursed'
-        AND (SELECT COUNT(*) FROM recovery_postings rp2 WHERE rp2.disbursement_id=ld.id) < ld.total_installments
+        AND (SELECT COUNT(*) FROM recovery_postings rp2 WHERE rp2.disbursement_id=ld.id AND rp2.installment_no > 0) < ld.total_installments
         AND substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2) < :date_iso
-        AND (SELECT COUNT(*) FROM recovery_postings rp3 WHERE rp3.disbursement_id=ld.id AND rp3.posting_date=:date) = 0
+        AND (SELECT COUNT(*) FROM recovery_postings rp3 WHERE rp3.disbursement_id=ld.id AND rp3.posting_date=:date AND rp3.installment_no > 0) = 0
         AND (SELECT COUNT(*) FROM arrear_entries ae WHERE ae.disbursement_id=ld.id AND ae.arrear_date=:date) = 0
     """
     if center_filter:
@@ -1629,7 +1629,7 @@ def arrears_collection_list():
                c.center_code, c.center_name, c.meeting_week,
                ld.disbursed_amount, ld.loan_id, ld.disbursement_no, ld.total_installments,
                lt.interest_rate, lt.interest_type,
-               (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ae.disbursement_id) as paid_count
+               (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ae.disbursement_id AND rp.installment_no > 0) as paid_count
         FROM arrear_entries ae
         LEFT JOIN loan_disbursements ld ON ae.disbursement_id=ld.id
         LEFT JOIN loan_applications la ON ld.application_id=la.id
@@ -1680,7 +1680,7 @@ def arrears_mark(did):
         flash('Loan not found.', 'danger')
         db.close()
         return redirect(url_for('arrears_collection_list', date=arrear_date))
-    paid_count = db.execute("SELECT COUNT(*) FROM recovery_postings WHERE disbursement_id=?", (did,)).fetchone()[0]
+    paid_count = db.execute("SELECT COUNT(*) FROM recovery_postings WHERE disbursement_id=? AND installment_no > 0", (did,)).fetchone()[0]
     amount = float(loan['disbursed_amount'])
     tenure = int(loan['total_installments'])
     rate = float(loan['interest_rate'] or 0)
@@ -2034,7 +2034,7 @@ def report_summary_sheet():
         LEFT JOIN loan_applications la ON ld.application_id=la.id
         LEFT JOIN members m ON la.member_id=m.id
         LEFT JOIN centers c ON la.center_id=c.id
-        WHERE rp.posting_date=?
+        WHERE rp.posting_date=? AND rp.installment_no > 0
     """ + (" AND la.center_id=?" if center_filter else ""),
     cond_params).fetchone()
 
@@ -2110,7 +2110,7 @@ def report_member_wise_summary():
         LEFT JOIN centers c ON m.center_id=c.id
         LEFT JOIN loan_applications la ON la.member_id=m.id
         LEFT JOIN loan_disbursements ld ON ld.application_id=la.id AND ld.status='Disbursed'
-        LEFT JOIN recovery_postings rp ON rp.disbursement_id=ld.id
+        LEFT JOIN recovery_postings rp ON rp.disbursement_id=ld.id AND rp.installment_no > 0
         WHERE m.status='ACTIVE'
         """ + (" AND m.center_id=?" if center_filter else "") + """
         GROUP BY m.id ORDER BY c.center_code, m.grp, m.member_code
@@ -2209,7 +2209,7 @@ def report_voucher_details():
         LEFT JOIN loan_applications la ON ld.application_id=la.id
         LEFT JOIN members m ON la.member_id=m.id
         LEFT JOIN centers c ON la.center_id=c.id
-        LEFT JOIN users u ON rp.posted_by=u.id WHERE 1=1
+        LEFT JOIN users u ON rp.posted_by=u.id WHERE rp.installment_no > 0
     """
     params = []
     if center_filter:
@@ -2325,7 +2325,7 @@ def report_outstanding():
         LEFT JOIN members m ON la.member_id=m.id
         LEFT JOIN centers c ON la.center_id=c.id
         LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
-        LEFT JOIN recovery_postings rp ON rp.disbursement_id=ld.id
+        LEFT JOIN recovery_postings rp ON rp.disbursement_id=ld.id AND rp.installment_no > 0
         WHERE ld.status='Disbursed'
         """ + (" AND la.center_id=?" if center_filter else "") + """
         GROUP BY ld.id ORDER BY c.center_code, m.grp, m.member_code
@@ -2474,7 +2474,7 @@ def report_voucher_credit():
     to_date = request.args.get('to_date', '')
 
     def _rp_sum(field):
-        q = f"SELECT COALESCE(SUM(rp.{field}),0) FROM recovery_postings rp LEFT JOIN loan_disbursements ld ON rp.disbursement_id=ld.id LEFT JOIN loan_applications la ON ld.application_id=la.id WHERE 1=1"
+        q = f"SELECT COALESCE(SUM(rp.{field}),0) FROM recovery_postings rp LEFT JOIN loan_disbursements ld ON rp.disbursement_id=ld.id LEFT JOIN loan_applications la ON ld.application_id=la.id WHERE rp.installment_no > 0"
         p = []
         if center_filter:
             q += " AND la.center_id=?"; p.append(center_filter)
@@ -2767,7 +2767,7 @@ def report_loan_ledger():
         LEFT JOIN members m ON la.member_id=m.id
         LEFT JOIN centers c ON la.center_id=c.id
         LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
-        LEFT JOIN recovery_postings rp ON rp.disbursement_id=ld.id
+        LEFT JOIN recovery_postings rp ON rp.disbursement_id=ld.id AND rp.installment_no > 0
         WHERE 1=1
     """
     params = []
