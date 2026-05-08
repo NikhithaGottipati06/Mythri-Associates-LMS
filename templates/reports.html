@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-bar-chart-line" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Reports</h5>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-4">
+    <div class="form-card h-100">
+      <div class="section-title"><i class="bi bi-person-lines-fill me-1"></i>Masters</div>
+      <div class="list-group list-group-flush">
+        <a href="{{ url_for('report_masters_centers') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-building me-2 text-primary"></i>Centers Report
+        </a>
+        <a href="{{ url_for('report_masters_members') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-people me-2 text-primary"></i>Members Report
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="form-card h-100">
+      <div class="section-title"><i class="bi bi-person-badge me-1"></i>Member Reports</div>
+      <div class="list-group list-group-flush">
+        <a href="{{ url_for('report_member_joining') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-person-plus me-2 text-success"></i>Member Joining Report
+        </a>
+        <a href="{{ url_for('report_member_withdraw') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-person-dash me-2 text-danger"></i>Member Withdraw Report
+        </a>
+        <a href="{{ url_for('report_member_wise_summary') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-person-check me-2 text-info"></i>Member Wise Summary Sheet
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="form-card h-100">
+      <div class="section-title"><i class="bi bi-cash-stack me-1"></i>Collection Reports</div>
+      <div class="list-group list-group-flush">
+        <a href="{{ url_for('report_collection_sheet') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-collection me-2 text-primary"></i>Collection Sheet
+        </a>
+        <a href="{{ url_for('report_summary_sheet') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-table me-2 text-primary"></i>Summary Sheet
+        </a>
+        <a href="{{ url_for('report_voucher_details') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-receipt me-2 text-secondary"></i>Voucher Details
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="form-card h-100">
+      <div class="section-title"><i class="bi bi-bank me-1"></i>Loan Reports</div>
+      <div class="list-group list-group-flush">
+        <a href="{{ url_for('report_disbursement') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-cash-coin me-2 text-success"></i>Disbursement Report
+        </a>
+        <a href="{{ url_for('report_outstanding') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-hourglass-split me-2 text-warning"></i>Outstanding Report
+        </a>
+        <a href="{{ url_for('report_prepaid') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-arrow-left-right me-2 text-info"></i>Prepaid Report
+        </a>
+        <a href="{{ url_for('report_loan_ledger') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-journal-text me-2 text-primary"></i>Loan Ledger Report
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="form-card h-100">
+      <div class="section-title"><i class="bi bi-arrow-up-circle me-1"></i>Advance Reports</div>
+      <div class="list-group list-group-flush">
+        <a href="{{ url_for('report_advance_collected') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-check-circle me-2 text-success"></i>Advance Collected Report
+        </a>
+        <a href="{{ url_for('report_advance_withdraw') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-dash-circle me-2 text-warning"></i>Advance Withdraw Report
+        </a>
+        <a href="{{ url_for('report_advance_consolidated') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-layers me-2 text-info"></i>Advance Consolidated Report
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="form-card h-100">
+      <div class="section-title"><i class="bi bi-exclamation-circle me-1"></i>Arrear Reports</div>
+      <div class="list-group list-group-flush">
+        <a href="{{ url_for('report_arrears_member_wise') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-person-exclamation me-2 text-danger"></i>Member Wise Arrears Details
+        </a>
+        <a href="{{ url_for('report_arrears_new') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-bell me-2 text-danger"></i>New Arrears Report
+        </a>
+        <a href="{{ url_for('report_arrears_collected') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-check2-all me-2 text-success"></i>Arrears Collected Report
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="form-card h-100">
+      <div class="section-title"><i class="bi bi-piggy-bank me-1"></i>Savings Reports</div>
+      <div class="list-group list-group-flush">
+        <a href="{{ url_for('savings_list') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-piggy-bank me-2 text-purple"></i>Savings Report
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="form-card h-100">
+      <div class="section-title"><i class="bi bi-file-earmark-text me-1"></i>Other Reports</div>
+      <div class="list-group list-group-flush">
+        <a href="{{ url_for('report_glance') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-eye me-2 text-primary"></i>Glance Report
+        </a>
+        <a href="{{ url_for('report_passbook') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-book me-2 text-info"></i>Passbook Report
+        </a>
+        <a href="{{ url_for('report_insurance') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-shield-check me-2 text-success"></i>Insurance Particulars
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Edit' if lt else 'New' }} Loan Type{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-tags" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>{{ 'Edit Loan Type' if lt else 'Add New Loan Type' }}</h5>
+</div>
+<div class="action-bar">
+  <a href="{{ url_for('loan_types_list') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Close</a>
+</div>
+<form method="POST">
+  <div class="form-card">
+    <div class="row g-3 align-items-center mb-2">
+      <div class="col-md-6">
+        <label class="form-label required">Name</label>
+        <input type="text" name="loan_type_name" class="form-control field-required"
+               value="{{ lt.loan_type_name if lt else '' }}" required>
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="active" id="active"
+                 {% if not lt or lt.active %}checked{% endif %}>
+          <label class="form-check-label fw-semibold" for="active">Active</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title mt-2">Method Type</div>
+    <div class="mb-3">
+      {% for method in ['FLAT','IRR','InterestOnBalanceOS'] %}
+      <div class="form-check form-check-inline">
+        <input class="form-check-input" type="radio" name="interest_method" id="m_{{ method }}"
+               value="{{ method }}"
+               {% if (lt and lt.interest_method == method) or (not lt and method == 'FLAT') %}checked{% endif %}>
+        <label class="form-check-label" for="m_{{ method }}">{{ method }}</label>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="section-title">Interest Type</div>
+    <div class="row g-3 mb-2">
+      <div class="col-md-4">
+        <div class="mb-2">
+          {% for itype in ['Percent','Fixed'] %}
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="interest_type" id="it_{{ itype }}"
+                   value="{{ itype }}"
+                   {% if (lt and lt.interest_type == itype) or (not lt and itype == 'Percent') %}checked{% endif %}>
+            <label class="form-check-label" for="it_{{ itype }}">{{ itype }}</label>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Interest %</label>
+        <input type="number" name="interest_rate" class="form-control" step="0.01"
+               value="{{ lt.interest_rate if lt else 0 }}">
+      </div>
+    </div>
+
+    <div class="section-title">Payment Type</div>
+    <div class="mb-3">
+      {% for freq in ['Weekly','Fortnightly','Monthly'] %}
+      <div class="form-check form-check-inline">
+        <input class="form-check-input" type="radio" name="repayment_frequency" id="f_{{ freq }}"
+               value="{{ freq }}"
+               {% if (lt and lt.repayment_frequency == freq) or (not lt and freq == 'Weekly') %}checked{% endif %}>
+        <label class="form-check-label" for="f_{{ freq }}">{{ freq }}</label>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="row g-3">
+      <div class="col-md-2">
+        <label class="form-label">Tenure (Weeks)</label>
+        <input type="number" name="tenure_weeks" class="form-control"
+               value="{{ lt.tenure_weeks if lt else 50 }}">
+      </div>
+      <div class="col-md-2 d-flex align-items-end pb-1">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="fixed_tenure" id="fixed_tenure"
+                 {% if not lt or lt.fixed_tenure %}checked{% endif %}>
+          <label class="form-check-label" for="fixed_tenure">Fixed Tenure</label>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Min Amount (₹)</label>
+        <input type="number" name="min_amount" class="form-control" step="0.01"
+               value="{{ lt.min_amount if lt else 0 }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Max Amount (₹)</label>
+        <input type="number" name="max_amount" class="form-control" step="0.01"
+               value="{{ lt.max_amount if lt else 0 }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Processing Fee (₹)</label>
+        <input type="number" name="processing_fee" class="form-control" step="0.01"
+               value="{{ lt.processing_fee if lt else 0 }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Insurance Fee (₹)</label>
+        <input type="number" name="insurance_fee" class="form-control" step="0.01"
+               value="{{ lt.insurance_fee if lt else 0 }}">
+      </div>
+      <div class="col-12">
+        <label class="form-label">Notes</label>
+        <textarea name="notes" class="form-control" rows="2">{{ lt.notes if lt else '' }}</textarea>
+      </div>
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary"><i class="bi bi-check2 me-1"></i>{{ 'Update' if lt else 'Save' }}</button>
+    <a href="{{ url_for('loan_types_list') }}" class="btn btn-secondary">Cancel</a>
+  </div>
+</form>
+{% endblock %}

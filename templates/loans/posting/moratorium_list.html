@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}Apply Moratorium{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-pause-circle" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Apply Moratorium</h5>
+</div>
+<div class="lms-table">
+  <table class="table table-hover mb-0">
+    <thead><tr><th>Disburse No</th><th>App No</th><th>Member</th><th>Disbursed Amt</th><th>Actions</th></tr></thead>
+    <tbody>
+    {% for l in loans %}
+      <tr>
+        <td class="fw-semibold text-primary">{{ l.disbursement_no }}</td>
+        <td>{{ l.application_no }}</td>
+        <td>{{ l.member_code }} – {{ l.member_name }}</td>
+        <td>₹{{ '{:,.0f}'.format(l.disbursed_amount) }}</td>
+        <td>
+          {% if session.role == 'Admin' %}
+          <a href="{{ url_for('moratorium_post', did=l.id) }}" class="btn btn-secondary btn-sm"><i class="bi bi-pause-circle me-1"></i>Apply Moratorium</a>
+          {% else %}<span class="text-muted">Admin only</span>{% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="text-center text-muted py-4">No active disbursements.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

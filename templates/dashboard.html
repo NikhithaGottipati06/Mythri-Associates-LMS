@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-speedometer2" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Dashboard</h5>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3 col-sm-6">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#e8f0fb;color:#1a3c6e;"><i class="bi bi-building"></i></div>
+      <div>
+        <div class="stat-num">{{ stats.centers }}</div>
+        <div class="stat-label">Active Centers</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3 col-sm-6">
+    <div class="stat-card" style="border-color:#28a745;">
+      <div class="stat-icon" style="background:#d4edda;color:#28a745;"><i class="bi bi-person-badge"></i></div>
+      <div>
+        <div class="stat-num" style="color:#28a745;">{{ stats.members }}</div>
+        <div class="stat-label">Active Members</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3 col-sm-6">
+    <div class="stat-card" style="border-color:#ffc107;">
+      <div class="stat-icon" style="background:#fff3cd;color:#856404;"><i class="bi bi-file-earmark-text"></i></div>
+      <div>
+        <div class="stat-num" style="color:#856404;">{{ stats.applications }}</div>
+        <div class="stat-label">Loan Applications</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3 col-sm-6">
+    <div class="stat-card" style="border-color:#17a2b8;">
+      <div class="stat-icon" style="background:#d1ecf1;color:#0c5460;"><i class="bi bi-cash-coin"></i></div>
+      <div>
+        <div class="stat-num" style="color:#0c5460;">{{ stats.disbursements }}</div>
+        <div class="stat-label">Disbursements</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3 col-sm-6">
+    <div class="stat-card" style="border-color:#6f42c1;">
+      <div class="stat-icon" style="background:#e8dff5;color:#6f42c1;"><i class="bi bi-piggy-bank"></i></div>
+      <div>
+        <div class="stat-num" style="color:#6f42c1;">₹{{ '{:,.0f}'.format(stats.savings_outstanding) }}</div>
+        <div class="stat-label">Savings Outstanding</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-md-6">
+    <div class="form-card">
+      <div class="section-title"><i class="bi bi-lightning me-1"></i>Quick Actions</div>
+      <div class="d-flex flex-wrap gap-2">
+        <a href="{{ url_for('centers_new') }}" class="btn btn-outline-primary btn-sm">
+          <i class="bi bi-plus-circle me-1"></i>Add Center
+        </a>
+        <a href="{{ url_for('members_new') }}" class="btn btn-outline-success btn-sm">
+          <i class="bi bi-person-plus me-1"></i>Add Member
+        </a>
+        <a href="{{ url_for('loan_applications_new') }}" class="btn btn-outline-warning btn-sm">
+          <i class="bi bi-file-earmark-plus me-1"></i>New Application
+        </a>
+        <a href="{{ url_for('loan_approvals_list') }}" class="btn btn-outline-info btn-sm">
+          <i class="bi bi-check2-all me-1"></i>Approvals
+        </a>
+        <a href="{{ url_for('recovery_posting_list') }}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-arrow-repeat me-1"></i>Recovery
+        </a>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="form-card">
+      <div class="section-title"><i class="bi bi-info-circle me-1"></i>System Info</div>
+      <table class="table table-sm mb-0" style="font-size:13px;">
+        <tr><td class="fw-semibold" style="width:140px;">Logged In As</td>
+            <td>{{ session.full_name }} <span class="badge bg-primary" style="font-size:10px;">{{ session.role }}</span></td></tr>
+        <tr><td class="fw-semibold">Software</td><td>MYTHRI LMS v1.0</td></tr>
+        <tr><td class="fw-semibold">Organisation</td><td>Mythri Associates – Vijayawada</td></tr>
+        <tr><td class="fw-semibold">Date</td><td>{{ now }}</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

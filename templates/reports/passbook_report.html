@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+{% block title %}Passbook Report{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-book" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Passbook Report</h5>
+</div>
+<div class="action-bar">
+  <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+  {% if loan %}<button onclick="window.print()" class="btn btn-outline-primary btn-sm ms-2"><i class="bi bi-printer me-1"></i>Print</button>{% endif %}
+</div>
+<form method="GET" class="form-card mb-3">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-4">
+      <label class="form-label">Select Loan ID</label>
+      <select name="loan_id" class="form-select form-select-sm">
+        <option value="">— Select Loan —</option>
+        {% for l in loans %}
+        <option value="{{ l.loan_id }}" {% if loan_filter == l.loan_id %}selected{% endif %}>
+          {{ l.loan_id }} – {{ l.member_code }} {{ l.full_name }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">View Passbook</button></div>
+  </div>
+</form>
+
+{% if loan %}
+<div class="form-card mb-3" id="passbook-print">
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <table class="table table-sm table-borderless mb-0" style="font-size:13px;">
+        <tr><th style="width:140px;">Loan ID</th><td class="fw-semibold text-primary">{{ loan.loan_id }}</td></tr>
+        <tr><th>Member</th><td>{{ loan.member_code }} – {{ loan.member_name }}</td></tr>
+        <tr><th>Center</th><td>{{ loan.center_name }}</td></tr>
+        <tr><th>Loan Type</th><td>{{ loan.loan_type_name }}</td></tr>
+        <tr><th>Purpose</th><td>{{ loan.purpose or '—' }}</td></tr>
+      </table>
+    </div>
+    <div class="col-md-6">
+      <table class="table table-sm table-borderless mb-0" style="font-size:13px;">
+        <tr><th style="width:160px;">Loan Amount</th><td class="fw-semibold">₹{{ '{:,.2f}'.format(loan.disbursed_amount) }}</td></tr>
+        <tr><th>Disbursement Date</th><td>{{ loan.disbursement_date }}</td></tr>
+        <tr><th>Total Installments</th><td>{{ loan.total_installments }}</td></tr>
+        <tr><th>Installment Amount</th><td>₹{{ '{:,.2f}'.format(loan.installment_amount or 0) }}</td></tr>
+        <tr><th>Interest Rate</th><td>{{ loan.interest_rate }}%</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="row mb-2" style="font-size:12px;">
+    <div class="col-md-3"><b>Processing Fee:</b> ₹{{ '{:,.2f}'.format(loan.processing_fee or 0) }}</div>
+    <div class="col-md-3"><b>Insurance Fee:</b> ₹{{ '{:,.2f}'.format(loan.insurance_fee or 0) }}</div>
+    <div class="col-md-3"><b>Nominee Ins. Fee:</b> ₹{{ '{:,.2f}'.format(loan.nominee_insurance_fee or 0) }}</div>
+    <div class="col-md-3"><b>Other Charges:</b> ₹{{ '{:,.2f}'.format(loan.other_charges or 0) }}</div>
+  </div>
+  <div class="lms-table" style="margin:0;">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr><th>Inst#</th><th>Date</th><th>Due Amt</th><th>Paid Amt</th><th>Principal</th><th>Interest</th><th>Penalty</th><th>Mode</th><th>Balance</th></tr>
+      </thead>
+      <tbody>
+      {% set running_bal = namespace(v=loan.disbursed_amount) %}
+      {% set total_paid = namespace(v=0) %}
+      {% for p in postings %}
+        {% set running_bal.v = running_bal.v - (p.principal or 0) %}
+        {% set total_paid.v = total_paid.v + (p.paid_amount or 0) %}
+        <tr>
+          <td>{{ p.installment_no }}</td>
+          <td>{{ p.posting_date }}</td>
+          <td>₹{{ '{:,.2f}'.format(p.due_amount or 0) }}</td>
+          <td class="fw-semibold text-success">₹{{ '{:,.2f}'.format(p.paid_amount or 0) }}</td>
+          <td>₹{{ '{:,.2f}'.format(p.principal or 0) }}</td>
+          <td>₹{{ '{:,.2f}'.format(p.interest or 0) }}</td>
+          <td>₹{{ '{:,.2f}'.format(p.penalty or 0) }}</td>
+          <td>{{ p.mode }}</td>
+          <td class="fw-semibold">₹{{ '{:,.2f}'.format(running_bal.v) }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="9" class="text-center text-muted py-3">No installments posted.</td></tr>
+      {% endfor %}
+      </tbody>
+      <tfoot class="table-light fw-semibold">
+        <tr>
+          <td colspan="3" class="text-end">Total Paid:</td>
+          <td class="text-success">₹{{ '{:,.2f}'.format(total_paid.v) }}</td>
+          <td colspan="4"></td>
+          <td>₹{{ '{:,.2f}'.format(loan.disbursed_amount - total_paid.v) }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,158 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Edit' if center else 'New' }} Center{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-building" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>{{ 'Edit Center – ' + center.center_code if center else 'Add New Center' }}</h5>
+</div>
+
+<div class="action-bar">
+  <a href="{{ url_for('centers_list') }}" class="btn btn-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Close
+  </a>
+  {% if center %}
+  <span class="ms-2 fw-semibold" style="font-size:13px;">Center Code: <span class="text-primary">{{ center.center_code }}</span></span>
+  {% else %}
+  <span class="ms-2 fw-semibold text-muted" style="font-size:13px;">Center Code: <em>*NEW</em></span>
+  {% endif %}
+</div>
+
+<form method="POST">
+  <div class="row g-3">
+    <!-- Left column -->
+    <div class="col-md-7">
+      <div class="form-card">
+        <div class="section-title">Center Information</div>
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label required">Center Name</label>
+            <div class="d-flex gap-2 align-items-center">
+              <input type="text" name="center_name" class="form-control field-required"
+                     value="{{ center.center_name if center else '' }}" required>
+              <div class="form-check ms-2 mb-0" style="white-space:nowrap;">
+                <input class="form-check-input" type="checkbox" name="active" id="active"
+                       {% if not center or center.active %}checked{% endif %}>
+                <label class="form-check-label fw-semibold" for="active">Active</label>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label required">Address 1</label>
+            <input type="text" name="address1" class="form-control field-required"
+                   value="{{ center.address1 if center else '' }}" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Address 2</label>
+            <input type="text" name="address2" class="form-control"
+                   value="{{ center.address2 if center else '' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">City</label>
+            <input type="text" name="city" class="form-control"
+                   value="{{ center.city if center else '' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Mandal</label>
+            <input type="text" name="mandal" class="form-control"
+                   value="{{ center.mandal if center else '' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Pin Code</label>
+            <input type="text" name="pin_code" class="form-control"
+                   value="{{ center.pin_code if center else '' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">District</label>
+            <input type="text" name="district" class="form-control"
+                   value="{{ center.district if center else '' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">State</label>
+            <input type="text" name="state" class="form-control"
+                   value="{{ center.state if center else 'ANDHRA PRADESH' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Landmark</label>
+            <input type="text" name="landmark" class="form-control"
+                   value="{{ center.landmark if center else '' }}">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Notes</label>
+            <textarea name="notes" class="form-control" rows="3">{{ center.notes if center else '' }}</textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right column -->
+    <div class="col-md-5">
+      <div class="form-card">
+        <div class="section-title">Staff & Capacity</div>
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label required">Staff</label>
+            <select name="staff_id" class="form-select field-required" required>
+              <option value="">— Select Staff —</option>
+              {% for s in staff %}
+              <option value="{{ s.id }}" {% if center and center.staff_id == s.id %}selected{% endif %}>
+                {{ s.full_name }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label required">Max Members</label>
+            <input type="number" name="max_members" class="form-control field-required"
+                   value="{{ center.max_members if center else 30 }}" required min="1">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-card mt-3">
+        <div class="section-title">Meeting Details</div>
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label required">Meeting Place</label>
+            <input type="text" name="meeting_place" class="form-control field-required"
+                   value="{{ center.meeting_place if center else '' }}" required>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Meeting Type</label>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="meeting_type" value="Weekly" id="weekly"
+                     {% if not center or center.meeting_type == 'Weekly' %}checked{% endif %}>
+              <label class="form-check-label" for="weekly">Weekly</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="meeting_type" value="Monthly" id="monthly"
+                     {% if center and center.meeting_type == 'Monthly' %}checked{% endif %}>
+              <label class="form-check-label" for="monthly">Monthly</label>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label required">Meeting Week/Day</label>
+            <select name="meeting_week" class="form-select field-required" required>
+              <option value="">— Day —</option>
+              {% for day in ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'] %}
+              <option value="{{ day }}" {% if center and center.meeting_week == day %}selected{% endif %}>{{ day }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label required">Meeting Time</label>
+            <input type="time" name="meeting_time" class="form-control field-required"
+                   value="{{ center.meeting_time if center else '' }}" required>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 mt-2">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check2 me-1"></i>{{ 'Update' if center else 'Save' }}
+    </button>
+    <a href="{{ url_for('centers_list') }}" class="btn btn-secondary">Cancel</a>
+  </div>
+</form>
+{% endblock %}

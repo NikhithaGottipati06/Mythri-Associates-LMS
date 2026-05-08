@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+{% block title %}Loan Disbursement{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-cash-coin" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Loan Disbursement</h5>
+</div>
+<div class="action-bar">
+  <a href="{{ url_for('loan_disburse_new') }}" class="btn btn-success btn-sm">
+    <i class="bi bi-plus-circle me-1"></i>Add New Loan
+  </a>
+  <span class="ms-auto total-bar">Total Records: {{ disbursed|length }}</span>
+</div>
+
+{% if approved %}
+<div class="form-card mb-3">
+  <div class="section-title"><i class="bi bi-hourglass-split me-1"></i>Approved – Awaiting Disbursement ({{ approved|length }})</div>
+  <div class="lms-table" style="margin:0;">
+    <table class="table table-hover mb-0">
+      <thead><tr><th>App No</th><th>Member</th><th>Loan Type</th><th>Approved Amt</th><th>Actions</th></tr></thead>
+      <tbody>
+      {% for a in approved %}
+        <tr>
+          <td class="fw-semibold text-primary">{{ a.application_no }}</td>
+          <td>{{ a.member_code }} – {{ a.member_name }}</td>
+          <td>{{ a.loan_type_name or '—' }}</td>
+          <td>₹{{ '{:,.0f}'.format(a.approved_amount or a.applied_amount) }}</td>
+          <td>
+            {% if session.role == 'Admin' %}
+            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#disburseModal{{ a.id }}">
+              <i class="bi bi-cash me-1"></i>Disburse
+            </button>
+            {% else %}<span class="text-muted">Admin only</span>{% endif %}
+          </td>
+        </tr>
+        <div class="modal fade" id="disburseModal{{ a.id }}" tabindex="-1">
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <form method="POST" action="{{ url_for('loan_disburse', aid=a.id) }}">
+              <div class="modal-header"><h5 class="modal-title">Disburse – {{ a.application_no }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+              <div class="modal-body">
+                <div class="row g-3">
+                  <div class="col-12">
+                    <label class="form-label fw-semibold">Disbursed Amount (₹)</label>
+                    <input type="number" name="disbursed_amount" class="form-control" step="0.01"
+                           value="{{ a.approved_amount or a.applied_amount }}" required>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label fw-semibold">Disbursement Date</label>
+                    <input type="text" name="disbursement_date" class="form-control" placeholder="DD/MM/YYYY" required>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label fw-semibold">Total Installments</label>
+                    <input type="number" name="total_installments" class="form-control" value="50" required>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label fw-semibold">Mode</label>
+                    <select name="mode" class="form-select">
+                      <option>Cash</option><option>Bank Transfer</option><option>Cheque</option>
+                    </select>
+                  </div>
+                  <div class="col-6">
+                    <label class="form-label fw-semibold">Account No</label>
+                    <input type="text" name="account_no" class="form-control">
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label fw-semibold">Remarks</label>
+                    <input type="text" name="remarks" class="form-control">
+                  </div>
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button type="submit" class="btn btn-primary">Confirm Disbursement</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+              </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="form-card">
+  <div class="section-title"><i class="bi bi-clock-history me-1"></i>Disbursement History ({{ disbursed|length }})</div>
+  <div class="lms-table" style="margin:0;overflow-x:auto;">
+    <table class="table table-hover mb-0" style="min-width:1000px;">
+      <thead>
+        <tr>
+          <th>Loan ID</th><th>App No</th><th>Member</th><th>Loan Type</th><th>Cycle#</th>
+          <th>Amount</th><th>Date</th><th>Mode</th><th>Installments</th><th>Inst. Amt</th><th>By</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for d in disbursed %}
+        <tr>
+          <td class="fw-semibold text-primary">{{ d.loan_id or d.disbursement_no }}</td>
+          <td>{{ d.application_no }}</td>
+          <td>{{ d.member_code }} – {{ d.member_name }}</td>
+          <td>{{ d.loan_type_name or '—' }}</td>
+          <td>{{ d.loan_cycle or 1 }}</td>
+          <td>₹{{ '{:,.0f}'.format(d.disbursed_amount) }}</td>
+          <td>{{ d.disbursement_date }}</td>
+          <td>{{ d.mode }}</td>
+          <td>{{ d.total_installments }}</td>
+          <td>₹{{ '{:,.2f}'.format(d.installment_amount or 0) }}</td>
+          <td>{{ d.disbursed_by_name }}</td>
+          <td>
+            {% if session.role == 'Admin' %}
+            <form method="POST" action="{{ url_for('loan_disbursement_delete', did=d.id) }}" style="display:inline;"
+                  onsubmit="return confirm('Delete disbursement {{ d.loan_id or d.disbursement_no }}? This will revert the application to Approved and delete related recovery postings and savings transactions.')">
+              <button class="btn btn-outline-danger btn-icon" title="Delete"><i class="bi bi-trash"></i></button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="12" class="text-center text-muted py-3">No disbursements yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

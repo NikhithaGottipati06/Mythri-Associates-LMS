@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block title %}Users{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-people" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Users</h5>
+</div>
+
+<div class="action-bar">
+  <a href="{{ url_for('users_new') }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-circle me-1"></i>Add New
+  </a>
+  <span class="ms-auto total-bar">Total Records: {{ users|length }}</span>
+</div>
+
+<div class="lms-table">
+  <table class="table table-hover mb-0">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Full Name</th>
+        <th>Active</th>
+        <th>Role</th>
+        <th>Login Name</th>
+        <th>Email</th>
+        <th>Joining Date</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for u in users %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td class="fw-semibold">{{ u.full_name }}</td>
+        <td>
+          {% if u.active %}
+            <span class="badge-active">Active</span>
+          {% else %}
+            <span class="badge-inactive">Inactive</span>
+          {% endif %}
+        </td>
+        <td><span class="badge {% if u.role=='Admin' %}bg-primary{% else %}bg-secondary{% endif %}">{{ u.role }}</span></td>
+        <td>{{ u.login_name }}</td>
+        <td>{{ u.email or '—' }}</td>
+        <td>{{ u.joining_date or '—' }}</td>
+        <td>
+          <a href="{{ url_for('users_edit', uid=u.id) }}" class="btn btn-outline-primary btn-icon" title="Edit">
+            <i class="bi bi-pencil"></i>
+          </a>
+          {% if u.id != session.user_id %}
+          <form method="POST" action="{{ url_for('users_delete', uid=u.id) }}" style="display:inline;"
+                onsubmit="return confirm('Delete user {{ u.full_name }}?')">
+            <button class="btn btn-outline-danger btn-icon" title="Delete"><i class="bi bi-trash"></i></button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="8" class="text-center text-muted py-4">No users found.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

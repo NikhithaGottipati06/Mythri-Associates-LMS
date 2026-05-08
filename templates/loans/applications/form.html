@@ -1,0 +1,182 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Edit' if app else 'New' }} Loan Application{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-file-earmark-plus" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>{{ 'Edit Loan Application' if app else 'New Loan Application' }}</h5>
+</div>
+<div class="action-bar">
+  <a href="{{ url_for('loan_applications_list') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Close</a>
+</div>
+<form method="POST">
+  <div class="form-card">
+    <div class="section-title">Member & Loan Details</div>
+    <div class="row g-3">
+      <div class="col-md-5">
+        <label class="form-label required">Member</label>
+        <select name="member_id" class="form-select field-required" id="member_id" required onchange="fillMember(this.value)">
+          <option value="">— Select Member —</option>
+          {% for m in members %}
+          <option value="{{ m.id }}" {% if app and app.member_id == m.id %}selected{% endif %}>
+            {{ m.member_code }} – {{ m.full_name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Nominee</label>
+        <input type="text" name="nominee_name" class="form-control"
+               value="{{ app.nominee_name if app else '' }}" placeholder="Nominee name">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Monthly Net Income (₹)</label>
+        <input type="number" name="monthly_net_income" id="monthly_net_income" class="form-control" step="0.01"
+               value="{{ app.monthly_net_income if app else 0 }}">
+      </div>
+      <div class="col-md-5">
+        <label class="form-label required">Loan Type</label>
+        <select name="loan_type_id" class="form-select field-required" id="loan_type_id" required onchange="fillLoanType(this.value)">
+          <option value="">— Select Loan Type —</option>
+          {% for lt in loan_types %}
+          <option value="{{ lt.id }}" {% if app and app.loan_type_id == lt.id %}selected{% endif %}>
+            {{ lt.loan_type_name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Tenure (Weeks)</label>
+        <input type="number" name="tenure_weeks" id="tenure_weeks" class="form-control" readonly
+               value="{{ app.tenure_weeks if app else '' }}" placeholder="Auto">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Loan Cycle #</label>
+        <input type="number" name="loan_cycle" class="form-control" min="1"
+               value="{{ app.loan_cycle if app else 1 }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label required">Amount Requested (₹)</label>
+        <input type="number" name="applied_amount" class="form-control field-required" step="0.01"
+               value="{{ app.applied_amount if app else '' }}" required>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label required">Loan Purpose</label>
+        <select name="purpose" class="form-select field-required" required>
+          <option value="">— Select Purpose —</option>
+          {% for p in loan_purposes %}
+          <option value="{{ p }}" {% if app and app.purpose == p %}selected{% endif %}>{{ p }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label required">Application Date</label>
+        <input type="text" name="applied_date" class="form-control field-required"
+               placeholder="DD/MM/YYYY" value="{{ app.applied_date if app else '' }}" required>
+      </div>
+      <div class="col-md-4" style="display:none;">
+        <label class="form-label">Center</label>
+        <select name="center_id" class="form-select" id="center_id">
+          <option value="">— Auto from Member —</option>
+          {% for c in centers %}
+          <option value="{{ c.id }}" {% if app and app.center_id == c.id %}selected{% endif %}>
+            {{ c.center_code }} – {{ c.center_name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="section-title mt-3">KYC Details</div>
+    <div class="row g-3">
+      <div class="col-md-3">
+        <label class="form-label">Member KYC Type</label>
+        <select name="member_kyc_type" id="member_kyc_type" class="form-select">
+          <option value="">— Select —</option>
+          {% for k in kyc_types %}
+          <option value="{{ k }}" {% if app and app.member_kyc_type == k %}selected{% endif %}>{{ k }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Member KYC Number</label>
+        <input type="text" name="member_kyc_number" id="member_kyc_number" class="form-control"
+               value="{{ app.member_kyc_number if app else '' }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Nominee KYC Type</label>
+        <select name="nominee_kyc_type" class="form-select">
+          <option value="">— Select —</option>
+          {% for k in kyc_types %}
+          <option value="{{ k }}" {% if app and app.nominee_kyc_type == k %}selected{% endif %}>{{ k }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Nominee KYC Number</label>
+        <input type="text" name="nominee_kyc_number" class="form-control"
+               value="{{ app.nominee_kyc_number if app else '' }}">
+      </div>
+    </div>
+
+    <div class="section-title mt-3">Fee Details</div>
+    <div class="row g-3">
+      <div class="col-md-3">
+        <label class="form-label">Processing Fee (₹)</label>
+        <input type="number" name="processing_fee" id="processing_fee" class="form-control" step="0.01"
+               value="{{ app.processing_fee if app else 0 }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Insurance Fee (₹)</label>
+        <input type="number" name="insurance_fee" id="insurance_fee" class="form-control" step="0.01"
+               value="{{ app.insurance_fee if app else 0 }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Nominee Insurance Fee (₹)</label>
+        <input type="number" name="nominee_insurance_fee" class="form-control" step="0.01"
+               value="{{ app.nominee_insurance_fee if app else 0 }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Other Charges (₹)</label>
+        <input type="number" name="other_charges" class="form-control" step="0.01"
+               value="{{ app.other_charges if app else 0 }}">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Remarks</label>
+        <input type="text" name="remarks" class="form-control"
+               value="{{ app.remarks if app else '' }}">
+      </div>
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary"><i class="bi bi-check2 me-1"></i>{{ 'Update' if app else 'Submit Application' }}</button>
+    <a href="{{ url_for('loan_applications_list') }}" class="btn btn-secondary">Cancel</a>
+  </div>
+</form>
+
+<script>
+const membersData = {{ members_json|safe }};
+const loanTypesData = {{ loan_types_json|safe }};
+
+function fillMember(mid) {
+  const m = membersData.find(x => x.id == mid);
+  if (!m) return;
+  document.getElementById('monthly_net_income').value = m.income || 0;
+  document.getElementById('member_kyc_type').value = m.kyc_type || '';
+  document.getElementById('member_kyc_number').value = m.kyc_number || '';
+  if (m.center_id) document.getElementById('center_id').value = m.center_id;
+}
+
+function fillLoanType(lid) {
+  const lt = loanTypesData.find(x => x.id == lid);
+  if (!lt) return;
+  document.getElementById('tenure_weeks').value = lt.tenure_weeks || '';
+  document.getElementById('processing_fee').value = lt.processing_fee || 0;
+  document.getElementById('insurance_fee').value = lt.insurance_fee || 0;
+}
+
+{% if app %}
+fillMember({{ app.member_id or 'null' }});
+fillLoanType({{ app.loan_type_id or 'null' }});
+{% endif %}
+</script>
+{% endblock %}

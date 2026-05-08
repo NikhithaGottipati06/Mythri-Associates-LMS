@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Advance Recovery{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-arrow-up-circle" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Advance Recovery</h5>
+</div>
+<div class="lms-table">
+  <table class="table table-hover mb-0">
+    <thead><tr><th>Disburse No</th><th>App No</th><th>Member</th><th>Disbursed Amt</th><th>Actions</th></tr></thead>
+    <tbody>
+    {% for l in loans %}
+      <tr>
+        <td class="fw-semibold text-primary">{{ l.disbursement_no }}</td>
+        <td>{{ l.application_no }}</td>
+        <td>{{ l.member_code }} – {{ l.member_name }}</td>
+        <td>₹{{ '{:,.0f}'.format(l.disbursed_amount) }}</td>
+        <td><a href="{{ url_for('advance_recovery_post', did=l.id) }}" class="btn btn-info btn-sm text-white"><i class="bi bi-arrow-up-circle me-1"></i>Post Advance</a></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="text-center text-muted py-4">No active disbursements.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

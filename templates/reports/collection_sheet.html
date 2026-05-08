@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block title %}Collection Sheet{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-collection" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Collection Sheet</h5>
+</div>
+<div class="action-bar">
+  <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+  <button onclick="window.print()" class="btn btn-outline-primary btn-sm ms-2"><i class="bi bi-printer me-1"></i>Print</button>
+</div>
+<form method="GET" class="form-card mb-3">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-4">
+      <label class="form-label">Center</label>
+      <select name="center_id" class="form-select form-select-sm">
+        <option value="">All Centers</option>
+        {% for c in centers %}
+        <option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} – {{ c.center_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Date</label>
+      <input type="text" name="report_date" class="form-control form-control-sm" value="{{ report_date }}" placeholder="DD/MM/YYYY">
+    </div>
+    <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
+  </div>
+</form>
+<div class="lms-table" style="overflow-x:auto;">
+  <table class="table table-hover mb-0" style="min-width:900px;">
+    <thead>
+      <tr>
+        <th>#</th><th>Loan ID</th><th>Member Code</th><th>Member Name</th><th>Grp</th>
+        <th>Center</th><th>Loan Type</th><th>Cycle#</th>
+        <th>Loan Amount</th><th>Inst. Amount</th><th>Total Installments</th>
+        <th>Paid Count</th><th>Total Paid</th><th>Balance</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% set total_inst = namespace(v=0) %}
+    {% set total_paid = namespace(v=0) %}
+    {% for l in loans %}
+      {% set balance = l.disbursed_amount - l.total_paid %}
+      {% set total_inst.v = total_inst.v + l.installment_amount %}
+      {% set total_paid.v = total_paid.v + l.total_paid %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td class="fw-semibold text-primary">{{ l.loan_id or l.disbursement_no }}</td>
+        <td>{{ l.member_code }}</td>
+        <td class="fw-semibold">{{ l.member_name }}</td>
+        <td>{{ l.grp }}</td>
+        <td>{{ l.center_name }}</td>
+        <td>{{ l.loan_type_name or '—' }}</td>
+        <td>{{ l.loan_cycle or 1 }}</td>
+        <td>₹{{ '{:,.0f}'.format(l.disbursed_amount) }}</td>
+        <td>₹{{ '{:,.2f}'.format(l.installment_amount or 0) }}</td>
+        <td>{{ l.total_installments }}</td>
+        <td>{{ l.paid_count }}</td>
+        <td>₹{{ '{:,.2f}'.format(l.total_paid) }}</td>
+        <td class="fw-semibold {% if balance > 0 %}text-danger{% else %}text-success{% endif %}">
+          ₹{{ '{:,.2f}'.format(balance) }}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="14" class="text-center text-muted py-4">No active loans found.</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot class="table-light fw-semibold">
+      <tr>
+        <td colspan="12" class="text-end">Totals:</td>
+        <td>₹{{ '{:,.2f}'.format(total_paid.v) }}</td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+{% endblock %}

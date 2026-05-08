@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+{% block title %}Glance Report{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-eye" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Glance Report – Quick Overview</h5>
+</div>
+<div class="action-bar">
+  <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+  <button onclick="window.print()" class="btn btn-outline-primary btn-sm ms-2"><i class="bi bi-printer me-1"></i>Print</button>
+</div>
+
+<!-- Summary Cards -->
+<div class="row g-3 mb-4">
+  <div class="col-md-2">
+    <div class="stat-card" style="border-color:#1a3c6e;">
+      <div class="stat-icon" style="background:#e8f0fe;color:#1a3c6e;"><i class="bi bi-building"></i></div>
+      <div class="stat-value">{{ stats.total_centers }}</div>
+      <div class="stat-label">Centers</div>
+    </div>
+  </div>
+  <div class="col-md-2">
+    <div class="stat-card" style="border-color:#198754;">
+      <div class="stat-icon" style="background:#d1e7dd;color:#198754;"><i class="bi bi-people"></i></div>
+      <div class="stat-value">{{ stats.total_members }}</div>
+      <div class="stat-label">Active Members</div>
+    </div>
+  </div>
+  <div class="col-md-2">
+    <div class="stat-card" style="border-color:#ffc107;">
+      <div class="stat-icon" style="background:#fff3cd;color:#856404;"><i class="bi bi-file-earmark-text"></i></div>
+      <div class="stat-value">{{ stats.total_applications }}</div>
+      <div class="stat-label">Loan Applications</div>
+    </div>
+  </div>
+  <div class="col-md-2">
+    <div class="stat-card" style="border-color:#0d6efd;">
+      <div class="stat-icon" style="background:#cfe2ff;color:#0d6efd;"><i class="bi bi-cash-coin"></i></div>
+      <div class="stat-value">{{ stats.total_disbursements }}</div>
+      <div class="stat-label">Disbursements</div>
+    </div>
+  </div>
+  <div class="col-md-2">
+    <div class="stat-card" style="border-color:#198754;">
+      <div class="stat-icon" style="background:#d1e7dd;color:#198754;"><i class="bi bi-currency-rupee"></i></div>
+      <div class="stat-value">₹{{ '{:,.0f}'.format(stats.total_disbursed_amount) }}</div>
+      <div class="stat-label">Total Disbursed</div>
+    </div>
+  </div>
+  <div class="col-md-2">
+    <div class="stat-card" style="border-color:#dc3545;">
+      <div class="stat-icon" style="background:#f8d7da;color:#dc3545;"><i class="bi bi-hourglass-split"></i></div>
+      <div class="stat-value">₹{{ '{:,.0f}'.format(stats.outstanding) }}</div>
+      <div class="stat-label">Outstanding</div>
+    </div>
+  </div>
+</div>
+
+<!-- Savings Summary Cards -->
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="stat-card" style="border-color:#6f42c1;">
+      <div class="stat-icon" style="background:#e8dff5;color:#6f42c1;"><i class="bi bi-piggy-bank"></i></div>
+      <div class="stat-value">₹{{ '{:,.0f}'.format(stats.total_savings) }}</div>
+      <div class="stat-label">Total Savings</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="stat-card" style="border-color:#fd7e14;">
+      <div class="stat-icon" style="background:#ffe5d0;color:#fd7e14;"><i class="bi bi-cash"></i></div>
+      <div class="stat-value">₹{{ '{:,.0f}'.format(stats.savings_withdrawn) }}</div>
+      <div class="stat-label">Savings Withdrawn</div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="stat-card" style="border-color:#198754;">
+      <div class="stat-icon" style="background:#d1e7dd;color:#198754;"><i class="bi bi-wallet2"></i></div>
+      <div class="stat-value">₹{{ '{:,.0f}'.format(stats.savings_outstanding) }}</div>
+      <div class="stat-label">Savings Outstanding</div>
+    </div>
+  </div>
+</div>
+
+<!-- Center-wise breakdown -->
+<div class="form-card">
+  <div class="section-title">Center-wise Summary</div>
+  <div class="lms-table" style="margin:0;">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr><th>Center Code</th><th>Center Name</th><th>Members</th><th>Loans</th><th>Disbursed</th><th>Collected</th><th>Outstanding</th><th>Savings</th><th>Withdrawn</th><th>Sav. Balance</th></tr>
+      </thead>
+      <tbody>
+      {% for c in center_stats %}
+        <tr>
+          <td class="fw-semibold text-primary">{{ c.center_code }}</td>
+          <td>{{ c.center_name }}</td>
+          <td>{{ c.members }}</td>
+          <td>{{ c.loans }}</td>
+          <td>₹{{ '{:,.0f}'.format(c.disbursed) }}</td>
+          <td>₹{{ '{:,.0f}'.format(c.collected) }}</td>
+          <td class="{% if (c.disbursed - c.collected) > 0 %}text-danger{% endif %}">
+            ₹{{ '{:,.0f}'.format(c.disbursed - c.collected) }}
+          </td>
+          <td>₹{{ '{:,.0f}'.format(c.savings_deposits or 0) }}</td>
+          <td>₹{{ '{:,.0f}'.format(c.savings_withdrawals or 0) }}</td>
+          <td class="text-success fw-semibold">₹{{ '{:,.0f}'.format((c.savings_deposits or 0) - (c.savings_withdrawals or 0)) }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

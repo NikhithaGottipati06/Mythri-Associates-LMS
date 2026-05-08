@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block title %}Centers Report{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-building" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Centers Report</h5>
+</div>
+<div class="action-bar">
+  <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+  <button onclick="window.print()" class="btn btn-outline-primary btn-sm ms-2"><i class="bi bi-printer me-1"></i>Print</button>
+  <span class="ms-auto total-bar">Total: {{ centers|length }} centers</span>
+</div>
+<div class="lms-table">
+  <table class="table table-hover mb-0">
+    <thead>
+      <tr>
+        <th>Code</th><th>Center Name</th><th>Active Members</th><th>Staff</th>
+        <th>Meeting Type</th><th>Meeting Week</th><th>Meeting Time</th>
+        <th>District</th><th>State</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for c in centers %}
+      <tr>
+        <td class="fw-semibold text-primary">{{ c.center_code }}</td>
+        <td class="fw-semibold">{{ c.center_name }}</td>
+        <td><span class="badge bg-success">{{ c.active_members }}</span></td>
+        <td>{{ c.staff_name or '—' }}</td>
+        <td>{{ c.meeting_type }}</td>
+        <td>{{ c.meeting_week or '—' }}</td>
+        <td>{{ c.meeting_time or '—' }}</td>
+        <td>{{ c.district or '—' }}</td>
+        <td>{{ c.state }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="9" class="text-center text-muted py-4">No centers found.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

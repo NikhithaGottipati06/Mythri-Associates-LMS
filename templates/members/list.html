@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% block title %}Members{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-person-badge" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Members</h5>
+</div>
+
+<div class="action-bar">
+  <a href="{{ url_for('members_new') }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-person-plus me-1"></i>Add New
+  </a>
+  <span class="ms-auto total-bar">Total Records: {{ members|length }}</span>
+</div>
+
+<div class="lms-table">
+  <table class="table table-hover mb-0">
+    <thead>
+      <tr>
+        <th>Member Code</th>
+        <th>Full Name</th>
+        <th>Center</th>
+        <th>Group</th>
+        <th>Gender</th>
+        <th>Phone</th>
+        <th>Date of Join</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for m in members %}
+      <tr>
+        <td class="fw-semibold text-primary">{{ m.member_code }}</td>
+        <td class="fw-semibold">{{ m.full_name }}</td>
+        <td>{{ m.center_code }} {{ m.center_name }}</td>
+        <td>{{ m.grp }}</td>
+        <td>{{ m.gender or '—' }}</td>
+        <td>{{ m.phone1 or '—' }}</td>
+        <td>{{ m.date_of_join or '—' }}</td>
+        <td>
+          {% if m.status == 'ACTIVE' %}
+            <span class="badge-active">ACTIVE</span>
+          {% elif m.status == 'WITHDRAWN' %}
+            <span class="badge-inactive">WITHDRAWN</span>
+          {% else %}
+            <span class="badge bg-secondary">{{ m.status }}</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if session.role == 'Admin' %}
+          <a href="{{ url_for('members_edit', mid=m.id) }}"
+             class="btn btn-outline-primary btn-icon" title="Edit">
+            <i class="bi bi-pencil"></i>
+          </a>
+          <form method="POST" action="{{ url_for('members_delete', mid=m.id) }}" style="display:inline;"
+                onsubmit="return confirm('Delete member {{ m.full_name }}?')">
+            <button class="btn btn-outline-danger btn-icon" title="Delete"><i class="bi bi-trash"></i></button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="9" class="text-center text-muted py-4">No members found. Click Add New to create one.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

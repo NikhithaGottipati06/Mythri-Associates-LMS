@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% block title %}Outstanding Report{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-hourglass-split" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Outstanding Report</h5>
+</div>
+<div class="action-bar">
+  <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+  <button onclick="window.print()" class="btn btn-outline-primary btn-sm ms-2"><i class="bi bi-printer me-1"></i>Print</button>
+</div>
+<form method="GET" class="form-card mb-3">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-4"><label class="form-label">Center</label>
+      <select name="center_id" class="form-select form-select-sm">
+        <option value="">All Centers</option>
+        {% for c in centers %}<option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} – {{ c.center_name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
+  </div>
+</form>
+<div class="lms-table" style="overflow-x:auto;">
+  <table class="table table-hover mb-0" style="min-width:1000px;">
+    <thead>
+      <tr><th>#</th><th>Loan ID</th><th>Member Code</th><th>Member Name</th><th>Grp</th><th>Center</th><th>Loan Type</th><th>Cycle#</th><th>Loan Amt</th><th>Paid</th><th>Pending Inst.</th><th>Outstanding</th></tr>
+    </thead>
+    <tbody>
+    {% set t_loan = namespace(v=0) %}
+    {% set t_paid = namespace(v=0) %}
+    {% set t_os = namespace(v=0) %}
+    {% for d in data %}
+      {% set t_loan.v = t_loan.v + d.disbursed_amount %}
+      {% set t_paid.v = t_paid.v + d.total_paid %}
+      {% set t_os.v = t_os.v + d.outstanding %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td class="fw-semibold text-primary">{{ d.loan_id or '—' }}</td>
+        <td>{{ d.member_code }}</td>
+        <td class="fw-semibold">{{ d.member_name }}</td>
+        <td>{{ d.grp }}</td>
+        <td>{{ d.center_code }}</td>
+        <td>{{ d.loan_type_name or '—' }}</td>
+        <td>{{ d.loan_cycle or 1 }}</td>
+        <td>₹{{ '{:,.0f}'.format(d.disbursed_amount) }}</td>
+        <td>₹{{ '{:,.0f}'.format(d.total_paid) }}</td>
+        <td>{{ d.total_installments - d.installments_paid }}</td>
+        <td class="fw-semibold {% if d.outstanding > 0 %}text-danger{% endif %}">
+          ₹{{ '{:,.2f}'.format(d.outstanding) }}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="12" class="text-center text-muted py-4">No outstanding loans.</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot class="table-light fw-semibold">
+      <tr>
+        <td colspan="8" class="text-end">Totals:</td>
+        <td>₹{{ '{:,.0f}'.format(t_loan.v) }}</td>
+        <td>₹{{ '{:,.0f}'.format(t_paid.v) }}</td>
+        <td></td>
+        <td>₹{{ '{:,.2f}'.format(t_os.v) }}</td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+{% endblock %}

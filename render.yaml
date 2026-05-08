@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: mythri-associates-lms
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn wsgi:application
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_PATH
+        value: /var/data/lms.db
+    disk:
+      name: lms-data
+      mountPath: /var/data
+      sizeGB: 1

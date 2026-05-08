@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}Member Withdraw Report{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-person-dash" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Member Withdraw Report</h5>
+</div>
+<div class="action-bar">
+  <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+  <button onclick="window.print()" class="btn btn-outline-primary btn-sm ms-2"><i class="bi bi-printer me-1"></i>Print</button>
+</div>
+<form method="GET" class="form-card mb-3">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-4">
+      <label class="form-label">Center</label>
+      <select name="center_id" class="form-select form-select-sm">
+        <option value="">All Centers</option>
+        {% for c in centers %}
+        <option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} – {{ c.center_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
+  </div>
+</form>
+<div class="lms-table">
+  <table class="table table-hover mb-0">
+    <thead>
+      <tr><th>#</th><th>Member Code</th><th>Name</th><th>Center</th><th>Group</th><th>Joined</th><th>Phone</th></tr>
+    </thead>
+    <tbody>
+    {% for m in members %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td class="fw-semibold text-primary">{{ m.member_code }}</td>
+        <td class="fw-semibold">{{ m.full_name }}</td>
+        <td>{{ m.center_code }} – {{ m.center_name }}</td>
+        <td>{{ m.grp }}</td>
+        <td>{{ m.date_of_join }}</td>
+        <td>{{ m.phone1 or '—' }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="text-center text-muted py-4">No withdrawn members.</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot><tr><td colspan="7" class="text-end fw-semibold">Total Withdrawn: {{ members|length }}</td></tr></tfoot>
+  </table>
+</div>
+{% endblock %}

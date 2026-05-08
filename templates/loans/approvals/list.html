@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+{% block title %}Loan Approvals{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-check2-circle" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Loan Approvals</h5>
+</div>
+
+<!-- Pending -->
+<div class="form-card mb-3">
+  <div class="section-title"><i class="bi bi-hourglass-split me-1"></i>Pending Applications ({{ pending|length }})</div>
+  <div class="lms-table" style="margin:0;">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr><th>App No</th><th>Member</th><th>Loan Type</th><th>Applied Amt</th><th>Date</th><th>Purpose</th><th>Actions</th></tr>
+      </thead>
+      <tbody>
+      {% for a in pending %}
+        <tr>
+          <td class="fw-semibold text-primary">{{ a.application_no }}</td>
+          <td>{{ a.member_code }} – {{ a.member_name }}</td>
+          <td>{{ a.loan_type_name or '—' }}</td>
+          <td>₹{{ '{:,.0f}'.format(a.applied_amount) }}</td>
+          <td>{{ a.applied_date }}</td>
+          <td>{{ a.purpose or '—' }}</td>
+          <td>
+            {% if session.role == 'Admin' %}
+            <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#approveModal{{ a.id }}">
+              <i class="bi bi-check2 me-1"></i>Approve
+            </button>
+            <form method="POST" action="{{ url_for('loan_reject', aid=a.id) }}" style="display:inline;">
+              <input type="hidden" name="remarks" value="Rejected by admin">
+              <button class="btn btn-danger btn-sm" onclick="return confirm('Reject this application?')">
+                <i class="bi bi-x me-1"></i>Reject
+              </button>
+            </form>
+            {% else %}
+            <span class="text-muted">Pending Admin Approval</span>
+            {% endif %}
+          </td>
+        </tr>
+        <!-- Approve Modal -->
+        <div class="modal fade" id="approveModal{{ a.id }}" tabindex="-1">
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <form method="POST" action="{{ url_for('loan_approve', aid=a.id) }}">
+              <div class="modal-header"><h5 class="modal-title">Approve Loan – {{ a.application_no }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+              <div class="modal-body">
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">Approved Amount (₹)</label>
+                  <input type="number" name="approved_amount" class="form-control" step="0.01"
+                         value="{{ a.applied_amount }}" required>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">Approved Date</label>
+                  <input type="text" name="approved_date" class="form-control" placeholder="DD/MM/YYYY" required>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">Remarks</label>
+                  <input type="text" name="remarks" class="form-control" value="Approved">
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button type="submit" class="btn btn-success">Confirm Approval</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+              </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-3">No pending applications.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- History -->
+<div class="form-card">
+  <div class="section-title"><i class="bi bi-clock-history me-1"></i>Approval History ({{ approved|length }})</div>
+  <div class="lms-table" style="margin:0;">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr><th>App No</th><th>Member</th><th>Applied Amt</th><th>Approved Amt</th><th>Status</th><th>Approved By</th><th>Date</th></tr>
+      </thead>
+      <tbody>
+      {% for a in approved %}
+        <tr>
+          <td class="fw-semibold text-primary">{{ a.application_no }}</td>
+          <td>{{ a.member_code }} – {{ a.member_name }}</td>
+          <td>₹{{ '{:,.0f}'.format(a.applied_amount) }}</td>
+          <td>{% if a.approved_amount %}₹{{ '{:,.0f}'.format(a.approved_amount) }}{% else %}—{% endif %}</td>
+          <td><span class="badge-{{ a.status|lower }}">{{ a.status }}</span></td>
+          <td>{{ a.approved_by_name or '—' }}</td>
+          <td>{{ a.approved_date or '—' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-3">No history.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block title %}Prepaid Types{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-tag" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Prepaid Types</h5>
+</div>
+<div class="action-bar">
+  <a href="{{ url_for('prepaid_types_new') }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-circle me-1"></i>Add New
+  </a>
+  <span class="ms-auto total-bar">Total Records: {{ types|length }}</span>
+</div>
+<div class="lms-table">
+  <table class="table table-hover mb-0">
+    <thead>
+      <tr>
+        <th>Prepaid Type</th><th>Active</th><th>Type</th><th>Loan Type</th>
+        <th>Full Interest</th><th>Preclosure Charges</th><th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for t in types %}
+      <tr>
+        <td class="fw-semibold">{{ t.name }}</td>
+        <td>{% if t.active %}<span class="badge-active">✓</span>{% else %}<span class="badge-inactive">✗</span>{% endif %}</td>
+        <td>{{ t.type or 'Weekly' }}</td>
+        <td>{{ t.loan_type_name or '—' }}</td>
+        <td>{% if t.full_interest %}<span class="badge-active">✓</span>{% else %}<span class="badge-inactive">✗</span>{% endif %}</td>
+        <td>{% if t.has_preclosure_charges %}<span class="badge-active">✓</span>{% else %}<span class="badge-inactive">✗</span>{% endif %}</td>
+        <td>
+          {% if session.role == 'Admin' %}
+          <a href="{{ url_for('prepaid_types_edit', pid=t.id) }}" class="btn btn-outline-primary btn-icon"><i class="bi bi-pencil"></i></a>
+          <form method="POST" action="{{ url_for('prepaid_types_delete', pid=t.id) }}" style="display:inline;"
+                onsubmit="return confirm('Delete?')">
+            <button class="btn btn-outline-danger btn-icon"><i class="bi bi-trash"></i></button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="text-center text-muted py-4">No prepaid types defined.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

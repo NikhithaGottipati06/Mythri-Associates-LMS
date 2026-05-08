@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Edit' if pt else 'New' }} Prepaid Type{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-tag" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>{{ 'Edit Prepaid Type' if pt else 'Add Prepaid Type' }}</h5>
+</div>
+<div class="action-bar">
+  <a href="{{ url_for('prepaid_types_list') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Close</a>
+</div>
+<form method="POST">
+  <div class="form-card">
+    <div class="row g-3 align-items-center mb-2">
+      <div class="col-md-5">
+        <label class="form-label required">Prepaid Type</label>
+        <input type="text" name="name" class="form-control field-required"
+               value="{{ pt.name if pt else '' }}" required>
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="active" id="active"
+                 {% if not pt or pt.active %}checked{% endif %}>
+          <label class="form-check-label fw-semibold" for="active">Active</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">Type</div>
+    <div class="mb-3">
+      {% for t in ['Weekly','Monthly','OneTime'] %}
+      <div class="form-check form-check-inline">
+        <input class="form-check-input" type="radio" name="type" id="type_{{ t }}"
+               value="{{ t }}"
+               {% if (pt and pt.type == t) or (not pt and t == 'Weekly') %}checked{% endif %}>
+        <label class="form-check-label" for="type_{{ t }}">{{ t }}</label>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="row g-3">
+      <div class="col-md-5">
+        <label class="form-label">Applicable for Loan Type</label>
+        <select name="loan_type_id" class="form-select">
+          <option value="">— All Loan Types —</option>
+          {% for lt in loan_types %}
+          <option value="{{ lt.id }}"
+            {% if pt and pt.loan_type_id == lt.id %}selected{% endif %}>
+            {{ lt.loan_type_name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="section-title mt-3">Options</div>
+    <div class="row g-3">
+      <div class="col-md-3">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="member_expired" id="member_expired"
+                 {% if pt and pt.member_expired %}checked{% endif %}>
+          <label class="form-check-label" for="member_expired">Member Expired</label>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="full_interest" id="full_interest"
+                 {% if not pt or pt.full_interest %}checked{% endif %}>
+          <label class="form-check-label" for="full_interest">Full Interest</label>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="has_preclosure_charges" id="has_preclosure_charges"
+                 {% if pt and pt.has_preclosure_charges %}checked{% endif %}>
+          <label class="form-check-label" for="has_preclosure_charges">Has Preclosure Charges</label>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary"><i class="bi bi-check2 me-1"></i>{{ 'Update' if pt else 'Save' }}</button>
+    <a href="{{ url_for('prepaid_types_list') }}" class="btn btn-secondary">Cancel</a>
+  </div>
+</form>
+{% endblock %}

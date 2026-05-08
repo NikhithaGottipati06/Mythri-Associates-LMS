@@ -1,0 +1,265 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Edit' if member else 'New' }} Member{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-person-badge" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>{{ 'Edit Member – ' + member.member_code if member else 'Add New Member' }}</h5>
+</div>
+
+<div class="action-bar">
+  <a href="{{ url_for('members_list') }}" class="btn btn-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Close
+  </a>
+  {% if member %}
+  <span class="ms-2 fw-semibold" style="font-size:13px;">
+    Member Code: <span class="text-primary">{{ member.member_code }}</span>
+    &nbsp;&nbsp;Status:
+    <span class="badge {% if member.status=='ACTIVE' %}bg-success{% else %}bg-danger{% endif %}">{{ member.status }}</span>
+  </span>
+  {% else %}
+  <span class="ms-2 fw-semibold text-muted" style="font-size:13px;">Member Code: <em>*NEW</em></span>
+  {% endif %}
+  {% if member and session.role == 'Admin' %}
+  <form method="POST" action="{{ url_for('members_withdraw', mid=member.id) }}" class="ms-auto"
+        onsubmit="return confirm('Withdraw member {{ member.full_name }}?')">
+    <button class="btn btn-outline-danger btn-sm"><i class="bi bi-person-x me-1"></i>Member Withdraw</button>
+  </form>
+  {% endif %}
+</div>
+
+<form method="POST">
+  <div class="row g-3">
+    <!-- Left: Personal details -->
+    <div class="col-md-8">
+      <div class="form-card">
+        <div class="section-title">Personal Information</div>
+        <div class="row g-3">
+          <div class="col-md-8">
+            <label class="form-label required">Center</label>
+            <select name="center_id" class="form-select field-required" required>
+              <option value="">— Select Center —</option>
+              {% for c in centers %}
+              <option value="{{ c.id }}" {% if member and member.center_id == c.id %}selected{% endif %}>
+                {{ c.center_code }} {{ c.center_name }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Group</label>
+            <input type="number" name="grp" class="form-control"
+                   value="{{ member.grp if member else 1 }}" min="1">
+          </div>
+          <div class="col-12">
+            <label class="form-label required">Full Name</label>
+            <input type="text" name="full_name" class="form-control field-required"
+                   value="{{ member.full_name if member else '' }}" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label required">Date of Join</label>
+            <input type="text" name="date_of_join" class="form-control field-required"
+                   placeholder="DD/MM/YYYY" value="{{ member.date_of_join if member else '' }}" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label required">Date of Birth</label>
+            <input type="text" name="date_of_birth" class="form-control field-required"
+                   placeholder="DD/MM/YYYY" value="{{ member.date_of_birth if member else '' }}" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Age (Years)</label>
+            <input type="text" id="age_display" class="form-control" readonly placeholder="Auto">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label required">Gender</label>
+            <select name="gender" class="form-select field-required" required>
+              <option value="">— Gender —</option>
+              <option value="Female" {% if member and member.gender=='Female' %}selected{% endif %}>Female</option>
+              <option value="Male" {% if member and member.gender=='Male' %}selected{% endif %}>Male</option>
+              <option value="Other" {% if member and member.gender=='Other' %}selected{% endif %}>Other</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label required">Marital Status</label>
+            <select name="marital_status" class="form-select field-required" required>
+              <option value="">— Status —</option>
+              <option value="Married" {% if member and member.marital_status=='Married' %}selected{% endif %}>Married</option>
+              <option value="Unmarried" {% if member and member.marital_status=='Unmarried' %}selected{% endif %}>Unmarried</option>
+              <option value="Widow" {% if member and member.marital_status=='Widow' %}selected{% endif %}>Widow</option>
+              <option value="Divorced" {% if member and member.marital_status=='Divorced' %}selected{% endif %}>Divorced</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Guardian Full Name</label>
+            <input type="text" name="guardian_name" class="form-control"
+                   value="{{ member.guardian_name if member else '' }}">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Spouse Full Name</label>
+            <input type="text" name="spouse_name" class="form-control"
+                   value="{{ member.spouse_name if member else '' }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Member Caste</label>
+            <input type="text" name="caste" class="form-control"
+                   value="{{ member.caste if member else '' }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Member Religion</label>
+            <input type="text" name="religion" class="form-control"
+                   value="{{ member.religion if member else '' }}">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-card mt-3">
+        <div class="section-title">Address</div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label required">Address 1</label>
+            <input type="text" name="address1" class="form-control field-required"
+                   value="{{ member.address1 if member else '' }}" required>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Address 2</label>
+            <input type="text" name="address2" class="form-control"
+                   value="{{ member.address2 if member else '' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">City</label>
+            <input type="text" name="city" class="form-control"
+                   value="{{ member.city if member else '' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Mandal</label>
+            <input type="text" name="mandal" class="form-control"
+                   value="{{ member.mandal if member else '' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Pin Code</label>
+            <input type="text" name="pin_code" class="form-control"
+                   value="{{ member.pin_code if member else '' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">District</label>
+            <input type="text" name="district" class="form-control"
+                   value="{{ member.district if member else '' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">State</label>
+            <input type="text" name="state" class="form-control"
+                   value="{{ member.state if member else 'ANDHRA PRADESH' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Landmark</label>
+            <input type="text" name="landmark" class="form-control"
+                   value="{{ member.landmark if member else '' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Phone 1</label>
+            <input type="text" name="phone1" class="form-control"
+                   value="{{ member.phone1 if member else '' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Phone 2</label>
+            <input type="text" name="phone2" class="form-control"
+                   value="{{ member.phone2 if member else '' }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Email Address</label>
+            <input type="email" name="email" class="form-control"
+                   value="{{ member.email if member else '' }}">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Notes</label>
+            <textarea name="notes" class="form-control" rows="2">{{ member.notes if member else '' }}</textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: KYC, Income, Fees -->
+    <div class="col-md-4">
+      <div class="form-card">
+        <div class="section-title">Default KYC Details</div>
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label required">KYC Type</label>
+            <select name="kyc_type" class="form-select field-required" required>
+              <option value="">— Select KYC —</option>
+              {% for k in ['Aadhaar Card','PAN Card','Voter ID','Driving Licence','Passport','Ration Card'] %}
+              <option value="{{ k }}" {% if member and member.kyc_type == k %}selected{% endif %}>{{ k }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label required">KYC Number</label>
+            <input type="text" name="kyc_number" class="form-control field-required"
+                   value="{{ member.kyc_number if member else '' }}" required>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-card mt-3">
+        <div class="section-title">Monthly Income / Expenditure</div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Income</label>
+            <input type="number" name="income" class="form-control" step="0.01"
+                   value="{{ member.income if member else 0 }}" oninput="calcNet()">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Expenditure</label>
+            <input type="number" name="expenditure" class="form-control" step="0.01"
+                   value="{{ member.expenditure if member else 0 }}" oninput="calcNet()">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Net</label>
+            <input type="text" id="net_display" class="form-control bg-light" readonly
+                   value="{{ (member.income - member.expenditure) if member else 0 }}">
+          </div>
+        </div>
+      </div>
+
+      {% if not member %}
+      <div class="form-card mt-3">
+        <div class="section-title">Membership Fees</div>
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label">Total Fees</label>
+            <input type="number" name="total_fees" class="form-control" step="0.01" value="0">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Mode</label>
+            <select name="fee_mode" class="form-select">
+              <option value="Cash">Cash</option>
+              <option value="Bank Transfer">Bank Transfer</option>
+              <option value="Cheque">Cheque</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Narration</label>
+            <input type="text" name="fee_narration" class="form-control" value="Cash">
+          </div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="d-flex gap-2 mt-2">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check2 me-1"></i>{{ 'Update' if member else 'Save' }}
+    </button>
+    <a href="{{ url_for('members_list') }}" class="btn btn-secondary">Cancel</a>
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+function calcNet(){
+  const inc = parseFloat(document.querySelector('[name=income]').value) || 0;
+  const exp = parseFloat(document.querySelector('[name=expenditure]').value) || 0;
+  document.getElementById('net_display').value = (inc - exp).toFixed(2);
+}
+</script>
+{% endblock %}

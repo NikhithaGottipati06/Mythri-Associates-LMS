@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}Arrears Collected Report{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-check2-all" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Arrears Collected Report</h5>
+</div>
+<div class="action-bar">
+  <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+  <button onclick="window.print()" class="btn btn-outline-primary btn-sm ms-2"><i class="bi bi-printer me-1"></i>Print</button>
+</div>
+<form method="GET" class="form-card mb-3">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-3"><label class="form-label">Center</label>
+      <select name="center_id" class="form-select form-select-sm">
+        <option value="">All Centers</option>
+        {% for c in centers %}<option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} – {{ c.center_name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2"><label class="form-label">From Date</label>
+      <input type="text" name="from_date" class="form-control form-control-sm" value="{{ from_date }}" placeholder="DD/MM/YYYY">
+    </div>
+    <div class="col-md-2"><label class="form-label">To Date</label>
+      <input type="text" name="to_date" class="form-control form-control-sm" value="{{ to_date }}" placeholder="DD/MM/YYYY">
+    </div>
+    <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
+  </div>
+</form>
+<div class="lms-table">
+  <table class="table table-hover mb-0">
+    <thead>
+      <tr><th>#</th><th>Date</th><th>Loan ID</th><th>Member</th><th>Center</th><th>Inst#</th><th>Paid Amt</th><th>Penalty</th></tr>
+    </thead>
+    <tbody>
+    {% set t_paid = namespace(v=0) %}
+    {% for r in records %}
+      {% set t_paid.v = t_paid.v + (r.paid_amount or 0) %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ r.posting_date }}</td>
+        <td class="text-primary fw-semibold">{{ r.loan_id or '—' }}</td>
+        <td>{{ r.member_code }} – {{ r.member_name }}</td>
+        <td>{{ r.center_code }}</td>
+        <td>{{ r.installment_no }}</td>
+        <td class="fw-semibold">₹{{ '{:,.2f}'.format(r.paid_amount or 0) }}</td>
+        <td>₹{{ '{:,.2f}'.format(r.penalty or 0) }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="8" class="text-center text-muted py-4">No arrears collections found.</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot class="table-light fw-semibold">
+      <tr><td colspan="6" class="text-end">Total Collected:</td><td>₹{{ '{:,.2f}'.format(t_paid.v) }}</td><td></td></tr>
+    </tfoot>
+  </table>
+</div>
+{% endblock %}

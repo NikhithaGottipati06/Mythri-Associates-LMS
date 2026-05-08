@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}Help{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-question-circle" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Help</h5>
+</div>
+<div class="form-card">
+  <div class="section-title">User Guide</div>
+  <h6 class="fw-bold text-primary">Getting Started</h6>
+  <ol style="font-size:13px;line-height:2;">
+    <li><strong>Masters → Centers</strong> – Create centers where members meet.</li>
+    <li><strong>Masters → Members</strong> – Register members and assign to a center.</li>
+    <li><strong>Loans → Masters → Loan Types</strong> – Define loan products with interest rates.</li>
+    <li><strong>Loans → Loan Applications</strong> – Submit a loan request for a member.</li>
+    <li><strong>Loans → Loan Approvals</strong> – Admin approves or rejects applications.</li>
+    <li><strong>Loans → Loan Disbursement</strong> – Admin disburses the approved amount.</li>
+    <li><strong>Loans → Posting → Recovery Posting</strong> – Post weekly/monthly repayments.</li>
+  </ol>
+  <hr>
+  <h6 class="fw-bold text-primary">Role Permissions</h6>
+  <table class="table table-bordered table-sm" style="font-size:13px; max-width:500px;">
+    <thead class="table-primary"><tr><th>Action</th><th>Admin</th><th>Staff</th></tr></thead>
+    <tbody>
+      <tr><td>Add records</td><td>✓</td><td>✓</td></tr>
+      <tr><td>Edit records</td><td>✓</td><td>✗</td></tr>
+      <tr><td>Delete records</td><td>✓</td><td>✗</td></tr>
+      <tr><td>Approve loans</td><td>✓</td><td>✗</td></tr>
+      <tr><td>Disburse loans</td><td>✓</td><td>✗</td></tr>
+      <tr><td>Manage users</td><td>✓</td><td>✗</td></tr>
+    </tbody>
+  </table>
+  <hr>
+  <h6 class="fw-bold text-primary">Login Credentials</h6>
+  <p style="font-size:13px;">Default admin: <strong>GVR</strong> / <strong>admin123</strong><br>
+  Default staff: <strong>Suresh01</strong> / <strong>staff123</strong></p>
+</div>
+{% endblock %}

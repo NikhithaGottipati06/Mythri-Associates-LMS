@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block title %}Advance Withdraw Report{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-dash-circle" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Advance Withdraw Report</h5>
+</div>
+<div class="action-bar">
+  <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+  <button onclick="window.print()" class="btn btn-outline-primary btn-sm ms-2"><i class="bi bi-printer me-1"></i>Print</button>
+</div>
+<div class="lms-table">
+  <table class="table table-hover mb-0">
+    <thead>
+      <tr><th>#</th><th>Date</th><th>Loan ID</th><th>Member</th><th>Center</th><th>Amount</th><th>Mode</th><th>Narration</th></tr>
+    </thead>
+    <tbody>
+    {% set t_amt = namespace(v=0) %}
+    {% for r in records %}
+      {% set t_amt.v = t_amt.v + (r.amount or 0) %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ r.recovery_date }}</td>
+        <td class="text-primary fw-semibold">{{ r.loan_id or '—' }}</td>
+        <td>{{ r.member_code }} – {{ r.member_name }}</td>
+        <td>{{ r.center_name }}</td>
+        <td>₹{{ '{:,.2f}'.format(r.amount or 0) }}</td>
+        <td>{{ r.mode }}</td>
+        <td>{{ r.narration or '—' }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="8" class="text-center text-muted py-4">No records found.</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot class="table-light fw-semibold">
+      <tr><td colspan="5" class="text-end">Total:</td><td>₹{{ '{:,.2f}'.format(t_amt.v) }}</td><td colspan="2"></td></tr>
+    </tfoot>
+  </table>
+</div>
+{% endblock %}

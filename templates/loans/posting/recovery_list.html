@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}Recovery Posting{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-arrow-repeat" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Recovery Posting</h5>
+</div>
+<div class="lms-table">
+  <table class="table table-hover mb-0">
+    <thead><tr><th>Disburse No</th><th>App No</th><th>Member</th><th>Center</th><th>Disbursed Amt</th><th>Installments</th><th>Posted</th><th>Actions</th></tr></thead>
+    <tbody>
+    {% for l in loans %}
+      <tr>
+        <td class="fw-semibold text-primary">{{ l.disbursement_no }}</td>
+        <td>{{ l.application_no }}</td>
+        <td>{{ l.member_code }} – {{ l.member_name }}</td>
+        <td>{{ l.center_name or '—' }}</td>
+        <td>₹{{ '{:,.0f}'.format(l.disbursed_amount) }}</td>
+        <td>{{ l.total_installments }}</td>
+        <td>{{ l.paid_count }} / {{ l.total_installments }}</td>
+        <td>
+          <a href="{{ url_for('recovery_post', did=l.id) }}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus me-1"></i>Post Recovery
+          </a>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="8" class="text-center text-muted py-4">No active disbursements.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

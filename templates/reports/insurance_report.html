@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% block title %}Insurance Particulars{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-shield-check" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Insurance Particulars</h5>
+</div>
+<div class="action-bar">
+  <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+  <button onclick="window.print()" class="btn btn-outline-primary btn-sm ms-2"><i class="bi bi-printer me-1"></i>Print</button>
+</div>
+<form method="GET" class="form-card mb-3">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-4"><label class="form-label">Center</label>
+      <select name="center_id" class="form-select form-select-sm">
+        <option value="">All Centers</option>
+        {% for c in centers %}<option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} – {{ c.center_name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
+  </div>
+</form>
+<div class="lms-table" style="overflow-x:auto;">
+  <table class="table table-hover mb-0" style="min-width:1100px;">
+    <thead>
+      <tr>
+        <th>#</th><th>Loan ID</th><th>Member Code</th><th>Member Name</th><th>DOB</th>
+        <th>Nominee</th><th>Nominee KYC</th><th>Nominee KYC No</th>
+        <th>Center</th><th>Loan Type</th><th>Loan Amt</th><th>Ins. Fee</th><th>Nom. Ins. Fee</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% set t_ins = namespace(v=0) %}
+    {% set t_nom = namespace(v=0) %}
+    {% for d in data %}
+      {% set t_ins.v = t_ins.v + (d.insurance_fee or 0) %}
+      {% set t_nom.v = t_nom.v + (d.nominee_insurance_fee or 0) %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td class="fw-semibold text-primary">{{ d.loan_id or '—' }}</td>
+        <td>{{ d.member_code }}</td>
+        <td class="fw-semibold">{{ d.full_name }}</td>
+        <td>{{ d.date_of_birth or '—' }}</td>
+        <td>{{ d.nominee_name or '—' }}</td>
+        <td>{{ d.nominee_kyc_type or '—' }}</td>
+        <td>{{ d.nominee_kyc_number or '—' }}</td>
+        <td>{{ d.center_code }}</td>
+        <td>{{ d.loan_type_name or '—' }}</td>
+        <td>₹{{ '{:,.0f}'.format(d.disbursed_amount) }}</td>
+        <td>₹{{ '{:,.2f}'.format(d.insurance_fee or 0) }}</td>
+        <td>₹{{ '{:,.2f}'.format(d.nominee_insurance_fee or 0) }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="13" class="text-center text-muted py-4">No records found.</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot class="table-light fw-semibold">
+      <tr>
+        <td colspan="11" class="text-end">Totals:</td>
+        <td>₹{{ '{:,.2f}'.format(t_ins.v) }}</td>
+        <td>₹{{ '{:,.2f}'.format(t_nom.v) }}</td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+{% endblock %}

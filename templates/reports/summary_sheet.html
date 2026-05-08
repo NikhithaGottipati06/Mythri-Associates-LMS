@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% block title %}Summary Sheet{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-table" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Summary Sheet</h5>
+</div>
+<div class="action-bar">
+  <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+  <button onclick="window.print()" class="btn btn-outline-primary btn-sm ms-2"><i class="bi bi-printer me-1"></i>Print</button>
+</div>
+<form method="GET" class="form-card mb-3">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-4">
+      <label class="form-label">Center</label>
+      <select name="center_id" class="form-select form-select-sm">
+        <option value="">All Centers</option>
+        {% for c in centers %}
+        <option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} – {{ c.center_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
+  </div>
+</form>
+<div class="lms-table">
+  <table class="table table-hover mb-0">
+    <thead>
+      <tr>
+        <th>#</th><th>Center Code</th><th>Center Name</th><th>Members</th>
+        <th>Active Loans</th><th>Total Disbursed</th><th>Total Collected</th><th>Outstanding</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% set t_members = namespace(v=0) %}
+    {% set t_loans = namespace(v=0) %}
+    {% set t_disbursed = namespace(v=0) %}
+    {% set t_collected = namespace(v=0) %}
+    {% for c in centers_data %}
+      {% set outstanding = c.total_disbursed - c.total_collected %}
+      {% set t_members.v = t_members.v + c.total_members %}
+      {% set t_loans.v = t_loans.v + c.active_loans %}
+      {% set t_disbursed.v = t_disbursed.v + c.total_disbursed %}
+      {% set t_collected.v = t_collected.v + c.total_collected %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td class="fw-semibold text-primary">{{ c.center_code }}</td>
+        <td class="fw-semibold">{{ c.center_name }}</td>
+        <td>{{ c.total_members }}</td>
+        <td>{{ c.active_loans }}</td>
+        <td>₹{{ '{:,.0f}'.format(c.total_disbursed) }}</td>
+        <td>₹{{ '{:,.0f}'.format(c.total_collected) }}</td>
+        <td class="fw-semibold {% if outstanding > 0 %}text-danger{% endif %}">
+          ₹{{ '{:,.0f}'.format(outstanding) }}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="8" class="text-center text-muted py-4">No data.</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot class="table-light fw-semibold">
+      <tr>
+        <td colspan="3" class="text-end">Totals:</td>
+        <td>{{ t_members.v }}</td>
+        <td>{{ t_loans.v }}</td>
+        <td>₹{{ '{:,.0f}'.format(t_disbursed.v) }}</td>
+        <td>₹{{ '{:,.0f}'.format(t_collected.v) }}</td>
+        <td>₹{{ '{:,.0f}'.format(t_disbursed.v - t_collected.v) }}</td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+{% endblock %}

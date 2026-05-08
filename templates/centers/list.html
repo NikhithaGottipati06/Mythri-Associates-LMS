@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block title %}Centers{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-building" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Centers</h5>
+</div>
+
+<div class="action-bar">
+  <a href="{{ url_for('centers_new') }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-circle me-1"></i>Add New
+  </a>
+  <span class="ms-auto total-bar">Total Records: {{ centers|length }}</span>
+</div>
+
+<div class="lms-table">
+  <table class="table table-hover mb-0">
+    <thead>
+      <tr>
+        <th>Center Code</th>
+        <th>Center</th>
+        <th>Active</th>
+        <th>Address1</th>
+        <th>City</th>
+        <th>State</th>
+        <th>Pin Code</th>
+        <th>Meeting Type</th>
+        <th>Meeting Place</th>
+        <th>Meeting Time</th>
+        <th>Max Members</th>
+        <th>Staff</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for c in centers %}
+      <tr>
+        <td class="fw-semibold text-primary">{{ c.center_code }}</td>
+        <td class="fw-semibold">{{ c.center_name }}</td>
+        <td>{% if c.active %}<span class="badge-active">✓</span>{% else %}<span class="badge-inactive">✗</span>{% endif %}</td>
+        <td>{{ c.address1 or '—' }}</td>
+        <td>{{ c.city or '—' }}</td>
+        <td>{{ c.state or '—' }}</td>
+        <td>{{ c.pin_code or '—' }}</td>
+        <td>{{ c.meeting_type }}({{ c.meeting_week }})</td>
+        <td>{{ c.meeting_place or '—' }}</td>
+        <td>{{ c.meeting_time or '—' }}</td>
+        <td>{{ c.max_members }}</td>
+        <td>{{ c.staff_name or '—' }}</td>
+        <td>
+          {% if session.role == 'Admin' %}
+          <a href="{{ url_for('centers_edit', cid=c.id) }}" class="btn btn-outline-primary btn-icon" title="Edit">
+            <i class="bi bi-pencil"></i>
+          </a>
+          <form method="POST" action="{{ url_for('centers_delete', cid=c.id) }}" style="display:inline;"
+                onsubmit="return confirm('Delete center {{ c.center_name }}?')">
+            <button class="btn btn-outline-danger btn-icon" title="Delete"><i class="bi bi-trash"></i></button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="13" class="text-center text-muted py-4">No centers found. Click Add New to create one.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

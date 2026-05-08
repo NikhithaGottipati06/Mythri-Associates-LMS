@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% block title %}Loan Types{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-tags" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Loan Types</h5>
+</div>
+<div class="action-bar">
+  <a href="{{ url_for('loan_types_new') }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-circle me-1"></i>Add New
+  </a>
+  <span class="ms-auto total-bar">Total Records: {{ types|length }}</span>
+</div>
+<div class="lms-table">
+  <table class="table table-hover mb-0">
+    <thead>
+      <tr>
+        <th>Name</th><th>Active</th><th>Payment Type</th><th>Tenure</th>
+        <th>Fixed Tenure</th><th>Method Type</th><th>Interest%</th>
+        <th>Proc. Fee</th><th>Insurance</th><th>Notes</th><th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for t in types %}
+      <tr>
+        <td class="fw-semibold">{{ t.loan_type_name }}</td>
+        <td>{% if t.active %}<span class="badge-active">✓</span>{% else %}<span class="badge-inactive">✗</span>{% endif %}</td>
+        <td>{{ t.repayment_frequency }}</td>
+        <td>{{ t.tenure_weeks }}</td>
+        <td>{% if t.fixed_tenure %}<span class="badge-active">✓</span>{% else %}<span class="badge-inactive">✗</span>{% endif %}</td>
+        <td><span class="badge bg-secondary">{{ t.interest_method or 'FLAT' }}</span></td>
+        <td>{{ t.interest_rate }}%</td>
+        <td>₹{{ t.processing_fee }}</td>
+        <td>₹{{ t.insurance_fee }}</td>
+        <td class="text-muted small">{{ t.notes or '—' }}</td>
+        <td>
+          {% if session.role == 'Admin' %}
+          <a href="{{ url_for('loan_types_edit', lid=t.id) }}" class="btn btn-outline-primary btn-icon"><i class="bi bi-pencil"></i></a>
+          <form method="POST" action="{{ url_for('loan_types_delete', lid=t.id) }}" style="display:inline;"
+                onsubmit="return confirm('Delete loan type?')">
+            <button class="btn btn-outline-danger btn-icon"><i class="bi bi-trash"></i></button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="11" class="text-center text-muted py-4">No loan types defined.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+{% block title %}Post Recovery{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-arrow-repeat" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Recovery Posting – {{ loan.disbursement_no }}</h5>
+</div>
+<div class="action-bar">
+  <a href="{{ url_for('recovery_posting_list') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+  <span class="ms-3 fw-semibold" style="font-size:13px;">
+    Member: {{ loan.member_code }} – {{ loan.member_name }} &nbsp;|&nbsp;
+    Amount: ₹{{ '{:,.0f}'.format(loan.disbursed_amount) }} &nbsp;|&nbsp;
+    Installments: {{ loan.total_installments }} × ₹{{ '{:,.2f}'.format(loan.installment_amount or 0) }}
+  </span>
+</div>
+
+<form method="POST">
+  <div class="form-card">
+    <div class="section-title">New Recovery Entry</div>
+    <div class="row g-3">
+      <div class="col-md-2">
+        <label class="form-label required">Installment No</label>
+        <input type="number" name="installment_no" class="form-control field-required"
+               value="{{ postings|length + 1 }}" required>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label required">Posting Date</label>
+        <input type="text" name="posting_date" class="form-control field-required" placeholder="DD/MM/YYYY" required>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Due Amount (₹)</label>
+        <input type="number" name="due_amount" class="form-control" step="0.01"
+               value="{{ loan.installment_amount or 0 }}">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label required">Paid Amount (₹)</label>
+        <input type="number" name="paid_amount" class="form-control field-required" step="0.01" required
+               oninput="splitAmount(this.value)">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Principal (₹)</label>
+        <input type="number" name="principal" id="principal" class="form-control" step="0.01" value="0">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Interest (₹)</label>
+        <input type="number" name="interest" id="interest" class="form-control" step="0.01" value="0">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Penalty (₹)</label>
+        <input type="number" name="penalty" class="form-control" step="0.01" value="0">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Mode</label>
+        <select name="mode" class="form-select">
+          <option>Cash</option><option>Bank Transfer</option><option>Cheque</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Savings (₹)</label>
+        <input type="number" name="savings_amount" class="form-control" step="0.01" value="100">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Narration</label>
+        <input type="text" name="narration" class="form-control" value="Weekly recovery">
+      </div>
+    </div>
+  </div>
+  <div class="d-flex gap-2 mb-3">
+    <button type="submit" class="btn btn-primary"><i class="bi bi-check2 me-1"></i>Post Recovery</button>
+    <a href="{{ url_for('recovery_posting_list') }}" class="btn btn-secondary">Cancel</a>
+  </div>
+</form>
+
+{% if savings_summary %}
+<div class="form-card mb-3">
+  <div class="section-title"><i class="bi bi-piggy-bank me-1"></i>Savings Summary – {{ loan.member_name }}</div>
+  <div class="row g-3">
+    <div class="col-md-4">
+      <div class="p-2 bg-light rounded text-center">
+        <div class="fw-semibold text-success" style="font-size:18px;">₹{{ '{:,.0f}'.format(savings_summary.total_deposits) }}</div>
+        <div class="text-muted" style="font-size:12px;">Total Deposits</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="p-2 bg-light rounded text-center">
+        <div class="fw-semibold text-danger" style="font-size:18px;">₹{{ '{:,.0f}'.format(savings_summary.total_withdrawals) }}</div>
+        <div class="text-muted" style="font-size:12px;">Total Withdrawals</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="p-2 bg-light rounded text-center">
+        <div class="fw-semibold text-primary" style="font-size:18px;">₹{{ '{:,.0f}'.format(savings_summary.balance) }}</div>
+        <div class="text-muted" style="font-size:12px;">Balance</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="form-card">
+  <div class="section-title">Posted Recoveries ({{ postings|length }})</div>
+  <div class="lms-table" style="margin:0;">
+    <table class="table table-sm mb-0">
+      <thead><tr><th>Inst#</th><th>Date</th><th>Due</th><th>Paid</th><th>Principal</th><th>Interest</th><th>Penalty</th><th>Mode</th>{% if session.role == 'Admin' %}<th>Actions</th>{% endif %}</tr></thead>
+      <tbody>
+      {% for p in postings %}
+        <tr>
+          <td>{{ p.installment_no }}</td>
+          <td>{{ p.posting_date }}</td>
+          <td>₹{{ '{:,.2f}'.format(p.due_amount) }}</td>
+          <td>₹{{ '{:,.2f}'.format(p.paid_amount) }}</td>
+          <td>₹{{ '{:,.2f}'.format(p.principal) }}</td>
+          <td>₹{{ '{:,.2f}'.format(p.interest) }}</td>
+          <td>₹{{ '{:,.2f}'.format(p.penalty) }}</td>
+          <td>{{ p.mode }}</td>
+          {% if session.role == 'Admin' %}
+          <td>
+            <form method="POST" action="{{ url_for('recovery_posting_delete', rid=p.id) }}" style="display:inline;"
+                  onsubmit="return confirm('Reverse/Delete recovery installment #{{ p.installment_no }}? This will also delete the linked savings transaction.')">
+              <button class="btn btn-outline-danger btn-icon" title="Reverse"><i class="bi bi-arrow-counterclockwise"></i></button>
+            </form>
+          </td>
+          {% endif %}
+        </tr>
+      {% else %}
+        <tr><td colspan="{% if session.role == 'Admin' %}9{% else %}8{% endif %}" class="text-center text-muted py-2">No recoveries posted yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const rate = {{ loan.interest_rate or 0 }};
+function splitAmount(val){
+  const paid = parseFloat(val) || 0;
+  const interest = parseFloat((paid * rate / 100).toFixed(2));
+  const principal = parseFloat((paid - interest).toFixed(2));
+  document.getElementById('interest').value = interest;
+  document.getElementById('principal').value = principal < 0 ? 0 : principal;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% block title %}Member Wise Summary Sheet{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-person-check" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Member Wise Summary Sheet</h5>
+</div>
+<div class="action-bar">
+  <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+  <button onclick="window.print()" class="btn btn-outline-primary btn-sm ms-2"><i class="bi bi-printer me-1"></i>Print</button>
+</div>
+<form method="GET" class="form-card mb-3">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-4">
+      <label class="form-label">Center</label>
+      <select name="center_id" class="form-select form-select-sm">
+        <option value="">All Centers</option>
+        {% for c in centers %}
+        <option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} – {{ c.center_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
+  </div>
+</form>
+<div class="lms-table" style="overflow-x:auto;">
+  <table class="table table-hover mb-0">
+    <thead>
+      <tr>
+        <th>#</th><th>Member Code</th><th>Name</th><th>Grp</th><th>Center</th>
+        <th>Loans</th><th>Total Disbursed</th><th>Total Paid</th><th>Outstanding</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% set t_d = namespace(v=0) %}
+    {% set t_p = namespace(v=0) %}
+    {% for d in data %}
+      {% set t_d.v = t_d.v + d.total_disbursed %}
+      {% set t_p.v = t_p.v + d.total_paid %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td class="fw-semibold text-primary">{{ d.member_code }}</td>
+        <td class="fw-semibold">{{ d.full_name }}</td>
+        <td>{{ d.grp }}</td>
+        <td>{{ d.center_code }} – {{ d.center_name }}</td>
+        <td>{{ d.loan_count }}</td>
+        <td>₹{{ '{:,.0f}'.format(d.total_disbursed) }}</td>
+        <td>₹{{ '{:,.0f}'.format(d.total_paid) }}</td>
+        <td class="{% if d.outstanding > 0 %}text-danger fw-semibold{% endif %}">
+          ₹{{ '{:,.0f}'.format(d.outstanding) }}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="9" class="text-center text-muted py-4">No data.</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot class="table-light fw-semibold">
+      <tr>
+        <td colspan="6" class="text-end">Totals:</td>
+        <td>₹{{ '{:,.0f}'.format(t_d.v) }}</td>
+        <td>₹{{ '{:,.0f}'.format(t_p.v) }}</td>
+        <td>₹{{ '{:,.0f}'.format(t_d.v - t_p.v) }}</td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+{% endblock %}

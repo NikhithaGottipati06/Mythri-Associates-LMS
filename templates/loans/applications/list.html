@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block title %}Loan Applications{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-file-earmark-text" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Loan Applications</h5>
+</div>
+<div class="action-bar">
+  <a href="{{ url_for('loan_applications_new') }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-circle me-1"></i>Add New
+  </a>
+  <span class="ms-auto total-bar">Total Records: {{ apps|length }}</span>
+</div>
+<div class="lms-table" style="overflow-x:auto;">
+  <table class="table table-hover mb-0" style="min-width:1400px;">
+    <thead>
+      <tr>
+        <th>Loan ID</th><th>Loan Type</th><th>Cycle#</th>
+        <th>Member Code</th><th>Member Name</th><th>Net Income</th>
+        <th>Center Code</th><th>Center Name</th><th>Center Type</th>
+        <th>Amt Requested</th><th>Loan Purpose</th><th>Status</th>
+        <th>App Date</th><th>Disb. Date</th><th>Amt Approved</th>
+        <th>Requested By</th><th>Approved By</th><th>Approved On</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for a in apps %}
+      <tr>
+        <td class="fw-semibold text-primary">{{ a.loan_id or a.application_no }}</td>
+        <td>{{ a.loan_type_name or '—' }}</td>
+        <td>{{ a.loan_cycle or 1 }}</td>
+        <td>{{ a.member_code }}</td>
+        <td class="fw-semibold">{{ a.member_name }}</td>
+        <td>{{ '₹{:,.0f}'.format(a.monthly_net_income or 0) }}</td>
+        <td>{{ a.c_code or '—' }}</td>
+        <td>{{ a.center_name or '—' }}</td>
+        <td>{{ a.center_type or '—' }}</td>
+        <td>₹{{ '{:,.0f}'.format(a.applied_amount) }}</td>
+        <td>{{ a.purpose or '—' }}</td>
+        <td><span class="badge-{{ a.status|lower }}">{{ a.status }}</span></td>
+        <td>{{ a.applied_date }}</td>
+        <td>{{ a.disbursement_date or '—' }}</td>
+        <td>{% if a.approved_amount %}₹{{ '{:,.0f}'.format(a.approved_amount) }}{% else %}—{% endif %}</td>
+        <td>{{ a.created_by_name or '—' }}</td>
+        <td>{{ a.approved_by_name or '—' }}</td>
+        <td>{{ a.approved_on or '—' }}</td>
+        <td>
+          {% if session.role == 'Admin' %}
+          <a href="{{ url_for('loan_applications_edit', aid=a.id) }}" class="btn btn-outline-primary btn-icon"><i class="bi bi-pencil"></i></a>
+          <form method="POST" action="{{ url_for('loan_applications_delete', aid=a.id) }}" style="display:inline;"
+                onsubmit="return confirm('Delete application?')">
+            <button class="btn btn-outline-danger btn-icon"><i class="bi bi-trash"></i></button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="19" class="text-center text-muted py-4">No loan applications found.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

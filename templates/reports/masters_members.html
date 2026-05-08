@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block title %}Members Report{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-people" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Members Report</h5>
+</div>
+<div class="action-bar">
+  <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+  <button onclick="window.print()" class="btn btn-outline-primary btn-sm ms-2"><i class="bi bi-printer me-1"></i>Print</button>
+</div>
+<form method="GET" class="form-card mb-3">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-4">
+      <label class="form-label">Center</label>
+      <select name="center_id" class="form-select form-select-sm">
+        <option value="">All Centers</option>
+        {% for c in centers %}
+        <option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} – {{ c.center_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label">Status</label>
+      <select name="status" class="form-select form-select-sm">
+        <option value="ACTIVE" {% if status_filter=='ACTIVE' %}selected{% endif %}>Active</option>
+        <option value="WITHDRAWN" {% if status_filter=='WITHDRAWN' %}selected{% endif %}>Withdrawn</option>
+        <option value="" {% if not status_filter %}selected{% endif %}>All</option>
+      </select>
+    </div>
+    <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
+  </div>
+</form>
+<div class="lms-table">
+  <table class="table table-hover mb-0">
+    <thead>
+      <tr>
+        <th>#</th><th>Code</th><th>Name</th><th>Center</th><th>Group</th>
+        <th>Joined</th><th>Phone</th><th>Gender</th><th>KYC</th><th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for m in members %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td class="fw-semibold text-primary">{{ m.member_code }}</td>
+        <td class="fw-semibold">{{ m.full_name }}</td>
+        <td>{{ m.center_code }} – {{ m.center_name }}</td>
+        <td>{{ m.grp }}</td>
+        <td>{{ m.date_of_join }}</td>
+        <td>{{ m.phone1 or '—' }}</td>
+        <td>{{ m.gender or '—' }}</td>
+        <td>{{ m.kyc_type or '—' }}</td>
+        <td><span class="badge-{{ m.status|lower }}">{{ m.status }}</span></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="10" class="text-center text-muted py-4">No members found.</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot><tr><td colspan="10" class="text-end fw-semibold">Total: {{ members|length }}</td></tr></tfoot>
+  </table>
+</div>
+{% endblock %}
