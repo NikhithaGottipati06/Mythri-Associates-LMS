@@ -848,14 +848,14 @@ def loan_disburse_new():
                 VALUES (?,?,?,?,'Approved')
             """, (app_id, amount, app_date, session['user_id']))
             if lt:
-            rate = float(lt['interest_rate'] or 0)
-            if lt.get('interest_type') == 'Fixed':
-                total_interest = rate
+                rate = float(lt['interest_rate'] or 0)
+                if lt.get('interest_type') == 'Fixed':
+                    total_interest = rate
+                else:
+                    total_interest = amount * rate / 100
             else:
-                total_interest = amount * rate / 100
-        else:
-            total_interest = 0
-        inst_amount = round((amount + total_interest) / tenure, 2) if tenure else 0
+                total_interest = 0
+            inst_amount = round((amount + total_interest) / tenure, 2) if tenure else 0
             db.execute("""
                 INSERT INTO loan_disbursements (application_id,disbursement_no,loan_id,disbursed_amount,
                 disbursement_date,mode,account_no,disbursed_by,status,total_installments,installment_amount,remarks)
