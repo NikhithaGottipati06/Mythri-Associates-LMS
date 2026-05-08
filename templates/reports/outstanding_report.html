@@ -34,7 +34,7 @@
 {% set ns = namespace(cur_center='', sno=0, g_loan=0, g_paid=0, g_os=0, total_loan=0, total_os=0) %}
 
 {% for d in data %}
-  {% set os = d.disbursed_amount - d.total_paid %}
+  {% set os = d.disbursed_amount - d.principal_paid %}
   {% if d.center_code != ns.cur_center %}
     {% if ns.cur_center != '' %}
     <tfoot>

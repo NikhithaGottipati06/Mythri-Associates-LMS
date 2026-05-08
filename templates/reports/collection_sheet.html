@@ -50,7 +50,7 @@
 
 {% set ns.cur_center = '' %}
 {% for l in loans %}
-  {% set os = l.disbursed_amount - l.total_paid %}
+  {% set os = l.disbursed_amount - l.principal_paid %}
   {% set bal_inst = l.total_installments - l.paid_count %}
   {% set prin_due = (l.disbursed_amount / l.total_installments) if l.total_installments else 0 %}
   {% set int_due = l.int_per_inst %}

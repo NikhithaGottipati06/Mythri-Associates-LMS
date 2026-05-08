@@ -1880,6 +1880,7 @@ def report_collection_sheet():
                lt.loan_type_name, lt.interest_rate, lt.interest_type,
                u.full_name as staff_name,
                (SELECT COALESCE(SUM(rp.paid_amount),0) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id) as total_paid,
+               (SELECT COALESCE(SUM(rp.principal),0) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id) as principal_paid,
                (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id) as paid_count,
                (SELECT COALESCE(SUM(ar.amount),0) FROM advance_recoveries ar WHERE ar.disbursement_id=ld.id) as advance_total
         FROM loan_disbursements ld
@@ -2215,7 +2216,7 @@ def report_outstanding():
                COALESCE(SUM(rp.principal),0) as principal_paid,
                COALESCE(SUM(rp.interest),0) as interest_paid,
                COUNT(rp.id) as installments_paid,
-               ld.disbursed_amount - COALESCE(SUM(rp.paid_amount),0) as outstanding
+               ld.disbursed_amount - COALESCE(SUM(rp.principal),0) as outstanding
         FROM loan_disbursements ld
         LEFT JOIN loan_applications la ON ld.application_id=la.id
         LEFT JOIN members m ON la.member_id=m.id
@@ -2247,7 +2248,7 @@ def report_arrears_member_wise():
                COALESCE(SUM(rp.paid_amount),0) as total_paid,
                COALESCE(SUM(rp.principal),0) as prin_paid,
                COALESCE(SUM(rp.interest),0) as int_paid,
-               ld.disbursed_amount - COALESCE(SUM(rp.paid_amount),0) as outstanding,
+               ld.disbursed_amount - COALESCE(SUM(rp.principal),0) as outstanding,
                ld.total_installments - COUNT(rp.id) as pending_installments
         FROM loan_disbursements ld
         LEFT JOIN loan_applications la ON ld.application_id=la.id
@@ -2278,7 +2279,7 @@ def report_arrears_new():
                m.full_name as member_name, m.member_code,
                c.center_name, c.center_code,
                lt.loan_type_name,
-               ld.disbursed_amount - COALESCE(SUM(rp.paid_amount),0) as outstanding
+               ld.disbursed_amount - COALESCE(SUM(rp.principal),0) as outstanding
         FROM loan_disbursements ld
         LEFT JOIN loan_applications la ON ld.application_id=la.id
         LEFT JOIN members m ON la.member_id=m.id
@@ -2345,8 +2346,9 @@ def report_glance():
         'total_disbursements': db.execute("SELECT COUNT(*) FROM loan_disbursements").fetchone()[0],
         'total_disbursed_amount': db.execute("SELECT COALESCE(SUM(disbursed_amount),0) FROM loan_disbursements").fetchone()[0],
         'total_collected': db.execute("SELECT COALESCE(SUM(paid_amount),0) FROM recovery_postings").fetchone()[0],
+        'total_principal_collected': db.execute("SELECT COALESCE(SUM(principal),0) FROM recovery_postings").fetchone()[0],
     }
-    stats['outstanding'] = stats['total_disbursed_amount'] - stats['total_collected']
+    stats['outstanding'] = stats['total_disbursed_amount'] - stats['total_principal_collected']
     stats['total_savings'] = db.execute("SELECT COALESCE(SUM(deposit_amount),0) FROM savings_transactions").fetchone()[0]
     stats['savings_withdrawn'] = db.execute("SELECT COALESCE(SUM(withdraw_amount),0) FROM savings_transactions").fetchone()[0]
     stats['savings_outstanding'] = stats['total_savings'] - stats['savings_withdrawn']
@@ -2356,6 +2358,7 @@ def report_glance():
                COUNT(DISTINCT ld.id) as loans,
                COALESCE(SUM(ld.disbursed_amount),0) as disbursed,
                COALESCE(SUM(rp.paid_amount),0) as collected,
+               COALESCE(SUM(rp.principal),0) as principal_collected,
                COALESCE((SELECT SUM(st.deposit_amount) FROM savings_transactions st WHERE st.center_id=c.id),0) as savings_deposits,
                COALESCE((SELECT SUM(st.withdraw_amount) FROM savings_transactions st WHERE st.center_id=c.id),0) as savings_withdrawals
         FROM centers c
@@ -2422,7 +2425,8 @@ def report_loan_ledger():
                c.center_name, c.center_code,
                lt.loan_type_name, lt.interest_rate,
                COALESCE(SUM(rp.paid_amount),0) as total_paid,
-               ld.disbursed_amount - COALESCE(SUM(rp.paid_amount),0) as outstanding,
+               COALESCE(SUM(rp.principal),0) as principal_paid,
+               ld.disbursed_amount - COALESCE(SUM(rp.principal),0) as outstanding,
                COUNT(rp.id) as paid_count
         FROM loan_disbursements ld
         LEFT JOIN loan_applications la ON ld.application_id=la.id
