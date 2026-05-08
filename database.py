@@ -355,6 +355,8 @@ def migrate_db():
             cleared_by INTEGER REFERENCES users(id),
             created_at TEXT DEFAULT (datetime('now'))
         )""",
+        # Fix maturity_amount for existing SD accounts: interest on SD amount, not loan amount
+        "UPDATE sd_accounts SET maturity_amount = sd_amount + sd_amount * roi / 100.0 * (tenure_months / 12.0) WHERE sd_amount > 0",
     ]
     for sql in migrations:
         try:
