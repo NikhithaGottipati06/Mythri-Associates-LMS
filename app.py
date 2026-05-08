@@ -1499,6 +1499,328 @@ def savings_withdraw(mid):
     flash(f'Withdrawal of ₹{withdraw_amount:,.0f} posted successfully.', 'success')
     return redirect(url_for('savings_list'))
 
+# ── Secure Deposits ───────────────────────────────────────────────────────────
+
+@app.route('/secure-deposits')
+@login_required
+def secure_deposits_list():
+    db = get_db()
+    center_filter = request.args.get('center_id', '')
+    all_members = db.execute("""
+        SELECT m.id, m.member_code, m.full_name, c.center_code
+        FROM members m LEFT JOIN centers c ON m.center_id=c.id
+        WHERE m.status='ACTIVE' ORDER BY m.member_code
+    """).fetchall()
+    centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
+
+    where = "WHERE 1=1"
+    params = []
+    if center_filter:
+        where += " AND sd.center_id=?"
+        params.append(center_filter)
+
+    summary = db.execute(f"""
+        SELECT m.id, m.member_code, m.full_name, c.center_code, c.center_name,
+               COALESCE(SUM(sd.deposit_amount),0) as total_deposits,
+               COALESCE(SUM(sd.withdraw_amount),0) as total_withdrawals
+        FROM members m
+        LEFT JOIN centers c ON m.center_id=c.id
+        LEFT JOIN secure_deposits sd ON sd.member_id=m.id
+        {where.replace('sd.center_id','m.center_id')}
+        GROUP BY m.id HAVING total_deposits > 0 OR total_withdrawals > 0
+        ORDER BY m.member_code
+    """, params).fetchall()
+
+    transactions = db.execute(f"""
+        SELECT sd.*, m.member_code, m.full_name, c.center_code, c.center_name,
+               u.full_name as posted_by_name
+        FROM secure_deposits sd
+        LEFT JOIN members m ON sd.member_id=m.id
+        LEFT JOIN centers c ON sd.center_id=c.id
+        LEFT JOIN users u ON sd.posted_by=u.id
+        {where}
+        ORDER BY sd.transaction_date DESC, sd.id DESC
+    """, params).fetchall()
+
+    totals_row = db.execute(f"""
+        SELECT COALESCE(SUM(sd.deposit_amount),0) as deposits,
+               COALESCE(SUM(sd.withdraw_amount),0) as withdrawals
+        FROM secure_deposits sd {where}
+    """, params).fetchone()
+    totals = {'deposits': totals_row['deposits'], 'withdrawals': totals_row['withdrawals'],
+              'balance': totals_row['deposits'] - totals_row['withdrawals']}
+    db.close()
+    return render_template('secure_deposits/list.html', all_members=all_members, centers=centers,
+                           summary=summary, transactions=transactions, totals=totals,
+                           center_filter=center_filter)
+
+@app.route('/secure-deposits/member-info')
+@login_required
+def secure_deposits_member_info():
+    db = get_db()
+    mid = request.args.get('mid', '')
+    if not mid:
+        return {'center': '', 'balance': 0}
+    member = db.execute("""
+        SELECT m.*, c.center_code, c.center_name FROM members m
+        LEFT JOIN centers c ON m.center_id=c.id WHERE m.id=?
+    """, (mid,)).fetchone()
+    bal = db.execute(
+        "SELECT COALESCE(SUM(deposit_amount),0)-COALESCE(SUM(withdraw_amount),0) as b FROM secure_deposits WHERE member_id=?",
+        (mid,)).fetchone()['b']
+    db.close()
+    if not member:
+        return {'center': '', 'balance': 0}
+    return {'center': f"{member['center_code']} {member['center_name']}", 'balance': bal or 0}
+
+@app.route('/secure-deposits/deposit/<int:mid>', methods=['POST'])
+@login_required
+def secure_deposit_add(mid):
+    db = get_db()
+    amount = float(request.form.get('deposit_amount', 0))
+    date = request.form.get('transaction_date', '').strip()
+    remarks = request.form.get('remarks', '').strip()
+    if amount <= 0 or not date:
+        flash('Invalid amount or date.', 'danger')
+        return redirect(url_for('secure_deposits_list'))
+    member = db.execute("SELECT center_id FROM members WHERE id=?", (mid,)).fetchone()
+    prev = db.execute(
+        "SELECT COALESCE(SUM(deposit_amount),0)-COALESCE(SUM(withdraw_amount),0) FROM secure_deposits WHERE member_id=?",
+        (mid,)).fetchone()[0] or 0
+    db.execute("""
+        INSERT INTO secure_deposits (member_id,center_id,transaction_date,deposit_amount,withdraw_amount,balance,remarks,posted_by)
+        VALUES (?,?,?,?,0,?,?,?)
+    """, (mid, member['center_id'], date, amount, prev + amount, remarks, session['user_id']))
+    db.commit()
+    db.close()
+    flash(f'Secure deposit of ₹{amount:,.0f} recorded.', 'success')
+    return redirect(url_for('secure_deposits_list'))
+
+@app.route('/secure-deposits/withdraw/<int:mid>', methods=['POST'])
+@login_required
+def secure_deposit_withdraw(mid):
+    db = get_db()
+    amount = float(request.form.get('withdraw_amount', 0))
+    date = request.form.get('transaction_date', '').strip()
+    remarks = request.form.get('remarks', '').strip()
+    prev = db.execute(
+        "SELECT COALESCE(SUM(deposit_amount),0)-COALESCE(SUM(withdraw_amount),0) FROM secure_deposits WHERE member_id=?",
+        (mid,)).fetchone()[0] or 0
+    if amount <= 0 or not date:
+        flash('Invalid amount or date.', 'danger')
+        return redirect(url_for('secure_deposits_list'))
+    if amount > prev:
+        flash(f'Insufficient balance. Available: ₹{prev:,.0f}', 'danger')
+        return redirect(url_for('secure_deposits_list'))
+    member = db.execute("SELECT center_id FROM members WHERE id=?", (mid,)).fetchone()
+    db.execute("""
+        INSERT INTO secure_deposits (member_id,center_id,transaction_date,deposit_amount,withdraw_amount,balance,remarks,posted_by)
+        VALUES (?,?,?,0,?,?,?,?)
+    """, (mid, member['center_id'], date, amount, prev - amount, remarks, session['user_id']))
+    db.commit()
+    db.close()
+    flash(f'Withdrawal of ₹{amount:,.0f} recorded.', 'success')
+    return redirect(url_for('secure_deposits_list'))
+
+@app.route('/reports/secure-deposits')
+@login_required
+def report_secure_deposits():
+    db = get_db()
+    center_filter = request.args.get('center_id', '')
+    from_date = request.args.get('from_date', '')
+    to_date = request.args.get('to_date', '')
+    centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
+    where = "WHERE 1=1"
+    params = []
+    if center_filter:
+        where += " AND sd.center_id=?"; params.append(center_filter)
+    if from_date:
+        where += " AND substr(sd.transaction_date,7,4)||'-'||substr(sd.transaction_date,4,2)||'-'||substr(sd.transaction_date,1,2) >= ?"; params.append(_to_iso(from_date))
+    if to_date:
+        where += " AND substr(sd.transaction_date,7,4)||'-'||substr(sd.transaction_date,4,2)||'-'||substr(sd.transaction_date,1,2) <= ?"; params.append(_to_iso(to_date))
+    transactions = db.execute(f"""
+        SELECT sd.*, m.member_code, m.full_name, c.center_code, c.center_name,
+               u.full_name as posted_by_name
+        FROM secure_deposits sd
+        LEFT JOIN members m ON sd.member_id=m.id
+        LEFT JOIN centers c ON sd.center_id=c.id
+        LEFT JOIN users u ON sd.posted_by=u.id
+        {where} ORDER BY sd.transaction_date, m.member_code
+    """, params).fetchall()
+    db.close()
+    return render_template('reports/secure_deposit_report.html', transactions=transactions, centers=centers,
+                           center_filter=center_filter, from_date=from_date, to_date=to_date)
+
+# ── Recurring Deposits ────────────────────────────────────────────────────────
+
+@app.route('/rd')
+@login_required
+def rd_list():
+    db = get_db()
+    center_filter = request.args.get('center_id', '')
+    all_members = db.execute("""
+        SELECT m.id, m.member_code, m.full_name, c.center_code
+        FROM members m LEFT JOIN centers c ON m.center_id=c.id
+        WHERE m.status='ACTIVE' ORDER BY m.member_code
+    """).fetchall()
+    centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
+    where = "WHERE 1=1"
+    params = []
+    if center_filter:
+        where += " AND rd.center_id=?"; params.append(center_filter)
+    accounts = db.execute(f"""
+        SELECT rd.*, m.member_code, m.full_name, c.center_code, c.center_name,
+               COALESCE(SUM(rdt.amount),0) as total_collected,
+               COUNT(rdt.id) as paid_count
+        FROM rd_accounts rd
+        LEFT JOIN members m ON rd.member_id=m.id
+        LEFT JOIN centers c ON rd.center_id=c.id
+        LEFT JOIN rd_transactions rdt ON rdt.rd_id=rd.id
+        {where} GROUP BY rd.id ORDER BY rd.rd_no DESC
+    """, params).fetchall()
+    db.close()
+    return render_template('rd/list.html', accounts=accounts, all_members=all_members,
+                           centers=centers, center_filter=center_filter)
+
+@app.route('/rd/new', methods=['POST'])
+@login_required
+def rd_new():
+    db = get_db()
+    mid = int(request.form.get('member_id', 0))
+    start_date = request.form.get('start_date', '').strip()
+    installment_amount = float(request.form.get('installment_amount', 0))
+    total_installments = int(request.form.get('total_installments', 0))
+    frequency = request.form.get('frequency', 'Weekly')
+    remarks = request.form.get('remarks', '').strip()
+    if not mid or not start_date or installment_amount <= 0 or total_installments <= 0:
+        flash('All fields are required.', 'danger')
+        return redirect(url_for('rd_list'))
+    member = db.execute("SELECT center_id FROM members WHERE id=?", (mid,)).fetchone()
+    last = db.execute("SELECT rd_no FROM rd_accounts ORDER BY id DESC LIMIT 1").fetchone()
+    if last:
+        try:
+            num = int(last['rd_no'].split('-')[1]) + 1
+        except Exception:
+            num = 1
+    else:
+        num = 1
+    rd_no = f"RD-{num:04d}"
+    db.execute("""
+        INSERT INTO rd_accounts (rd_no,member_id,center_id,start_date,installment_amount,total_installments,frequency,status,remarks,created_by)
+        VALUES (?,?,?,?,?,?,?,?,?,?)
+    """, (rd_no, mid, member['center_id'], start_date, installment_amount, total_installments, frequency, 'Active', remarks, session['user_id']))
+    db.commit()
+    db.close()
+    flash(f'RD Account {rd_no} opened successfully.', 'success')
+    return redirect(url_for('rd_list'))
+
+@app.route('/rd/<int:rdid>')
+@login_required
+def rd_detail(rdid):
+    db = get_db()
+    account = db.execute("""
+        SELECT rd.*, m.member_code, m.full_name, m.phone1, c.center_code, c.center_name,
+               u.full_name as created_by_name
+        FROM rd_accounts rd
+        LEFT JOIN members m ON rd.member_id=m.id
+        LEFT JOIN centers c ON rd.center_id=c.id
+        LEFT JOIN users u ON rd.created_by=u.id
+        WHERE rd.id=?
+    """, (rdid,)).fetchone()
+    if not account:
+        flash('RD account not found.', 'danger')
+        return redirect(url_for('rd_list'))
+    transactions = db.execute("""
+        SELECT rdt.*, u.full_name as posted_by_name
+        FROM rd_transactions rdt LEFT JOIN users u ON rdt.posted_by=u.id
+        WHERE rdt.rd_id=? ORDER BY rdt.installment_no
+    """, (rdid,)).fetchall()
+    db.close()
+    return render_template('rd/detail.html', account=account, transactions=transactions)
+
+@app.route('/rd/<int:rdid>/pay', methods=['POST'])
+@login_required
+def rd_pay(rdid):
+    db = get_db()
+    account = db.execute("SELECT * FROM rd_accounts WHERE id=?", (rdid,)).fetchone()
+    if not account or account['status'] == 'Closed':
+        flash('RD account not found or already closed.', 'danger')
+        return redirect(url_for('rd_list'))
+    paid_count = db.execute("SELECT COUNT(*) FROM rd_transactions WHERE rd_id=?", (rdid,)).fetchone()[0]
+    if paid_count >= account['total_installments']:
+        db.execute("UPDATE rd_accounts SET status='Closed' WHERE id=?", (rdid,))
+        db.commit()
+        db.close()
+        flash('All installments already paid. RD marked as Closed.', 'warning')
+        return redirect(url_for('rd_detail', rdid=rdid))
+    transaction_date = request.form.get('transaction_date', '').strip()
+    amount = float(request.form.get('amount', account['installment_amount']))
+    remarks = request.form.get('remarks', '').strip()
+    if not transaction_date or amount <= 0:
+        flash('Invalid date or amount.', 'danger')
+        return redirect(url_for('rd_detail', rdid=rdid))
+    next_inst = paid_count + 1
+    db.execute("""
+        INSERT INTO rd_transactions (rd_id, transaction_date, installment_no, amount, remarks, posted_by)
+        VALUES (?,?,?,?,?,?)
+    """, (rdid, transaction_date, next_inst, amount, remarks, session['user_id']))
+    if next_inst >= account['total_installments']:
+        db.execute("UPDATE rd_accounts SET status='Closed' WHERE id=?", (rdid,))
+    db.commit()
+    db.close()
+    flash(f'Installment {next_inst}/{account["total_installments"]} recorded.', 'success')
+    return redirect(url_for('rd_detail', rdid=rdid))
+
+@app.route('/reports/rd')
+@login_required
+def report_rd():
+    db = get_db()
+    center_filter = request.args.get('center_id', '')
+    from_date = request.args.get('from_date', '')
+    to_date = request.args.get('to_date', '')
+    status_filter = request.args.get('status', '')
+    centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
+    where = "WHERE 1=1"
+    params = []
+    if center_filter:
+        where += " AND rd.center_id=?"; params.append(center_filter)
+    if status_filter:
+        where += " AND rd.status=?"; params.append(status_filter)
+    accounts = db.execute(f"""
+        SELECT rd.*, m.member_code, m.full_name, c.center_code, c.center_name,
+               COALESCE(SUM(rdt.amount),0) as total_collected,
+               COUNT(rdt.id) as paid_count
+        FROM rd_accounts rd
+        LEFT JOIN members m ON rd.member_id=m.id
+        LEFT JOIN centers c ON rd.center_id=c.id
+        LEFT JOIN rd_transactions rdt ON rdt.rd_id=rd.id
+        {where} GROUP BY rd.id ORDER BY rd.rd_no
+    """, params).fetchall()
+    # transactions filtered by date
+    twhere = "WHERE 1=1"
+    tparams = []
+    if center_filter:
+        twhere += " AND rd.center_id=?"; tparams.append(center_filter)
+    if from_date:
+        twhere += " AND substr(rdt.transaction_date,7,4)||'-'||substr(rdt.transaction_date,4,2)||'-'||substr(rdt.transaction_date,1,2) >= ?"; tparams.append(_to_iso(from_date))
+    if to_date:
+        twhere += " AND substr(rdt.transaction_date,7,4)||'-'||substr(rdt.transaction_date,4,2)||'-'||substr(rdt.transaction_date,1,2) <= ?"; tparams.append(_to_iso(to_date))
+    transactions = db.execute(f"""
+        SELECT rdt.*, rd.rd_no, rd.installment_amount, rd.total_installments,
+               m.member_code, m.full_name, c.center_code, c.center_name,
+               u.full_name as posted_by_name
+        FROM rd_transactions rdt
+        LEFT JOIN rd_accounts rd ON rdt.rd_id=rd.id
+        LEFT JOIN members m ON rd.member_id=m.id
+        LEFT JOIN centers c ON rd.center_id=c.id
+        LEFT JOIN users u ON rdt.posted_by=u.id
+        {twhere} ORDER BY rdt.transaction_date, rd.rd_no
+    """, tparams).fetchall()
+    db.close()
+    return render_template('reports/rd_report.html', accounts=accounts, transactions=transactions,
+                           centers=centers, center_filter=center_filter, from_date=from_date,
+                           to_date=to_date, status_filter=status_filter)
+
 # ── Loan Schedule ─────────────────────────────────────────────────────────────
 
 @app.route('/loans/disbursement/<int:did>/schedule')

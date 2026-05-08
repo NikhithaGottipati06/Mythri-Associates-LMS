@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+{% block title %}Recurring Deposit Report{% endblock %}
+{% block content %}
+
+<div class="print-header">
+  <h4>MYTHRI ASSOCIATES – Vijayawada</h4>
+  <h5>Recurring Deposit Report{% if from_date or to_date %} — {{ from_date or '—' }} to {{ to_date or '—' }}{% endif %}</h5>
+</div>
+
+<div class="page-header no-print">
+  <i class="bi bi-arrow-repeat" style="font-size:20px;color:#6f42c1;"></i>
+  <h5>Recurring Deposit Report</h5>
+</div>
+<div class="action-bar no-print">
+  <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+  <button onclick="window.print()" class="btn-print-pdf ms-2"><i class="bi bi-printer-fill"></i> Print / PDF</button>
+</div>
+
+<form method="GET" class="form-card mb-3 no-print">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-3">
+      <label class="form-label">Center</label>
+      <select name="center_id" class="form-select form-select-sm">
+        <option value="">All Centers</option>
+        {% for c in centers %}
+        <option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} – {{ c.center_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">From Date</label>
+      <input type="text" name="from_date" class="form-control form-control-sm" value="{{ from_date }}" placeholder="DD/MM/YYYY">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">To Date</label>
+      <input type="text" name="to_date" class="form-control form-control-sm" value="{{ to_date }}" placeholder="DD/MM/YYYY">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Status</label>
+      <select name="status" class="form-select form-select-sm">
+        <option value="">All</option>
+        <option value="Active" {% if status_filter == 'Active' %}selected{% endif %}>Active</option>
+        <option value="Closed" {% if status_filter == 'Closed' %}selected{% endif %}>Closed</option>
+      </select>
+    </div>
+    <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
+  </div>
+</form>
+
+<!-- RD Accounts Summary -->
+<div class="form-card mb-3">
+  <div class="section-title"><i class="bi bi-table me-1"></i>RD Accounts Summary</div>
+  <div class="lms-table" style="margin:0;overflow-x:auto;">
+    <table class="table table-bordered table-sm mb-0" style="font-size:12px;">
+      <thead>
+        <tr style="background:#1a3c6e;color:#fff;">
+          <th>RD No</th><th>Member</th><th>Center</th><th>Start Date</th>
+          <th>Frequency</th><th>Inst. Amt</th><th>Total Inst.</th>
+          <th>Paid</th><th>Collected</th><th>Pending Amt</th><th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% set ns = namespace(total_col=0, total_pen=0) %}
+      {% for a in accounts %}
+        {% set remaining = a.total_installments - a.paid_count %}
+        {% set pending_amt = remaining * a.installment_amount %}
+        {% set ns.total_col = ns.total_col + a.total_collected %}
+        {% set ns.total_pen = ns.total_pen + pending_amt %}
+        <tr {% if loop.index % 2 == 0 %}style="background:#f5f8ff;"{% endif %}>
+          <td class="fw-semibold text-primary">{{ a.rd_no }}</td>
+          <td>{{ a.member_code }} – {{ a.full_name }}</td>
+          <td>{{ a.center_code }}</td>
+          <td>{{ a.start_date }}</td>
+          <td>{{ a.frequency }}</td>
+          <td>₹{{ '{:,.0f}'.format(a.installment_amount) }}</td>
+          <td class="text-center">{{ a.total_installments }}</td>
+          <td class="text-center text-success fw-semibold">{{ a.paid_count }}</td>
+          <td class="text-success">₹{{ '{:,.2f}'.format(a.total_collected) }}</td>
+          <td class="text-danger">₹{{ '{:,.2f}'.format(pending_amt) }}</td>
+          <td>
+            {% if a.status == 'Active' %}<span class="badge bg-success">Active</span>
+            {% else %}<span class="badge bg-secondary">Closed</span>{% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="11" class="text-center text-muted py-4">No RD accounts found.</td></tr>
+      {% endfor %}
+      </tbody>
+      {% if accounts %}
+      <tfoot>
+        <tr style="background:#dce8f8;font-weight:700;">
+          <td colspan="8" class="text-end">Totals ({{ accounts|length }} accounts):</td>
+          <td class="text-success">₹{{ '{:,.2f}'.format(ns.total_col) }}</td>
+          <td class="text-danger">₹{{ '{:,.2f}'.format(ns.total_pen) }}</td>
+          <td></td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</div>
+
+<!-- Transaction-level detail (date-filtered) -->
+{% if from_date or to_date %}
+<div class="form-card">
+  <div class="section-title"><i class="bi bi-clock-history me-1"></i>Transactions{% if from_date %} from {{ from_date }}{% endif %}{% if to_date %} to {{ to_date }}{% endif %}</div>
+  <div class="lms-table" style="margin:0;overflow-x:auto;">
+    <table class="table table-bordered table-sm mb-0" style="font-size:12px;">
+      <thead>
+        <tr style="background:#1a3c6e;color:#fff;">
+          <th>S.No</th><th>Date</th><th>RD No</th><th>Inst. No</th>
+          <th>Member</th><th>Center</th><th>Amount</th><th>Remarks</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% set ns2 = namespace(sno=0, total=0) %}
+      {% for t in transactions %}
+        {% set ns2.sno = ns2.sno + 1 %}
+        {% set ns2.total = ns2.total + t.amount %}
+        <tr {% if loop.index % 2 == 0 %}style="background:#f5f8ff;"{% endif %}>
+          <td>{{ ns2.sno }}</td>
+          <td>{{ t.transaction_date }}</td>
+          <td class="fw-semibold text-primary">{{ t.rd_no }}</td>
+          <td class="text-center">{{ t.installment_no }} / {{ t.total_installments }}</td>
+          <td>{{ t.member_code }} – {{ t.full_name }}</td>
+          <td>{{ t.center_code }}</td>
+          <td class="text-success fw-semibold">₹{{ '{:,.2f}'.format(t.amount) }}</td>
+          <td>{{ t.remarks or '—' }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8" class="text-center text-muted py-3">No transactions in selected date range.</td></tr>
+      {% endfor %}
+      </tbody>
+      {% if transactions %}
+      <tfoot>
+        <tr style="background:#dce8f8;font-weight:700;">
+          <td colspan="6" class="text-end">Total Collected:</td>
+          <td class="text-success">₹{{ '{:,.2f}'.format(ns2.total) }}</td>
+          <td></td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

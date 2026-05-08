@@ -43,9 +43,13 @@
      href="{{ url_for('members_list') }}"><i class="bi bi-person-badge"></i> Members</a>
 
   <!-- Savings -->
-  <div class="nav-section">Savings</div>
-  <a class="nav-link {% if 'savings' in request.endpoint %}active{% endif %}"
+  <div class="nav-section">Savings & Deposits</div>
+  <a class="nav-link {% if request.endpoint == 'savings_list' %}active{% endif %}"
      href="{{ url_for('savings_list') }}"><i class="bi bi-piggy-bank"></i> Savings Account</a>
+  <a class="nav-link {% if 'secure_deposit' in request.endpoint %}active{% endif %}"
+     href="{{ url_for('secure_deposits_list') }}"><i class="bi bi-shield-lock"></i> Secure Deposit</a>
+  <a class="nav-link {% if request.endpoint in ['rd_list','rd_detail','rd_new','rd_pay'] %}active{% endif %}"
+     href="{{ url_for('rd_list') }}"><i class="bi bi-arrow-repeat"></i> Recurring Deposit</a>
 
   <!-- Loans -->
   <div class="nav-section">Loans</div>

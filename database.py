@@ -225,6 +225,45 @@ def init_db():
             posted_by INTEGER REFERENCES users(id),
             created_at TEXT DEFAULT (datetime('now'))
         );
+
+        CREATE TABLE IF NOT EXISTS secure_deposits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            member_id INTEGER REFERENCES members(id),
+            center_id INTEGER REFERENCES centers(id),
+            transaction_date TEXT NOT NULL,
+            deposit_amount REAL DEFAULT 0,
+            withdraw_amount REAL DEFAULT 0,
+            balance REAL DEFAULT 0,
+            remarks TEXT,
+            posted_by INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS rd_accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            rd_no TEXT UNIQUE NOT NULL,
+            member_id INTEGER REFERENCES members(id),
+            center_id INTEGER REFERENCES centers(id),
+            start_date TEXT NOT NULL,
+            installment_amount REAL NOT NULL,
+            total_installments INTEGER NOT NULL,
+            frequency TEXT DEFAULT 'Weekly',
+            status TEXT DEFAULT 'Active',
+            remarks TEXT,
+            created_by INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS rd_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            rd_id INTEGER REFERENCES rd_accounts(id),
+            transaction_date TEXT NOT NULL,
+            installment_no INTEGER NOT NULL,
+            amount REAL NOT NULL,
+            remarks TEXT,
+            posted_by INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT (datetime('now'))
+        );
     """)
 
     # Seed admin user if no users exist

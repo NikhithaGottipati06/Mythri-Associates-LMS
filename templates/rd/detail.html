@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+{% block title %}RD – {{ account.rd_no }}{% endblock %}
+{% block content %}
+<div class="page-header no-print">
+  <i class="bi bi-arrow-repeat" style="font-size:20px;color:#6f42c1;"></i>
+  <h5>RD Account – {{ account.rd_no }}</h5>
+</div>
+<div class="action-bar no-print">
+  <a href="{{ url_for('rd_list') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+  <button onclick="window.print()" class="btn-print-pdf ms-2"><i class="bi bi-printer-fill"></i> Print</button>
+</div>
+
+<div class="print-header">
+  <h4>MYTHRI ASSOCIATES – Vijayawada</h4>
+  <p>RD Account: {{ account.rd_no }} &nbsp;|&nbsp; {{ account.member_code }} / {{ account.full_name }}</p>
+</div>
+
+<!-- Account Info -->
+<div class="form-card mb-3">
+  <div class="row">
+    <div class="col-md-6">
+      <table class="table table-sm table-borderless mb-0" style="font-size:13px;">
+        <tr><th style="width:150px;">RD No</th><td class="fw-semibold text-primary">{{ account.rd_no }}</td></tr>
+        <tr><th>Member</th><td>{{ account.member_code }} – {{ account.full_name }}</td></tr>
+        <tr><th>Phone</th><td>{{ account.phone1 or '—' }}</td></tr>
+        <tr><th>Center</th><td>{{ account.center_code }} – {{ account.center_name }}</td></tr>
+        <tr><th>Start Date</th><td>{{ account.start_date }}</td></tr>
+        <tr><th>Status</th>
+          <td>{% if account.status == 'Active' %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-secondary">Closed</span>{% endif %}</td>
+        </tr>
+      </table>
+    </div>
+    <div class="col-md-6">
+      {% set paid_count = transactions|length %}
+      {% set total_collected = transactions|sum(attribute='amount') %}
+      {% set remaining = account.total_installments - paid_count %}
+      {% set total_amount = account.installment_amount * account.total_installments %}
+      <table class="table table-sm table-borderless mb-0" style="font-size:13px;">
+        <tr><th style="width:160px;">Installment Amount</th><td class="fw-semibold">₹{{ '{:,.2f}'.format(account.installment_amount) }}</td></tr>
+        <tr><th>Frequency</th><td>{{ account.frequency }}</td></tr>
+        <tr><th>Total Installments</th><td>{{ account.total_installments }}</td></tr>
+        <tr><th>Paid Installments</th><td class="text-success fw-semibold">{{ paid_count }} / {{ account.total_installments }}</td></tr>
+        <tr><th>Collected</th><td class="text-success fw-semibold">₹{{ '{:,.2f}'.format(total_collected) }}</td></tr>
+        <tr><th>Pending</th><td class="text-danger fw-semibold">₹{{ '{:,.2f}'.format(account.installment_amount * remaining) }}</td></tr>
+        <tr><th>Total RD Amount</th><td class="fw-bold">₹{{ '{:,.2f}'.format(total_amount) }}</td></tr>
+      </table>
+    </div>
+  </div>
+  {% if account.remarks %}<div class="mt-2 text-muted" style="font-size:12px;"><i class="bi bi-chat-left-text me-1"></i>{{ account.remarks }}</div>{% endif %}
+</div>
+
+<!-- Record Payment -->
+{% if account.status == 'Active' and session.role == 'Admin' %}
+{% set paid_count_val = transactions|length %}
+{% if paid_count_val < account.total_installments %}
+<div class="form-card mb-3 no-print">
+  <div class="section-title"><i class="bi bi-cash-coin me-1"></i>Record Installment {{ paid_count_val + 1 }} / {{ account.total_installments }}</div>
+  <form method="POST" action="{{ url_for('rd_pay', rdid=account.id) }}">
+    <div class="row g-3 align-items-end">
+      <div class="col-md-2">
+        <label class="form-label fw-semibold" style="font-size:13px;">Date</label>
+        <input type="text" name="transaction_date" class="form-control form-control-sm" placeholder="DD/MM/YYYY" required>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-semibold" style="font-size:13px;">Amount (₹)</label>
+        <input type="number" name="amount" class="form-control form-control-sm" value="{{ account.installment_amount }}" min="0.01" step="0.01" required>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label fw-semibold" style="font-size:13px;">Remarks</label>
+        <input type="text" name="remarks" class="form-control form-control-sm" placeholder="Optional">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-check-circle me-1"></i>Record Payment</button>
+      </div>
+    </div>
+  </form>
+</div>
+{% endif %}
+{% endif %}
+
+<!-- Payment History -->
+<div class="form-card">
+  <div class="section-title"><i class="bi bi-list-check me-1"></i>Payment Schedule</div>
+  <div class="lms-table" style="margin:0;overflow-x:auto;">
+    <table class="table table-bordered table-sm mb-0" style="font-size:12px;">
+      <thead>
+        <tr style="background:#1a3c6e;color:#fff;">
+          <th>Inst. No</th><th>Date Paid</th><th>Amount</th><th>Remarks</th><th>Posted By</th><th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% set paid_nos = transactions | map(attribute='installment_no') | list %}
+      {% for i in range(1, account.total_installments + 1) %}
+        {% set txn = None %}
+        {% for t in transactions %}{% if t.installment_no == i %}{% set txn = t %}{% endif %}{% endfor %}
+        <tr {% if txn %}style="background:#f0fff4;"{% elif loop.index % 2 == 0 %}style="background:#f9f9f9;"{% endif %}>
+          <td class="text-center fw-semibold">{{ i }}</td>
+          <td>{% if txn %}{{ txn.transaction_date }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+          <td>{% if txn %}₹{{ '{:,.2f}'.format(txn.amount) }}{% else %}<span class="text-muted">₹{{ '{:,.2f}'.format(account.installment_amount) }}</span>{% endif %}</td>
+          <td>{% if txn %}{{ txn.remarks or '—' }}{% else %}—{% endif %}</td>
+          <td>{% if txn %}{{ txn.posted_by_name }}{% else %}—{% endif %}</td>
+          <td>
+            {% if txn %}<span class="badge bg-success">Paid</span>
+            {% else %}<span class="badge bg-warning text-dark">Pending</span>{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr style="background:#dce8f8;font-weight:700;">
+          <td colspan="2" class="text-end">Total Collected:</td>
+          <td>₹{{ '{:,.2f}'.format(transactions|sum(attribute='amount')) }}</td>
+          <td colspan="3"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endblock %}

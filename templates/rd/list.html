@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+{% block title %}Recurring Deposit{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-arrow-repeat" style="font-size:20px;color:#6f42c1;"></i>
+  <h5>Recurring Deposit (RD) Accounts</h5>
+</div>
+
+{% if session.role == 'Admin' %}
+<div class="form-card mb-3">
+  <div class="section-title"><i class="bi bi-plus-circle me-1"></i>Open New RD Account</div>
+  <form method="POST" action="{{ url_for('rd_new') }}">
+    <div class="row g-3 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label fw-semibold" style="font-size:13px;">Member</label>
+        <select name="member_id" class="form-select form-select-sm" required>
+          <option value="">— Select Member —</option>
+          {% for m in all_members %}
+          <option value="{{ m.id }}">{{ m.member_code }} – {{ m.full_name }} ({{ m.center_code }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-semibold" style="font-size:13px;">Start Date</label>
+        <input type="text" name="start_date" class="form-control form-control-sm" placeholder="DD/MM/YYYY" required>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-semibold" style="font-size:13px;">Installment Amount (₹)</label>
+        <input type="number" name="installment_amount" class="form-control form-control-sm" min="1" step="0.01" placeholder="e.g. 500" required>
+      </div>
+      <div class="col-md-1">
+        <label class="form-label fw-semibold" style="font-size:13px;">Total Inst.</label>
+        <input type="number" name="total_installments" class="form-control form-control-sm" min="1" placeholder="e.g. 50" required>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-semibold" style="font-size:13px;">Frequency</label>
+        <select name="frequency" class="form-select form-select-sm">
+          <option value="Weekly">Weekly</option>
+          <option value="Monthly">Monthly</option>
+        </select>
+      </div>
+    </div>
+    <div class="row g-3 align-items-end mt-1">
+      <div class="col-md-6">
+        <label class="form-label fw-semibold" style="font-size:13px;">Remarks (optional)</label>
+        <input type="text" name="remarks" class="form-control form-control-sm" placeholder="e.g. Linked to loan L-0001">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-plus-circle me-1"></i>Open RD Account</button>
+      </div>
+    </div>
+  </form>
+</div>
+{% endif %}
+
+<!-- Filter -->
+<div class="action-bar mb-2">
+  <form method="GET" class="d-flex gap-2 align-items-center">
+    <label class="fw-semibold" style="font-size:13px;">Center:</label>
+    <select name="center_id" class="form-select form-select-sm" style="width:200px;" onchange="this.form.submit()">
+      <option value="">All Centers</option>
+      {% for c in centers %}
+      <option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} {{ c.center_name }}</option>
+      {% endfor %}
+    </select>
+  </form>
+  <span class="ms-auto total-bar">Total RD Accounts: {{ accounts|length }}</span>
+</div>
+
+<div class="form-card">
+  <div class="lms-table" style="margin:0;overflow-x:auto;">
+    <table class="table table-hover mb-0" style="font-size:13px;">
+      <thead>
+        <tr>
+          <th>RD No</th><th>Member</th><th>Center</th>
+          <th>Start Date</th><th>Frequency</th>
+          <th>Inst. Amount</th><th>Total Inst.</th>
+          <th>Paid</th><th>Collected</th><th>Pending</th><th>Status</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for a in accounts %}
+        {% set remaining = a.total_installments - a.paid_count %}
+        {% set pending_amt = remaining * a.installment_amount %}
+        <tr>
+          <td class="fw-semibold text-primary">
+            <a href="{{ url_for('rd_detail', rdid=a.id) }}">{{ a.rd_no }}</a>
+          </td>
+          <td>{{ a.member_code }} – {{ a.full_name }}</td>
+          <td>{{ a.center_code }}</td>
+          <td>{{ a.start_date }}</td>
+          <td>{{ a.frequency }}</td>
+          <td class="fw-semibold">₹{{ '{:,.0f}'.format(a.installment_amount) }}</td>
+          <td class="text-center">{{ a.total_installments }}</td>
+          <td class="text-center text-success fw-semibold">{{ a.paid_count }}</td>
+          <td class="text-success">₹{{ '{:,.0f}'.format(a.total_collected) }}</td>
+          <td class="text-danger">₹{{ '{:,.0f}'.format(pending_amt) }}</td>
+          <td>
+            {% if a.status == 'Active' %}
+              <span class="badge bg-success">Active</span>
+            {% else %}
+              <span class="badge bg-secondary">Closed</span>
+            {% endif %}
+          </td>
+          <td>
+            <a href="{{ url_for('rd_detail', rdid=a.id) }}" class="btn btn-sm btn-outline-primary py-0 px-2">
+              <i class="bi bi-eye"></i> View
+            </a>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="12" class="text-center text-muted py-4">No RD accounts found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

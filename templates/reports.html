@@ -130,10 +130,16 @@
 
   <div class="col-md-4">
     <div class="form-card h-100">
-      <div class="section-title"><i class="bi bi-piggy-bank me-1"></i>Savings Reports</div>
+      <div class="section-title"><i class="bi bi-piggy-bank me-1"></i>Savings & Deposit Reports</div>
       <div class="list-group list-group-flush">
         <a href="{{ url_for('savings_list') }}" class="list-group-item list-group-item-action">
           <i class="bi bi-piggy-bank me-2 text-purple"></i>Savings Report
+        </a>
+        <a href="{{ url_for('report_secure_deposits') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-shield-lock me-2 text-primary"></i>Secure Deposit Report
+        </a>
+        <a href="{{ url_for('report_rd') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-arrow-repeat me-2 text-purple"></i>Recurring Deposit Report
         </a>
       </div>
     </div>
