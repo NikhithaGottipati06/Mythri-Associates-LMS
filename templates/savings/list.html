@@ -6,7 +6,6 @@
   <h5>Savings Account</h5>
 </div>
 
-{% if session.role == 'Admin' %}
 <!-- ── New Entry Card ────────────────────────────────────────────── -->
 <div class="form-card mb-3">
   <div class="section-title"><i class="bi bi-plus-circle me-1"></i>New Savings Entry</div>
@@ -47,11 +46,13 @@
         <button class="btn btn-warning btn-sm fw-semibold" id="withdrawBtn" onclick="submitEntry('withdraw')">
           <i class="bi bi-cash me-1"></i>Withdraw
         </button>
+        {% if session.role == 'Admin' %}
         <form id="undoForm" method="POST" style="display:inline;" onsubmit="return confirm('Undo last transaction for this member?')">
           <button type="submit" class="btn btn-outline-secondary btn-sm fw-semibold">
             <i class="bi bi-arrow-counterclockwise me-1"></i>Undo Last
           </button>
         </form>
+        {% endif %}
       </div>
     </div>
 
@@ -66,7 +67,6 @@
     </form>
   </div>
 </div>
-{% endif %}
 
 <!-- ── Summary Cards ─────────────────────────────────────────────── -->
 <div class="row g-3 mb-3">
@@ -201,7 +201,8 @@ function fetchMemberInfo(mid) {
       document.getElementById('memberBalance').value = '₹' + currentBalance.toLocaleString('en-IN');
       document.getElementById('entryForm').style.display = 'block';
       document.getElementById('withdrawBtn').disabled = currentBalance <= 0;
-      document.getElementById('undoForm').action = `/savings/undo/${mid}`;
+      const undoForm = document.getElementById('undoForm');
+      if (undoForm) undoForm.action = `/savings/undo/${mid}`;
     });
 }
 

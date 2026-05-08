@@ -98,14 +98,15 @@
   </div>
 </div>
 
-{% if session.role == 'Admin' %}
-<!-- Admin: Withdraw & Undo panel (no-print) -->
+<!-- Actions panel (no-print) -->
 <div class="form-card mt-3 no-print" style="border-color:#6f42c1;">
   <div class="section-title d-flex justify-content-between align-items-center">
-    <span><i class="bi bi-cash me-1"></i>Admin Actions</span>
+    <span><i class="bi bi-cash me-1"></i>Actions</span>
+    {% if session.role == 'Admin' %}
     <form method="POST" action="{{ url_for('rd_undo', rdid=account.id) }}" onsubmit="return confirm('Undo last RD transaction?')">
       <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-counterclockwise me-1"></i>Undo Last</button>
     </form>
+    {% endif %}
   </div>
 
   {% set total_collected_val = transactions|sum(attribute='amount') %}
@@ -152,7 +153,8 @@
     <table class="table table-sm table-hover mb-0" style="font-size:12px;">
       <thead>
         <tr style="background:#1a3c6e;color:#fff;">
-          <th>Inst. No</th><th>Date</th><th>Amount</th><th>Remarks</th><th>Posted By</th><th>Action</th>
+          <th>Inst. No</th><th>Date</th><th>Amount</th><th>Remarks</th><th>Posted By</th>
+          {% if session.role == 'Admin' %}<th>Action</th>{% endif %}
         </tr>
       </thead>
       <tbody>
@@ -163,11 +165,13 @@
           <td>₹{{ '{:,.2f}'.format(t.amount) }}</td>
           <td>{{ t.remarks or '—' }}</td>
           <td>{{ t.posted_by_name }}</td>
+          {% if session.role == 'Admin' %}
           <td>
             <form method="POST" action="{{ url_for('rd_transaction_delete', tid=t.id) }}" style="display:inline;" onsubmit="return confirm('Delete installment {{ t.installment_no }}?')">
               <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Delete"><i class="bi bi-trash"></i></button>
             </form>
           </td>
+          {% endif %}
         </tr>
       {% endfor %}
       </tbody>
@@ -184,7 +188,8 @@
     <table class="table table-sm table-hover mb-0" style="font-size:12px;">
       <thead>
         <tr style="background:#842029;color:#fff;">
-          <th>#</th><th>Date</th><th>Amount</th><th>Remarks</th><th>Posted By</th><th>Action</th>
+          <th>#</th><th>Date</th><th>Amount</th><th>Remarks</th><th>Posted By</th>
+          {% if session.role == 'Admin' %}<th>Action</th>{% endif %}
         </tr>
       </thead>
       <tbody>
@@ -195,18 +200,19 @@
           <td class="text-danger fw-semibold">₹{{ '{:,.2f}'.format(w.amount) }}</td>
           <td>{{ w.remarks or '—' }}</td>
           <td>{{ w.posted_by_name }}</td>
+          {% if session.role == 'Admin' %}
           <td>
             <form method="POST" action="{{ url_for('rd_transaction_delete', tid=w.id) }}" style="display:inline;" onsubmit="return confirm('Delete this withdrawal?')">
               <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Delete"><i class="bi bi-trash"></i></button>
             </form>
           </td>
+          {% endif %}
         </tr>
       {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
-{% endif %}
 {% endif %}
 
 {% endblock %}

@@ -6,7 +6,6 @@
   <h5>Recurring Deposit (RD) Accounts</h5>
 </div>
 
-{% if session.role == 'Admin' %}
 <div class="form-card mb-3">
   <div class="section-title"><i class="bi bi-plus-circle me-1"></i>Open New RD Account</div>
   <form method="POST" action="{{ url_for('rd_new') }}" id="rdForm">
@@ -87,7 +86,6 @@
     </div>
   </form>
 </div>
-{% endif %}
 
 <!-- Summary Cards -->
 {% if accounts %}

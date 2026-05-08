@@ -6,7 +6,6 @@
   <h5>Secure Deposit Accounts</h5>
 </div>
 
-{% if session.role == 'Admin' %}
 <div class="form-card mb-3">
   <div class="section-title"><i class="bi bi-plus-circle me-1"></i>Open New Secure Deposit Account</div>
   <form method="POST" action="{{ url_for('secure_deposit_new') }}" id="sdForm">
@@ -84,7 +83,6 @@
     </div>
   </form>
 </div>
-{% endif %}
 
 <!-- Summary Cards -->
 <div class="row g-3 mb-3">

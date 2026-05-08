@@ -1484,7 +1484,7 @@ def savings_member_info():
     })
 
 @app.route('/savings/deposit/<int:mid>', methods=['POST'])
-@admin_required
+@login_required
 def savings_deposit(mid):
     db = get_db()
     deposit_amount = float(request.form.get('deposit_amount', 0))
@@ -1509,7 +1509,7 @@ def savings_deposit(mid):
     return redirect(url_for('savings_list'))
 
 @app.route('/savings/withdraw/<int:mid>', methods=['POST'])
-@admin_required
+@login_required
 def savings_withdraw(mid):
     db = get_db()
     withdraw_amount = float(request.form.get('withdraw_amount', 0))
@@ -1620,7 +1620,7 @@ def secure_deposits_member_info():
                     'loan_amount': loan_amt or 0})
 
 @app.route('/secure-deposits/new', methods=['POST'])
-@admin_required
+@login_required
 def secure_deposit_new():
     db = get_db()
     mid = int(request.form.get('member_id', 0) or 0)
@@ -1989,7 +1989,7 @@ def rd_pay(rdid):
     return redirect(url_for('rd_detail', rdid=rdid))
 
 @app.route('/rd/<int:rdid>/withdraw', methods=['POST'])
-@admin_required
+@login_required
 def rd_withdraw(rdid):
     db = get_db()
     account = db.execute("SELECT * FROM rd_accounts WHERE id=?", (rdid,)).fetchone()
