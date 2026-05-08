@@ -1,15 +1,22 @@
 {% extends 'base.html' %}
 {% block title %}Summary Sheet{% endblock %}
 {% block content %}
-<div class="page-header">
+
+<div class="print-header">
+  <h4>MYTHRI ASSOCIATES – Vijayawada</h4>
+  <h5>Summary Sheet – {{ report_date }}</h5>
+</div>
+
+<div class="page-header no-print">
   <i class="bi bi-table" style="font-size:20px;color:#1a3c6e;"></i>
   <h5>Summary Sheet</h5>
 </div>
-<div class="action-bar">
+<div class="action-bar no-print">
   <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
-  <button onclick="window.print()" class="btn btn-outline-primary btn-sm ms-2"><i class="bi bi-printer me-1"></i>Print</button>
+  <button onclick="window.print()" class="btn-print-pdf ms-2"><i class="bi bi-printer-fill"></i> Print / PDF</button>
 </div>
-<form method="GET" class="form-card mb-3">
+
+<form method="GET" class="form-card mb-3 no-print">
   <div class="row g-2 align-items-end">
     <div class="col-md-4">
       <label class="form-label">Center</label>
@@ -20,54 +27,50 @@
         {% endfor %}
       </select>
     </div>
+    <div class="col-md-2">
+      <label class="form-label">Date</label>
+      <input type="text" name="report_date" class="form-control form-control-sm" value="{{ report_date }}" placeholder="DD/MM/YYYY">
+    </div>
     <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
   </div>
 </form>
-<div class="lms-table">
-  <table class="table table-hover mb-0">
-    <thead>
-      <tr>
-        <th>#</th><th>Center Code</th><th>Center Name</th><th>Members</th>
-        <th>Active Loans</th><th>Total Disbursed</th><th>Total Collected</th><th>Outstanding</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% set t_members = namespace(v=0) %}
-    {% set t_loans = namespace(v=0) %}
-    {% set t_disbursed = namespace(v=0) %}
-    {% set t_collected = namespace(v=0) %}
-    {% for c in centers_data %}
-      {% set outstanding = c.total_disbursed - c.total_collected %}
-      {% set t_members.v = t_members.v + c.total_members %}
-      {% set t_loans.v = t_loans.v + c.active_loans %}
-      {% set t_disbursed.v = t_disbursed.v + c.total_disbursed %}
-      {% set t_collected.v = t_collected.v + c.total_collected %}
-      <tr>
-        <td>{{ loop.index }}</td>
-        <td class="fw-semibold text-primary">{{ c.center_code }}</td>
-        <td class="fw-semibold">{{ c.center_name }}</td>
-        <td>{{ c.total_members }}</td>
-        <td>{{ c.active_loans }}</td>
-        <td>₹{{ '{:,.0f}'.format(c.total_disbursed) }}</td>
-        <td>₹{{ '{:,.0f}'.format(c.total_collected) }}</td>
-        <td class="fw-semibold {% if outstanding > 0 %}text-danger{% endif %}">
-          ₹{{ '{:,.0f}'.format(outstanding) }}
-        </td>
-      </tr>
-    {% else %}
-      <tr><td colspan="8" class="text-center text-muted py-4">No data.</td></tr>
-    {% endfor %}
-    </tbody>
-    <tfoot class="table-light fw-semibold">
-      <tr>
-        <td colspan="3" class="text-end">Totals:</td>
-        <td>{{ t_members.v }}</td>
-        <td>{{ t_loans.v }}</td>
-        <td>₹{{ '{:,.0f}'.format(t_disbursed.v) }}</td>
-        <td>₹{{ '{:,.0f}'.format(t_collected.v) }}</td>
-        <td>₹{{ '{:,.0f}'.format(t_disbursed.v - t_collected.v) }}</td>
-      </tr>
-    </tfoot>
-  </table>
+
+<div class="row g-3">
+  <div class="col-md-6">
+    <div class="form-card h-100">
+      <div class="section-title text-center" style="font-size:14px;color:#198754;"><a href="#" style="color:#198754;font-weight:700;">Credit Details</a></div>
+      <table class="table table-bordered mb-0" style="font-size:13px;">
+        <tbody>
+          <tr><td>Member Joining Fee</td><td class="text-end fw-semibold">{{ '{:,.2f}'.format(credit_data.joining_fee) }}</td></tr>
+          <tr><td>Insurance Premium</td><td class="text-end">{{ '{:,.2f}'.format(credit_data.insurance_premium) }}</td></tr>
+          <tr><td>Processing Fee</td><td class="text-end">{{ '{:,.2f}'.format(credit_data.processing_fee) }}</td></tr>
+          <tr><td>Prin Recovery</td><td class="text-end">{{ '{:,.2f}'.format(credit_data.prin_recovery) }}</td></tr>
+          <tr><td>Int Recovery</td><td class="text-end">{{ '{:,.2f}'.format(credit_data.int_recovery) }}</td></tr>
+          <tr><td>Prepaid Amount</td><td class="text-end">{{ '{:,.2f}'.format(credit_data.prepaid_amount) }}</td></tr>
+          <tr><td>PreClosure Charges</td><td class="text-end">{{ '{:,.2f}'.format(credit_data.preclosure_charges) }}</td></tr>
+          <tr><td>Advance Recovery Collected</td><td class="text-end">{{ '{:,.2f}'.format(credit_data.advance_collected) }}</td></tr>
+          <tr class="table-success fw-bold">
+            <td><b>Credit Total:</b></td>
+            <td class="text-end text-success" style="font-size:14px;">{{ '{:,.2f}'.format(credit_data.credit_total) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="form-card h-100">
+      <div class="section-title text-center" style="font-size:14px;color:#dc3545;"><a href="#" style="color:#dc3545;font-weight:700;">Debit Details</a></div>
+      <table class="table table-bordered mb-0" style="font-size:13px;">
+        <tbody>
+          <tr><td>Disbursed Amount</td><td class="text-end">{{ '{:,.2f}'.format(debit_data.disbursed_amount) }}</td></tr>
+          <tr><td>Advance Recovery Withdraw</td><td class="text-end">{{ '{:,.2f}'.format(debit_data.advance_withdraw) }}</td></tr>
+          <tr class="table-danger fw-bold">
+            <td><b>Debit Total:</b></td>
+            <td class="text-end text-danger" style="font-size:14px;">{{ '{:,.2f}'.format(debit_data.debit_total) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
 {% endblock %}

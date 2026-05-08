@@ -1,63 +1,121 @@
 {% extends 'base.html' %}
 {% block title %}Disbursement Report{% endblock %}
 {% block content %}
-<div class="page-header">
+
+<div class="print-header">
+  <h4>MYTHRI ASSOCIATES – Vijayawada</h4>
+  <h5>Disbursement Report
+    {% if from_date or to_date %}– {{ from_date }}{% if to_date %} to {{ to_date }}{% endif %}{% endif %}
+  </h5>
+</div>
+
+<div class="page-header no-print">
   <i class="bi bi-cash-coin" style="font-size:20px;color:#1a3c6e;"></i>
   <h5>Disbursement Report</h5>
 </div>
-<div class="action-bar">
+<div class="action-bar no-print">
   <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
-  <button onclick="window.print()" class="btn btn-outline-primary btn-sm ms-2"><i class="bi bi-printer me-1"></i>Print</button>
+  <button onclick="window.print()" class="btn-print-pdf ms-2"><i class="bi bi-printer-fill"></i> Print / PDF</button>
 </div>
-<form method="GET" class="form-card mb-3">
+
+<form method="GET" class="form-card mb-3 no-print">
   <div class="row g-2 align-items-end">
-    <div class="col-md-3"><label class="form-label">Center</label>
+    <div class="col-md-3">
+      <label class="form-label">Center</label>
       <select name="center_id" class="form-select form-select-sm">
         <option value="">All Centers</option>
-        {% for c in centers %}<option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} – {{ c.center_name }}</option>{% endfor %}
+        {% for c in centers %}
+        <option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} – {{ c.center_name }}</option>
+        {% endfor %}
       </select>
     </div>
-    <div class="col-md-2"><label class="form-label">From Date</label>
+    <div class="col-md-2">
+      <label class="form-label">From Date</label>
       <input type="text" name="from_date" class="form-control form-control-sm" value="{{ from_date }}" placeholder="DD/MM/YYYY">
     </div>
-    <div class="col-md-2"><label class="form-label">To Date</label>
+    <div class="col-md-2">
+      <label class="form-label">To Date</label>
       <input type="text" name="to_date" class="form-control form-control-sm" value="{{ to_date }}" placeholder="DD/MM/YYYY">
     </div>
     <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
   </div>
 </form>
-<div class="lms-table" style="overflow-x:auto;">
-  <table class="table table-hover mb-0" style="min-width:1000px;">
-    <thead>
-      <tr><th>#</th><th>Loan ID</th><th>Date</th><th>Member Code</th><th>Member Name</th><th>Center</th><th>Loan Type</th><th>Cycle#</th><th>Amount</th><th>Installments</th><th>Inst. Amt</th><th>Proc. Fee</th><th>Ins. Fee</th><th>By</th></tr>
-    </thead>
-    <tbody>
-    {% set t_amt = namespace(v=0) %}
-    {% for r in records %}
-      {% set t_amt.v = t_amt.v + r.disbursed_amount %}
-      <tr>
-        <td>{{ loop.index }}</td>
-        <td class="fw-semibold text-primary">{{ r.loan_id or r.disbursement_no }}</td>
-        <td>{{ r.disbursement_date }}</td>
-        <td>{{ r.member_code }}</td>
-        <td class="fw-semibold">{{ r.member_name }}</td>
-        <td>{{ r.center_code }}</td>
-        <td>{{ r.loan_type_name or '—' }}</td>
-        <td>{{ r.loan_cycle or 1 }}</td>
-        <td class="fw-semibold">₹{{ '{:,.0f}'.format(r.disbursed_amount) }}</td>
-        <td>{{ r.total_installments }}</td>
-        <td>₹{{ '{:,.2f}'.format(r.installment_amount or 0) }}</td>
-        <td>₹{{ '{:,.0f}'.format(r.processing_fee or 0) }}</td>
-        <td>₹{{ '{:,.0f}'.format(r.insurance_fee or 0) }}</td>
-        <td>{{ r.disbursed_by_name or '—' }}</td>
+
+{% set ns = namespace(cur_center='', sno=0, g_amt=0, total_amt=0) %}
+
+{% for r in records %}
+  {% if r.center_code != ns.cur_center %}
+    {% if ns.cur_center != '' %}
+    <tfoot>
+      <tr style="background:#dce8f8;font-weight:700;">
+        <td colspan="9" class="text-end">Group {{ ns.cur_center }} Total:</td>
+        <td style="color:blue;">{{ '{:,.0f}'.format(ns.g_amt) }}</td>
+        <td colspan="1"></td>
       </tr>
-    {% else %}
-      <tr><td colspan="14" class="text-center text-muted py-4">No disbursements found.</td></tr>
-    {% endfor %}
-    </tbody>
-    <tfoot class="table-light fw-semibold">
-      <tr><td colspan="8" class="text-end">Total Disbursed:</td><td>₹{{ '{:,.0f}'.format(t_amt.v) }}</td><td colspan="5"></td></tr>
     </tfoot>
-  </table>
-</div>
+    </table></div></div>
+    {% endif %}
+    {% set ns.cur_center = r.center_code %}
+    {% set ns.sno = 0 %}
+    {% set ns.g_amt = 0 %}
+    <div class="form-card mb-2">
+    <div class="print-info" style="font-weight:700;margin-bottom:4px;">{{ r.center_code }} / {{ r.center_name }}</div>
+    <div class="section-title no-print">{{ r.center_code }} / {{ r.center_name }}</div>
+    <div style="overflow-x:auto;">
+    <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:1100px;">
+      <thead>
+        <tr>
+          <th>S.No</th><th>Center Code</th><th>Center Name</th>
+          <th>Member Code</th><th>Member Name</th>
+          <th>Nominee Name</th><th>Nominee Relation</th>
+          <th>Tenure (Wks)</th><th>Loan Cycle</th>
+          <th>Issue Date</th><th>Loan Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+  {% endif %}
+
+  {% set ns.sno = ns.sno + 1 %}
+  {% set ns.g_amt = ns.g_amt + r.disbursed_amount %}
+  {% set ns.total_amt = ns.total_amt + r.disbursed_amount %}
+  <tr>
+    <td>{{ ns.sno }}</td>
+    <td>{{ r.center_code }}</td>
+    <td>{{ r.center_name }}</td>
+    <td class="fw-semibold text-primary">{{ r.member_code }}</td>
+    <td>{{ r.member_name }}</td>
+    <td>{{ r.nominee_name or '—' }}</td>
+    <td>{{ r.nominee_relation or '—' }}</td>
+    <td class="text-center">{{ r.total_installments }}</td>
+    <td class="text-center">{{ r.loan_cycle or 1 }}</td>
+    <td>{{ r.disbursement_date }}</td>
+    <td class="fw-semibold">{{ '{:,.0f}'.format(r.disbursed_amount) }}</td>
+  </tr>
+{% else %}
+  <div class="form-card text-center text-muted py-4">No disbursements found.</div>
+{% endfor %}
+
+{% if records %}
+  <tfoot>
+    <tr style="background:#dce8f8;font-weight:700;">
+      <td colspan="9" class="text-end">Group {{ ns.cur_center }} Total:</td>
+      <td style="color:blue;">{{ '{:,.0f}'.format(ns.g_amt) }}</td>
+      <td colspan="1"></td>
+    </tr>
+  </tfoot>
+  </table></div></div>
+
+  <div class="form-card">
+    <div class="section-title">Grand Total</div>
+    <table class="table table-bordered mb-0" style="font-size:12px;">
+      <tbody>
+        <tr class="fw-bold" style="background:#1a3c6e;color:#fff;">
+          <td>Total Disbursements: {{ records|length }}</td>
+          <td>Total Loan Amount: {{ '{:,.0f}'.format(ns.total_amt) }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+
 {% endblock %}

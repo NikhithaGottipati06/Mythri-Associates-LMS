@@ -120,3 +120,55 @@ body { background: #eef2f7; font-family: 'Segoe UI', sans-serif; font-size: 14px
   .sidebar { transform: translateX(-220px); }
   .main-content { margin-left: 0; }
 }
+
+/* ── Print / PDF ── */
+.print-header { display: none; text-align: center; margin-bottom: 8px; }
+.print-header h4 { font-size: 14pt; font-weight: 800; margin: 0; }
+.print-header h5 { font-size: 11pt; font-weight: 600; margin: 2px 0; }
+.print-header p  { font-size: 9pt; margin: 1px 0; }
+.print-info { display: none; font-size: 9pt; margin-bottom: 6px; }
+.no-print { }
+
+@media print {
+  .topbar, .sidebar, .action-bar, .no-print,
+  .alert, nav.sidebar, .page-header i { display: none !important; }
+
+  .main-content { margin-left: 0 !important; padding: 4mm !important; background: #fff !important; }
+  body { background: #fff !important; font-size: 9pt; font-family: Arial, sans-serif; }
+
+  .print-header, .print-info { display: block !important; }
+
+  .form-card { box-shadow: none !important; border: 1px solid #ccc !important;
+    padding: 6px 8px !important; margin-bottom: 8px !important; }
+  .form-card .filter-form { display: none !important; }
+
+  .lms-table { box-shadow: none !important; border-radius: 0 !important; }
+  table { font-size: 7.5pt !important; width: 100% !important; border-collapse: collapse !important; }
+  th, td { border: 0.5pt solid #555 !important; padding: 2px 4px !important; vertical-align: middle !important; }
+  thead th { background: #1a3c6e !important; color: #fff !important;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  tfoot td { background: #e8f0fb !important; font-weight: 700;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  .page-header { background: none !important; box-shadow: none !important;
+    border: none !important; padding: 0 !important; margin-bottom: 6px !important; }
+  .page-header h5 { font-size: 11pt; }
+
+  tr { page-break-inside: avoid; }
+  thead { display: table-header-group; }
+  tfoot { display: table-footer-group; }
+
+  .stat-card, .badge { box-shadow: none !important; }
+
+  .btn-print-pdf { display: none !important; }
+
+  @page { margin: 8mm 6mm; size: A4 landscape; }
+  @page :first { margin-top: 8mm; }
+}
+
+.btn-print-pdf {
+  background: #dc3545; color: #fff; border: none; border-radius: 5px;
+  padding: 5px 14px; font-size: 12.5px; cursor: pointer; display: inline-flex;
+  align-items: center; gap: 6px;
+}
+.btn-print-pdf:hover { background: #b02a37; color: #fff; }

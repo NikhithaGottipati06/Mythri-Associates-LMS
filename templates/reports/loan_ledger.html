@@ -1,72 +1,90 @@
 {% extends 'base.html' %}
 {% block title %}Loan Ledger Report{% endblock %}
 {% block content %}
-<div class="page-header">
+
+<div class="print-header">
+  <h4>MYTHRI ASSOCIATES – Vijayawada</h4>
+  <h5>Loan Ledger Report</h5>
+</div>
+
+<div class="page-header no-print">
   <i class="bi bi-journal-text" style="font-size:20px;color:#1a3c6e;"></i>
   <h5>Loan Ledger Report</h5>
 </div>
-<div class="action-bar">
+<div class="action-bar no-print">
   <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
-  <button onclick="window.print()" class="btn btn-outline-primary btn-sm ms-2"><i class="bi bi-printer me-1"></i>Print</button>
+  <button onclick="window.print()" class="btn-print-pdf ms-2"><i class="bi bi-printer-fill"></i> Print / PDF</button>
 </div>
-<form method="GET" class="form-card mb-3">
+
+<form method="GET" class="form-card mb-3 no-print">
   <div class="row g-2 align-items-end">
-    <div class="col-md-3"><label class="form-label">Center</label>
+    <div class="col-md-3">
+      <label class="form-label">Center</label>
       <select name="center_id" class="form-select form-select-sm">
         <option value="">All Centers</option>
-        {% for c in centers %}<option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} – {{ c.center_name }}</option>{% endfor %}
+        {% for c in centers %}
+        <option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} – {{ c.center_name }}</option>
+        {% endfor %}
       </select>
     </div>
-    <div class="col-md-3"><label class="form-label">Member</label>
+    <div class="col-md-3">
+      <label class="form-label">Member</label>
       <select name="member_id" class="form-select form-select-sm">
         <option value="">All Members</option>
-        {% for m in members %}<option value="{{ m.id }}" {% if member_filter == m.id|string %}selected{% endif %}>{{ m.member_code }} – {{ m.full_name }}</option>{% endfor %}
+        {% for m in members %}
+        <option value="{{ m.id }}" {% if member_filter == m.id|string %}selected{% endif %}>{{ m.member_code }} – {{ m.full_name }}</option>
+        {% endfor %}
       </select>
     </div>
     <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
   </div>
 </form>
-<div class="lms-table" style="overflow-x:auto;">
-  <table class="table table-hover mb-0" style="min-width:1000px;">
+
+<div class="form-card">
+  <div style="overflow-x:auto;">
+  <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:1000px;">
     <thead>
-      <tr><th>#</th><th>Loan ID</th><th>Member Code</th><th>Member Name</th><th>Grp</th><th>Center</th><th>Loan Type</th><th>Cycle#</th><th>Disb. Date</th><th>Loan Amt</th><th>Paid</th><th>Paid Inst.</th><th>Outstanding</th></tr>
+      <tr>
+        <th>S.No</th><th>Loan ID</th><th>Mem Code</th><th>Member Name</th>
+        <th>Center</th><th>Loan Type</th><th>Cycle#</th><th>Disb. Date</th>
+        <th>Loan Amt</th><th>Paid</th><th>Paid Inst.</th><th>Outstanding</th>
+      </tr>
     </thead>
     <tbody>
-    {% set t_loan = namespace(v=0) %}
-    {% set t_paid = namespace(v=0) %}
-    {% set t_os = namespace(v=0) %}
+    {% set ns = namespace(sno=0, t_loan=0, t_paid=0, t_os=0) %}
     {% for r in records %}
-      {% set t_loan.v = t_loan.v + r.disbursed_amount %}
-      {% set t_paid.v = t_paid.v + r.total_paid %}
-      {% set t_os.v = t_os.v + r.outstanding %}
+      {% set ns.sno = ns.sno + 1 %}
+      {% set ns.t_loan = ns.t_loan + r.disbursed_amount %}
+      {% set ns.t_paid = ns.t_paid + r.total_paid %}
+      {% set ns.t_os = ns.t_os + r.outstanding %}
       <tr>
-        <td>{{ loop.index }}</td>
+        <td>{{ ns.sno }}</td>
         <td class="fw-semibold text-primary">{{ r.loan_id or '—' }}</td>
         <td>{{ r.member_code }}</td>
-        <td class="fw-semibold">{{ r.member_name }}</td>
-        <td>{{ r.grp }}</td>
+        <td>{{ r.member_name }}</td>
         <td>{{ r.center_code }}</td>
         <td>{{ r.loan_type_name or '—' }}</td>
         <td>{{ r.loan_cycle or 1 }}</td>
         <td>{{ r.disbursement_date }}</td>
-        <td>₹{{ '{:,.0f}'.format(r.disbursed_amount) }}</td>
-        <td>₹{{ '{:,.0f}'.format(r.total_paid) }}</td>
+        <td>{{ '{:,.0f}'.format(r.disbursed_amount) }}</td>
+        <td>{{ '{:,.0f}'.format(r.total_paid) }}</td>
         <td>{{ r.paid_count }}/{{ r.total_installments }}</td>
-        <td class="{% if r.outstanding > 0 %}text-danger fw-semibold{% endif %}">₹{{ '{:,.2f}'.format(r.outstanding) }}</td>
+        <td class="{% if r.outstanding > 0 %}text-danger fw-semibold{% endif %}">{{ '{:,.2f}'.format(r.outstanding) }}</td>
       </tr>
     {% else %}
-      <tr><td colspan="13" class="text-center text-muted py-4">No records.</td></tr>
+      <tr><td colspan="12" class="text-center text-muted py-4">No records found.</td></tr>
     {% endfor %}
     </tbody>
-    <tfoot class="table-light fw-semibold">
-      <tr>
-        <td colspan="9" class="text-end">Totals:</td>
-        <td>₹{{ '{:,.0f}'.format(t_loan.v) }}</td>
-        <td>₹{{ '{:,.0f}'.format(t_paid.v) }}</td>
+    <tfoot>
+      <tr style="background:#dce8f8;font-weight:700;">
+        <td colspan="8" class="text-end">Totals:</td>
+        <td>{{ '{:,.0f}'.format(ns.t_loan) }}</td>
+        <td>{{ '{:,.0f}'.format(ns.t_paid) }}</td>
         <td></td>
-        <td class="text-danger">₹{{ '{:,.2f}'.format(t_os.v) }}</td>
+        <td class="text-danger">{{ '{:,.2f}'.format(ns.t_os) }}</td>
       </tr>
     </tfoot>
   </table>
+  </div>
 </div>
 {% endblock %}

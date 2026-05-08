@@ -1,54 +1,86 @@
 {% extends 'base.html' %}
 {% block title %}Member Wise Arrears Details{% endblock %}
 {% block content %}
-<div class="page-header">
+
+<div class="print-header">
+  <h4>MYTHRI ASSOCIATES – Vijayawada</h4>
+  <h5>Member Wise Arrears Details Report</h5>
+</div>
+
+<div class="page-header no-print">
   <i class="bi bi-person-exclamation" style="font-size:20px;color:#1a3c6e;"></i>
   <h5>Member Wise Arrears Details Report</h5>
 </div>
-<div class="action-bar">
+<div class="action-bar no-print">
   <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
-  <button onclick="window.print()" class="btn btn-outline-primary btn-sm ms-2"><i class="bi bi-printer me-1"></i>Print</button>
+  <button onclick="window.print()" class="btn-print-pdf ms-2"><i class="bi bi-printer-fill"></i> Print / PDF</button>
 </div>
-<form method="GET" class="form-card mb-3">
+
+<form method="GET" class="form-card mb-3 no-print">
   <div class="row g-2 align-items-end">
-    <div class="col-md-4"><label class="form-label">Center</label>
+    <div class="col-md-4">
+      <label class="form-label">Center</label>
       <select name="center_id" class="form-select form-select-sm">
         <option value="">All Centers</option>
-        {% for c in centers %}<option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} – {{ c.center_name }}</option>{% endfor %}
+        {% for c in centers %}
+        <option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} – {{ c.center_name }}</option>
+        {% endfor %}
       </select>
     </div>
     <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
   </div>
 </form>
-<div class="lms-table" style="overflow-x:auto;">
-  <table class="table table-hover mb-0">
+
+<div class="form-card">
+  <div style="overflow-x:auto;">
+  <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:900px;">
     <thead>
-      <tr><th>#</th><th>Loan ID</th><th>Member Code</th><th>Member Name</th><th>Grp</th><th>Center</th><th>Loan Type</th><th>Loan Amt</th><th>Paid</th><th>Pending Inst.</th><th>Outstanding</th></tr>
+      <tr>
+        <th>S.No</th><th>Mem Code</th><th>Member Name</th><th>Issue Date</th>
+        <th>Loan Amount</th><th>Prin Outstanding</th><th>Int Outstanding</th>
+        <th>Arrear Prin Due</th><th>Arrear Int Due</th>
+      </tr>
     </thead>
     <tbody>
-    {% set t_os = namespace(v=0) %}
+    {% set ns = namespace(sno=0, t_loan=0, t_prin_os=0, t_int_os=0, t_arrear_prin=0, t_arrear_int=0) %}
     {% for d in data %}
-      {% set t_os.v = t_os.v + d.outstanding %}
+      {% set ns.sno = ns.sno + 1 %}
+      {% set prin_os = d.disbursed_amount - d.prin_paid %}
+      {% set int_total = (d.disbursed_amount * (d.interest_rate or 0) / 100) if d.interest_rate else 0 %}
+      {% set int_os = int_total - d.int_paid %}
+      {% set arrear_prin = (d.disbursed_amount / d.total_installments) if d.total_installments else 0 %}
+      {% set arrear_int = (int_total / d.total_installments) if d.total_installments else 0 %}
+      {% set ns.t_loan = ns.t_loan + d.disbursed_amount %}
+      {% set ns.t_prin_os = ns.t_prin_os + prin_os %}
+      {% set ns.t_int_os = ns.t_int_os + [int_os, 0]|max %}
+      {% set ns.t_arrear_prin = ns.t_arrear_prin + arrear_prin %}
+      {% set ns.t_arrear_int = ns.t_arrear_int + arrear_int %}
       <tr>
-        <td>{{ loop.index }}</td>
-        <td class="fw-semibold text-primary">{{ d.loan_id or '—' }}</td>
-        <td>{{ d.member_code }}</td>
-        <td class="fw-semibold">{{ d.member_name }}</td>
-        <td>{{ d.grp }}</td>
-        <td>{{ d.center_code }}</td>
-        <td>{{ d.loan_type_name or '—' }}</td>
-        <td>₹{{ '{:,.0f}'.format(d.disbursed_amount) }}</td>
-        <td>₹{{ '{:,.0f}'.format(d.total_paid) }}</td>
-        <td class="text-danger fw-semibold">{{ d.pending_installments }}</td>
-        <td class="text-danger fw-semibold">₹{{ '{:,.2f}'.format(d.outstanding) }}</td>
+        <td>{{ ns.sno }}</td>
+        <td class="fw-semibold text-primary">{{ d.member_code }}</td>
+        <td>{{ d.member_name }}</td>
+        <td>{{ d.disbursement_date }}</td>
+        <td>{{ '{:,.0f}'.format(d.disbursed_amount) }}</td>
+        <td class="text-danger">{{ '{:,.2f}'.format(prin_os) }}</td>
+        <td class="text-danger">{{ '{:,.2f}'.format([int_os, 0]|max) }}</td>
+        <td>{{ '{:,.2f}'.format(arrear_prin) }}</td>
+        <td>{{ '{:,.2f}'.format(arrear_int) }}</td>
       </tr>
     {% else %}
-      <tr><td colspan="11" class="text-center text-success py-4">No arrears found.</td></tr>
+      <tr><td colspan="9" class="text-center text-success py-4">No arrears found.</td></tr>
     {% endfor %}
     </tbody>
-    <tfoot class="table-light fw-semibold">
-      <tr><td colspan="10" class="text-end">Total Outstanding:</td><td class="text-danger">₹{{ '{:,.2f}'.format(t_os.v) }}</td></tr>
+    <tfoot>
+      <tr style="background:#dce8f8;font-weight:700;">
+        <td colspan="4" class="text-end">Totals:</td>
+        <td>{{ '{:,.0f}'.format(ns.t_loan) }}</td>
+        <td class="text-danger">{{ '{:,.2f}'.format(ns.t_prin_os) }}</td>
+        <td class="text-danger">{{ '{:,.2f}'.format(ns.t_int_os) }}</td>
+        <td>{{ '{:,.2f}'.format(ns.t_arrear_prin) }}</td>
+        <td>{{ '{:,.2f}'.format(ns.t_arrear_int) }}</td>
+      </tr>
     </tfoot>
   </table>
+  </div>
 </div>
 {% endblock %}

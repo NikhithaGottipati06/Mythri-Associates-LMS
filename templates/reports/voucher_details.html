@@ -1,62 +1,96 @@
 {% extends 'base.html' %}
 {% block title %}Voucher Details{% endblock %}
 {% block content %}
-<div class="page-header">
+
+<div class="print-header">
+  <h4>MYTHRI ASSOCIATES – Vijayawada</h4>
+  <h5>Voucher Details
+    {% if from_date or to_date %}– {{ from_date }}{% if to_date %} to {{ to_date }}{% endif %}{% endif %}
+  </h5>
+</div>
+
+<div class="page-header no-print">
   <i class="bi bi-receipt" style="font-size:20px;color:#1a3c6e;"></i>
   <h5>Voucher Details</h5>
 </div>
-<div class="action-bar">
+<div class="action-bar no-print">
   <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
-  <button onclick="window.print()" class="btn btn-outline-primary btn-sm ms-2"><i class="bi bi-printer me-1"></i>Print</button>
+  <button onclick="window.print()" class="btn-print-pdf ms-2"><i class="bi bi-printer-fill"></i> Print / PDF</button>
 </div>
-<form method="GET" class="form-card mb-3">
+
+<form method="GET" class="form-card mb-3 no-print">
   <div class="row g-2 align-items-end">
-    <div class="col-md-3"><label class="form-label">Center</label>
+    <div class="col-md-3">
+      <label class="form-label">Center</label>
       <select name="center_id" class="form-select form-select-sm">
         <option value="">All Centers</option>
-        {% for c in centers %}<option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} – {{ c.center_name }}</option>{% endfor %}
+        {% for c in centers %}
+        <option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} – {{ c.center_name }}</option>
+        {% endfor %}
       </select>
     </div>
-    <div class="col-md-2"><label class="form-label">From Date</label>
+    <div class="col-md-2">
+      <label class="form-label">From Date</label>
       <input type="text" name="from_date" class="form-control form-control-sm" value="{{ from_date }}" placeholder="DD/MM/YYYY">
     </div>
-    <div class="col-md-2"><label class="form-label">To Date</label>
+    <div class="col-md-2">
+      <label class="form-label">To Date</label>
       <input type="text" name="to_date" class="form-control form-control-sm" value="{{ to_date }}" placeholder="DD/MM/YYYY">
     </div>
     <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
   </div>
 </form>
-<div class="lms-table" style="overflow-x:auto;">
-  <table class="table table-hover mb-0" style="min-width:900px;">
+
+<!-- Credit Vouchers (Collections) -->
+<div class="form-card mb-3">
+  <div class="section-title no-print" style="color:#198754;">Credit Voucher (Collections)</div>
+  <div class="print-info" style="font-weight:700;color:#198754;margin-bottom:4px;">Credit Voucher (Collections)</div>
+  <div style="overflow-x:auto;">
+  <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:1000px;">
     <thead>
-      <tr><th>#</th><th>Date</th><th>Loan ID</th><th>Member</th><th>Center</th><th>Inst#</th><th>Due Amt</th><th>Paid Amt</th><th>Principal</th><th>Interest</th><th>Penalty</th><th>Mode</th><th>Posted By</th></tr>
+      <tr>
+        <th>S.No</th><th>Date</th><th>Loan ID</th><th>Mem Code</th><th>Member Name</th>
+        <th>Center</th><th>Inst#</th><th>Due Amt</th><th>Paid Amt</th>
+        <th>Principal</th><th>Interest</th><th>Penalty</th><th>Mode</th>
+      </tr>
     </thead>
     <tbody>
-    {% set t_paid = namespace(v=0) %}
+    {% set ns = namespace(sno=0, t_paid=0, t_prin=0, t_int=0) %}
     {% for r in records %}
-      {% set t_paid.v = t_paid.v + r.paid_amount %}
+      {% set ns.sno = ns.sno + 1 %}
+      {% set ns.t_paid = ns.t_paid + (r.paid_amount or 0) %}
+      {% set ns.t_prin = ns.t_prin + (r.principal or 0) %}
+      {% set ns.t_int = ns.t_int + (r.interest or 0) %}
       <tr>
-        <td>{{ loop.index }}</td>
+        <td>{{ ns.sno }}</td>
         <td>{{ r.posting_date }}</td>
         <td class="text-primary fw-semibold">{{ r.loan_id or '—' }}</td>
-        <td>{{ r.member_code }} – {{ r.member_name }}</td>
+        <td>{{ r.member_code }}</td>
+        <td>{{ r.member_name }}</td>
         <td>{{ r.center_code }}</td>
         <td>{{ r.installment_no }}</td>
-        <td>₹{{ '{:,.2f}'.format(r.due_amount or 0) }}</td>
-        <td class="fw-semibold">₹{{ '{:,.2f}'.format(r.paid_amount or 0) }}</td>
-        <td>₹{{ '{:,.2f}'.format(r.principal or 0) }}</td>
-        <td>₹{{ '{:,.2f}'.format(r.interest or 0) }}</td>
-        <td>₹{{ '{:,.2f}'.format(r.penalty or 0) }}</td>
+        <td>{{ '{:,.2f}'.format(r.due_amount or 0) }}</td>
+        <td class="fw-semibold text-success">{{ '{:,.2f}'.format(r.paid_amount or 0) }}</td>
+        <td>{{ '{:,.2f}'.format(r.principal or 0) }}</td>
+        <td class="text-danger">{{ '{:,.2f}'.format(r.interest or 0) }}</td>
+        <td>{{ '{:,.2f}'.format(r.penalty or 0) }}</td>
         <td>{{ r.mode }}</td>
-        <td>{{ r.posted_by_name or '—' }}</td>
       </tr>
     {% else %}
       <tr><td colspan="13" class="text-center text-muted py-4">No vouchers found.</td></tr>
     {% endfor %}
     </tbody>
-    <tfoot class="table-light fw-semibold">
-      <tr><td colspan="7" class="text-end">Total Collected:</td><td>₹{{ '{:,.2f}'.format(t_paid.v) }}</td><td colspan="5"></td></tr>
+    <tfoot>
+      <tr style="background:#d1e7dd;font-weight:700;">
+        <td colspan="8" class="text-end">Credit Total:</td>
+        <td class="text-success">{{ '{:,.2f}'.format(ns.t_paid) }}</td>
+        <td>{{ '{:,.2f}'.format(ns.t_prin) }}</td>
+        <td>{{ '{:,.2f}'.format(ns.t_int) }}</td>
+        <td colspan="2"></td>
+      </tr>
     </tfoot>
   </table>
+  </div>
 </div>
+
 {% endblock %}

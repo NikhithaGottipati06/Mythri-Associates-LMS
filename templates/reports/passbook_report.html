@@ -1,17 +1,28 @@
 {% extends 'base.html' %}
 {% block title %}Passbook Report{% endblock %}
 {% block content %}
-<div class="page-header">
+
+{% if loan %}
+<div class="print-header">
+  <h4>MYTHRI ASSOCIATES – Vijayawada</h4>
+  <p>Member Code/Name: {{ loan.member_code }} / {{ loan.member_name }} &nbsp;&nbsp; Center: {{ loan.center_name }}</p>
+  <p>Loan Amount: {{ '{:,.2f}'.format(loan.disbursed_amount) }} &nbsp;|&nbsp; Loan Tenure: {{ loan.total_installments }} Weeks &nbsp;|&nbsp; ROI: {{ loan.interest_rate }}% &nbsp;|&nbsp; Loan Date: {{ loan.disbursement_date }}</p>
+  <p>Processing Fee: {{ '{:,.2f}'.format(loan.processing_fee or 0) }} &nbsp;|&nbsp; Insurance Premium: {{ '{:,.2f}'.format((loan.insurance_fee or 0) + (loan.nominee_insurance_fee or 0)) }}</p>
+</div>
+{% endif %}
+
+<div class="page-header no-print">
   <i class="bi bi-book" style="font-size:20px;color:#1a3c6e;"></i>
   <h5>Passbook Report</h5>
 </div>
-<div class="action-bar">
+<div class="action-bar no-print">
   <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
-  {% if loan %}<button onclick="window.print()" class="btn btn-outline-primary btn-sm ms-2"><i class="bi bi-printer me-1"></i>Print</button>{% endif %}
+  {% if loan %}<button onclick="window.print()" class="btn-print-pdf ms-2"><i class="bi bi-printer-fill"></i> Print / PDF</button>{% endif %}
 </div>
-<form method="GET" class="form-card mb-3">
+
+<form method="GET" class="form-card mb-3 no-print">
   <div class="row g-2 align-items-end">
-    <div class="col-md-4">
+    <div class="col-md-5">
       <label class="form-label">Select Loan ID</label>
       <select name="loan_id" class="form-select form-select-sm">
         <option value="">— Select Loan —</option>
@@ -27,11 +38,16 @@
 </form>
 
 {% if loan %}
-<div class="form-card mb-3" id="passbook-print">
-  <div class="row mb-3">
+{% set weekly_principal = (loan.disbursed_amount / loan.total_installments) if loan.total_installments else 0 %}
+{% set total_interest_amt = (loan.disbursed_amount * (loan.interest_rate or 0) / 100) %}
+{% set weekly_interest = (total_interest_amt / loan.total_installments) if loan.total_installments else 0 %}
+{% set total_due_amt = loan.disbursed_amount + total_interest_amt %}
+
+<div class="form-card mb-3 no-print">
+  <div class="row">
     <div class="col-md-6">
       <table class="table table-sm table-borderless mb-0" style="font-size:13px;">
-        <tr><th style="width:140px;">Loan ID</th><td class="fw-semibold text-primary">{{ loan.loan_id }}</td></tr>
+        <tr><th style="width:150px;">Loan ID</th><td class="fw-semibold text-primary">{{ loan.loan_id }}</td></tr>
         <tr><th>Member</th><td>{{ loan.member_code }} – {{ loan.member_name }}</td></tr>
         <tr><th>Center</th><td>{{ loan.center_name }}</td></tr>
         <tr><th>Loan Type</th><td>{{ loan.loan_type_name }}</td></tr>
@@ -41,55 +57,93 @@
     <div class="col-md-6">
       <table class="table table-sm table-borderless mb-0" style="font-size:13px;">
         <tr><th style="width:160px;">Loan Amount</th><td class="fw-semibold">₹{{ '{:,.2f}'.format(loan.disbursed_amount) }}</td></tr>
-        <tr><th>Disbursement Date</th><td>{{ loan.disbursement_date }}</td></tr>
-        <tr><th>Total Installments</th><td>{{ loan.total_installments }}</td></tr>
-        <tr><th>Installment Amount</th><td>₹{{ '{:,.2f}'.format(loan.installment_amount or 0) }}</td></tr>
-        <tr><th>Interest Rate</th><td>{{ loan.interest_rate }}%</td></tr>
+        <tr><th>Loan Date</th><td>{{ loan.disbursement_date }}</td></tr>
+        <tr><th>Tenure</th><td>{{ loan.total_installments }} Weeks</td></tr>
+        <tr><th>ROI</th><td>{{ loan.interest_rate }}%</td></tr>
+        <tr><th>Processing Fee</th><td>₹{{ '{:,.2f}'.format(loan.processing_fee or 0) }}</td></tr>
+        <tr><th>Insurance Premium</th><td>₹{{ '{:,.2f}'.format((loan.insurance_fee or 0)+(loan.nominee_insurance_fee or 0)) }}</td></tr>
+        <tr><th>Total Due</th><td class="fw-bold text-danger">₹{{ '{:,.2f}'.format(total_due_amt) }}</td></tr>
       </table>
     </div>
   </div>
-  <div class="row mb-2" style="font-size:12px;">
-    <div class="col-md-3"><b>Processing Fee:</b> ₹{{ '{:,.2f}'.format(loan.processing_fee or 0) }}</div>
-    <div class="col-md-3"><b>Insurance Fee:</b> ₹{{ '{:,.2f}'.format(loan.insurance_fee or 0) }}</div>
-    <div class="col-md-3"><b>Nominee Ins. Fee:</b> ₹{{ '{:,.2f}'.format(loan.nominee_insurance_fee or 0) }}</div>
-    <div class="col-md-3"><b>Other Charges:</b> ₹{{ '{:,.2f}'.format(loan.other_charges or 0) }}</div>
-  </div>
-  <div class="lms-table" style="margin:0;">
-    <table class="table table-hover mb-0">
-      <thead>
-        <tr><th>Inst#</th><th>Date</th><th>Due Amt</th><th>Paid Amt</th><th>Principal</th><th>Interest</th><th>Penalty</th><th>Mode</th><th>Balance</th></tr>
-      </thead>
-      <tbody>
-      {% set running_bal = namespace(v=loan.disbursed_amount) %}
-      {% set total_paid = namespace(v=0) %}
-      {% for p in postings %}
-        {% set running_bal.v = running_bal.v - (p.principal or 0) %}
-        {% set total_paid.v = total_paid.v + (p.paid_amount or 0) %}
-        <tr>
-          <td>{{ p.installment_no }}</td>
-          <td>{{ p.posting_date }}</td>
-          <td>₹{{ '{:,.2f}'.format(p.due_amount or 0) }}</td>
-          <td class="fw-semibold text-success">₹{{ '{:,.2f}'.format(p.paid_amount or 0) }}</td>
-          <td>₹{{ '{:,.2f}'.format(p.principal or 0) }}</td>
-          <td>₹{{ '{:,.2f}'.format(p.interest or 0) }}</td>
-          <td>₹{{ '{:,.2f}'.format(p.penalty or 0) }}</td>
-          <td>{{ p.mode }}</td>
-          <td class="fw-semibold">₹{{ '{:,.2f}'.format(running_bal.v) }}</td>
-        </tr>
-      {% else %}
-        <tr><td colspan="9" class="text-center text-muted py-3">No installments posted.</td></tr>
-      {% endfor %}
-      </tbody>
-      <tfoot class="table-light fw-semibold">
-        <tr>
-          <td colspan="3" class="text-end">Total Paid:</td>
-          <td class="text-success">₹{{ '{:,.2f}'.format(total_paid.v) }}</td>
-          <td colspan="4"></td>
-          <td>₹{{ '{:,.2f}'.format(loan.disbursed_amount - total_paid.v) }}</td>
-        </tr>
-      </tfoot>
-    </table>
-  </div>
 </div>
+
+<!-- Two-column passbook table matching reference -->
+{% set half = ((loan.total_installments + 1) // 2) %}
+{% set schedule = [] %}
+{% set running = namespace(bal=loan.disbursed_amount) %}
+{% for inst in range(1, loan.total_installments + 2) %}
+  {% set due_date = '' %}
+  {% set rec_date = '' %}
+  {% set paid_amt = 0 %}
+  {# find posting for this installment #}
+  {% for p in postings %}
+    {% if p.installment_no == inst %}
+      {% set rec_date = p.posting_date %}
+      {% set paid_amt = p.paid_amount %}
+    {% endif %}
+  {% endfor %}
+  {% set prin = (loan.disbursed_amount / loan.total_installments) if inst > 0 and loan.total_installments else 0 %}
+  {% set intamt = ((loan.disbursed_amount * (loan.interest_rate or 0) / 100) / loan.total_installments) if loan.total_installments else 0 %}
+  {% if inst == 0 %}
+    {% set prin = 0 %}{% set intamt = 0 %}
+  {% endif %}
+{% endfor %}
+
+<div class="lms-table" style="margin:0;">
+  <table class="table table-bordered table-sm mb-0" style="font-size:11.5px;">
+    <thead>
+      <tr style="background:#1a3c6e;color:#fff;">
+        <th colspan="9" class="text-center">{{ loan.member_code }} – {{ loan.member_name }} &nbsp;|&nbsp; {{ loan.loan_type_name }} &nbsp;|&nbsp; {{ loan.total_installments }} Weeks</th>
+      </tr>
+      <tr>
+        <th>S.No</th><th>Due Date</th><th>Rec Date</th>
+        <th>Prin Due</th><th>Int Due</th><th>Total Due</th>
+        <th>Prin Bal</th><th>Staff</th><th>Others</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% set bal = namespace(v=loan.disbursed_amount) %}
+    <!-- Row 0: disbursement -->
+    <tr>
+      <td>0</td>
+      <td>{{ loan.disbursement_date }}</td>
+      <td></td>
+      <td>0.00</td><td>0.00</td><td>0.00</td>
+      <td class="fw-semibold">{{ '{:,.2f}'.format(loan.disbursed_amount) }}</td>
+      <td></td><td></td>
+    </tr>
+    {% set prin_week = (loan.disbursed_amount / loan.total_installments) if loan.total_installments else 0 %}
+    {% set int_week  = ((loan.disbursed_amount * (loan.interest_rate or 0) / 100) / loan.total_installments) if loan.total_installments else 0 %}
+    {% set total_week = prin_week + int_week %}
+    {% for inst in range(1, loan.total_installments + 1) %}
+      {% set bal.v = bal.v - prin_week %}
+      {% set rec_date = '' %}
+      {% for p in postings %}{% if p.installment_no == inst %}{% set rec_date = p.posting_date %}{% endif %}{% endfor %}
+      <tr {% if loop.index % 2 == 0 %}style="background:#f5f8ff;"{% endif %}>
+        <td>{{ inst }}</td>
+        <td></td>
+        <td>{{ rec_date }}</td>
+        <td>{{ '{:,.2f}'.format(prin_week) }}</td>
+        <td class="text-danger">{{ '{:,.2f}'.format(int_week) }}</td>
+        <td class="fw-semibold">{{ '{:,.2f}'.format(total_week) }}</td>
+        <td>{{ '{:,.2f}'.format([bal.v, 0]|max) }}</td>
+        <td></td><td></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr style="background:#dce8f8;font-weight:700;">
+        <td colspan="3" class="text-end">Totals:</td>
+        <td>{{ '{:,.2f}'.format(prin_week * loan.total_installments) }}</td>
+        <td>{{ '{:,.2f}'.format(int_week * loan.total_installments) }}</td>
+        <td>{{ '{:,.2f}'.format(total_week * loan.total_installments) }}</td>
+        <td>0.00</td><td colspan="2"></td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+{% else %}
+<div class="form-card text-center text-muted py-4">Select a Loan ID above to view passbook.</div>
 {% endif %}
 {% endblock %}

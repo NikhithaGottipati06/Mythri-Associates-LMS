@@ -1,41 +1,55 @@
 {% extends 'base.html' %}
 {% block title %}Centers Report{% endblock %}
 {% block content %}
-<div class="page-header">
+
+<div class="print-header">
+  <h4>MYTHRI ASSOCIATES – Vijayawada</h4>
+  <h5>Centers Master Report</h5>
+</div>
+
+<div class="page-header no-print">
   <i class="bi bi-building" style="font-size:20px;color:#1a3c6e;"></i>
   <h5>Centers Report</h5>
 </div>
-<div class="action-bar">
+<div class="action-bar no-print">
   <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
-  <button onclick="window.print()" class="btn btn-outline-primary btn-sm ms-2"><i class="bi bi-printer me-1"></i>Print</button>
+  <button onclick="window.print()" class="btn-print-pdf ms-2"><i class="bi bi-printer-fill"></i> Print / PDF</button>
   <span class="ms-auto total-bar">Total: {{ centers|length }} centers</span>
 </div>
-<div class="lms-table">
-  <table class="table table-hover mb-0">
+
+<div class="form-card">
+  <div style="overflow-x:auto;">
+  <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:1000px;">
     <thead>
       <tr>
-        <th>Code</th><th>Center Name</th><th>Active Members</th><th>Staff</th>
-        <th>Meeting Type</th><th>Meeting Week</th><th>Meeting Time</th>
-        <th>District</th><th>State</th>
+        <th>S.No</th><th>Center Code</th><th>Center Name</th><th>Address</th>
+        <th>Max Members</th><th>Meeting Type</th><th>Meeting Day</th>
+        <th>Meeting Place</th><th>Staff Name</th>
       </tr>
     </thead>
     <tbody>
     {% for c in centers %}
       <tr>
+        <td>{{ loop.index }}</td>
         <td class="fw-semibold text-primary">{{ c.center_code }}</td>
         <td class="fw-semibold">{{ c.center_name }}</td>
-        <td><span class="badge bg-success">{{ c.active_members }}</span></td>
-        <td>{{ c.staff_name or '—' }}</td>
-        <td>{{ c.meeting_type }}</td>
+        <td>{{ c.address1 or '—' }}</td>
+        <td class="text-center">{{ c.max_members or '—' }}</td>
+        <td>{{ c.meeting_type or '—' }}</td>
         <td>{{ c.meeting_week or '—' }}</td>
-        <td>{{ c.meeting_time or '—' }}</td>
-        <td>{{ c.district or '—' }}</td>
-        <td>{{ c.state }}</td>
+        <td>{{ c.meeting_place or '—' }}</td>
+        <td>{{ c.staff_name or '—' }}</td>
       </tr>
     {% else %}
       <tr><td colspan="9" class="text-center text-muted py-4">No centers found.</td></tr>
     {% endfor %}
     </tbody>
+    <tfoot>
+      <tr style="background:#dce8f8;font-weight:700;">
+        <td colspan="9" class="text-end">Total Centers: {{ centers|length }}</td>
+      </tr>
+    </tfoot>
   </table>
+  </div>
 </div>
 {% endblock %}

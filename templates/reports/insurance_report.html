@@ -1,66 +1,85 @@
 {% extends 'base.html' %}
-{% block title %}Insurance Particulars{% endblock %}
+{% block title %}Insurance Premium Collection Report{% endblock %}
 {% block content %}
-<div class="page-header">
+
+<div class="print-header">
+  <h4>MYTHRI ASSOCIATES – Vijayawada</h4>
+  <h5>Insurance Premium Collection Report</h5>
+</div>
+
+<div class="page-header no-print">
   <i class="bi bi-shield-check" style="font-size:20px;color:#1a3c6e;"></i>
-  <h5>Insurance Particulars</h5>
+  <h5>Insurance Premium Collection Report</h5>
 </div>
-<div class="action-bar">
+<div class="action-bar no-print">
   <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
-  <button onclick="window.print()" class="btn btn-outline-primary btn-sm ms-2"><i class="bi bi-printer me-1"></i>Print</button>
+  <button onclick="window.print()" class="btn-print-pdf ms-2"><i class="bi bi-printer-fill"></i> Print / PDF</button>
 </div>
-<form method="GET" class="form-card mb-3">
+
+<form method="GET" class="form-card mb-3 no-print">
   <div class="row g-2 align-items-end">
-    <div class="col-md-4"><label class="form-label">Center</label>
+    <div class="col-md-4">
+      <label class="form-label">Center</label>
       <select name="center_id" class="form-select form-select-sm">
         <option value="">All Centers</option>
-        {% for c in centers %}<option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} – {{ c.center_name }}</option>{% endfor %}
+        {% for c in centers %}
+        <option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} – {{ c.center_name }}</option>
+        {% endfor %}
       </select>
     </div>
     <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
   </div>
 </form>
-<div class="lms-table" style="overflow-x:auto;">
-  <table class="table table-hover mb-0" style="min-width:1100px;">
+
+<div class="form-card">
+  <div style="overflow-x:auto;">
+  <table class="table table-bordered table-sm mb-0" style="font-size:10.5px;min-width:1300px;">
     <thead>
       <tr>
-        <th>#</th><th>Loan ID</th><th>Member Code</th><th>Member Name</th><th>DOB</th>
-        <th>Nominee</th><th>Nominee KYC</th><th>Nominee KYC No</th>
-        <th>Center</th><th>Loan Type</th><th>Loan Amt</th><th>Ins. Fee</th><th>Nom. Ins. Fee</th>
+        <th>S.No</th><th>Mem Code</th><th>Member Name</th><th>DOB</th><th>KYC</th><th>Gender</th>
+        <th>Nominee</th><th>Nom. KYC</th><th>Nom. KYC No</th>
+        <th>Center</th><th>Loan Type</th><th>Loan Amt</th>
+        <th>Ins. Fee</th><th>Nom. Ins.</th><th>Tenure</th><th>Cycle#</th><th>Issue Date</th>
       </tr>
     </thead>
     <tbody>
-    {% set t_ins = namespace(v=0) %}
-    {% set t_nom = namespace(v=0) %}
+    {% set ns = namespace(sno=0, t_ins=0, t_nom=0) %}
     {% for d in data %}
-      {% set t_ins.v = t_ins.v + (d.insurance_fee or 0) %}
-      {% set t_nom.v = t_nom.v + (d.nominee_insurance_fee or 0) %}
+      {% set ns.sno = ns.sno + 1 %}
+      {% set ns.t_ins = ns.t_ins + (d.insurance_fee or 0) %}
+      {% set ns.t_nom = ns.t_nom + (d.nominee_insurance_fee or 0) %}
       <tr>
-        <td>{{ loop.index }}</td>
-        <td class="fw-semibold text-primary">{{ d.loan_id or '—' }}</td>
-        <td>{{ d.member_code }}</td>
-        <td class="fw-semibold">{{ d.full_name }}</td>
+        <td>{{ ns.sno }}</td>
+        <td class="fw-semibold text-primary">{{ d.member_code }}</td>
+        <td>{{ d.full_name }}</td>
         <td>{{ d.date_of_birth or '—' }}</td>
+        <td>{{ d.kyc_type or '—' }}</td>
+        <td>{{ d.gender or '—' }}</td>
         <td>{{ d.nominee_name or '—' }}</td>
         <td>{{ d.nominee_kyc_type or '—' }}</td>
         <td>{{ d.nominee_kyc_number or '—' }}</td>
         <td>{{ d.center_code }}</td>
         <td>{{ d.loan_type_name or '—' }}</td>
-        <td>₹{{ '{:,.0f}'.format(d.disbursed_amount) }}</td>
-        <td>₹{{ '{:,.2f}'.format(d.insurance_fee or 0) }}</td>
-        <td>₹{{ '{:,.2f}'.format(d.nominee_insurance_fee or 0) }}</td>
+        <td>{{ '{:,.0f}'.format(d.disbursed_amount) }}</td>
+        <td class="text-success fw-semibold">{{ '{:,.2f}'.format(d.insurance_fee or 0) }}</td>
+        <td>{{ '{:,.2f}'.format(d.nominee_insurance_fee or 0) }}</td>
+        <td>{{ d.total_installments or '—' }}</td>
+        <td>{{ d.loan_cycle or 1 }}</td>
+        <td>{{ d.disbursement_date or '—' }}</td>
       </tr>
     {% else %}
-      <tr><td colspan="13" class="text-center text-muted py-4">No records found.</td></tr>
+      <tr><td colspan="17" class="text-center text-muted py-4">No records found.</td></tr>
     {% endfor %}
     </tbody>
-    <tfoot class="table-light fw-semibold">
-      <tr>
-        <td colspan="11" class="text-end">Totals:</td>
-        <td>₹{{ '{:,.2f}'.format(t_ins.v) }}</td>
-        <td>₹{{ '{:,.2f}'.format(t_nom.v) }}</td>
+    <tfoot>
+      <tr style="background:#dce8f8;font-weight:700;">
+        <td colspan="12" class="text-end">Totals:</td>
+        <td class="text-success">{{ '{:,.2f}'.format(ns.t_ins) }}</td>
+        <td>{{ '{:,.2f}'.format(ns.t_nom) }}</td>
+        <td colspan="3"></td>
       </tr>
     </tfoot>
   </table>
+  </div>
 </div>
 {% endblock %}

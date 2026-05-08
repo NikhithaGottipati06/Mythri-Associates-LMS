@@ -1703,22 +1703,36 @@ def report_collection_sheet():
     db = get_db()
     center_filter = request.args.get('center_id', '')
     report_date = request.args.get('report_date', datetime.now().strftime('%d/%m/%Y'))
-    loans = db.execute("""
+    rows = db.execute("""
         SELECT ld.*, la.application_no, la.purpose, la.loan_cycle,
-               m.full_name as member_name, m.member_code, m.grp,
-               c.center_name, c.center_code,
-               lt.loan_type_name,
+               m.full_name as member_name, m.member_code, m.grp, m.phone1,
+               c.center_name, c.center_code, c.meeting_week,
+               lt.loan_type_name, lt.interest_rate, lt.interest_type,
+               u.full_name as staff_name,
                (SELECT COALESCE(SUM(rp.paid_amount),0) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id) as total_paid,
-               (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id) as paid_count
+               (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id) as paid_count,
+               (SELECT COALESCE(SUM(ar.amount),0) FROM advance_recoveries ar WHERE ar.disbursement_id=ld.id) as advance_total
         FROM loan_disbursements ld
         LEFT JOIN loan_applications la ON ld.application_id=la.id
         LEFT JOIN members m ON la.member_id=m.id
         LEFT JOIN centers c ON la.center_id=c.id
         LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
+        LEFT JOIN users u ON c.staff_id=u.id
         WHERE ld.status='Disbursed'
         """ + (" AND la.center_id=?" if center_filter else "") + """
         ORDER BY c.center_code, m.grp, m.member_code
     """, ([center_filter] if center_filter else [])).fetchall()
+    # compute interest per installment for each loan
+    loans = []
+    for r in rows:
+        d = dict(r)
+        amt = float(d['disbursed_amount'] or 0)
+        tenure = int(d['total_installments'] or 1)
+        rate = float(d['interest_rate'] or 0)
+        itype = d['interest_type'] or 'Percent'
+        total_int = rate if itype == 'Fixed' else amt * rate / 100
+        d['int_per_inst'] = round(total_int / tenure, 2) if tenure else 0
+        loans.append(d)
     centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
     db.close()
     return render_template('reports/collection_sheet.html', loans=loans, centers=centers,
@@ -1730,23 +1744,70 @@ def report_summary_sheet():
     db = get_db()
     center_filter = request.args.get('center_id', '')
     report_date = request.args.get('report_date', datetime.now().strftime('%d/%m/%Y'))
-    centers_data = db.execute("""
-        SELECT c.center_code, c.center_name,
-               COUNT(DISTINCT m.id) as total_members,
-               COUNT(DISTINCT ld.id) as active_loans,
-               COALESCE(SUM(ld.disbursed_amount),0) as total_disbursed,
-               COALESCE(SUM(rp.paid_amount),0) as total_collected
-        FROM centers c
-        LEFT JOIN members m ON m.center_id=c.id AND m.status='ACTIVE'
-        LEFT JOIN loan_applications la ON la.center_id=c.id
-        LEFT JOIN loan_disbursements ld ON ld.application_id=la.id AND ld.status='Disbursed'
-        LEFT JOIN recovery_postings rp ON rp.disbursement_id=ld.id
-        """ + (" WHERE c.id=?" if center_filter else "") + """
-        GROUP BY c.id ORDER BY c.center_code
-    """, ([center_filter] if center_filter else [])).fetchall()
+    date_param = [report_date]
+    cond = " AND rp.posting_date=?" if not center_filter else " AND rp.posting_date=? AND la.center_id=?"
+    cond_params = date_param if not center_filter else date_param + [center_filter]
+
+    credit = db.execute("""
+        SELECT
+          COALESCE(SUM(m.total_fees),0) as joining_fee,
+          COALESCE(SUM(la.insurance_fee + la.nominee_insurance_fee),0) as insurance_premium,
+          COALESCE(SUM(la.processing_fee),0) as processing_fee,
+          COALESCE(SUM(rp.principal),0) as prin_recovery,
+          COALESCE(SUM(rp.interest),0) as int_recovery
+        FROM recovery_postings rp
+        LEFT JOIN loan_disbursements ld ON rp.disbursement_id=ld.id
+        LEFT JOIN loan_applications la ON ld.application_id=la.id
+        LEFT JOIN members m ON la.member_id=m.id
+        LEFT JOIN centers c ON la.center_id=c.id
+        WHERE rp.posting_date=?
+    """ + (" AND la.center_id=?" if center_filter else ""),
+    cond_params).fetchone()
+
+    prepaid_amt = db.execute("""
+        SELECT COALESCE(SUM(pt.amount),0) FROM prepaid_transactions pt
+        LEFT JOIN loan_disbursements ld ON pt.disbursement_id=ld.id
+        LEFT JOIN loan_applications la ON ld.application_id=la.id
+        WHERE pt.transaction_date=? AND pt.is_undo=0
+    """ + (" AND la.center_id=?" if center_filter else ""),
+    cond_params).fetchone()[0]
+
+    advance_collected = db.execute("""
+        SELECT COALESCE(SUM(ar.amount),0) FROM advance_recoveries ar
+        LEFT JOIN loan_disbursements ld ON ar.disbursement_id=ld.id
+        LEFT JOIN loan_applications la ON ld.application_id=la.id
+        WHERE ar.recovery_date=?
+    """ + (" AND la.center_id=?" if center_filter else ""),
+    cond_params).fetchone()[0]
+
+    disbursed_amt = db.execute("""
+        SELECT COALESCE(SUM(ld.disbursed_amount),0) FROM loan_disbursements ld
+        LEFT JOIN loan_applications la ON ld.application_id=la.id
+        WHERE ld.disbursement_date=?
+    """ + (" AND la.center_id=?" if center_filter else ""),
+    cond_params).fetchone()[0]
+
+    credit_data = {
+        'joining_fee': credit['joining_fee'] if credit else 0,
+        'insurance_premium': credit['insurance_premium'] if credit else 0,
+        'processing_fee': credit['processing_fee'] if credit else 0,
+        'prin_recovery': credit['prin_recovery'] if credit else 0,
+        'int_recovery': credit['int_recovery'] if credit else 0,
+        'prepaid_amount': prepaid_amt,
+        'preclosure_charges': 0,
+        'advance_collected': advance_collected,
+    }
+    credit_data['credit_total'] = sum(credit_data.values())
+    debit_data = {
+        'disbursed_amount': disbursed_amt,
+        'advance_withdraw': 0,
+    }
+    debit_data['debit_total'] = sum(debit_data.values())
+
     centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
     db.close()
-    return render_template('reports/summary_sheet.html', centers_data=centers_data,
+    return render_template('reports/summary_sheet.html',
+                           credit_data=credit_data, debit_data=debit_data,
                            centers=centers, center_filter=center_filter, report_date=report_date)
 
 @app.route('/reports/member-wise-summary')
@@ -1754,13 +1815,23 @@ def report_summary_sheet():
 def report_member_wise_summary():
     db = get_db()
     center_filter = request.args.get('center_id', '')
+    report_date = request.args.get('report_date', datetime.now().strftime('%d/%m/%Y'))
     data = db.execute("""
-        SELECT m.member_code, m.full_name, m.grp,
+        SELECT m.member_code, m.full_name, m.grp, m.total_fees as join_fee,
                c.center_name, c.center_code,
-               COUNT(ld.id) as loan_count,
-               COALESCE(SUM(ld.disbursed_amount),0) as total_disbursed,
-               COALESCE(SUM(rp.paid_amount),0) as total_paid,
-               COALESCE(SUM(ld.disbursed_amount),0) - COALESCE(SUM(rp.paid_amount),0) as outstanding
+               COALESCE(SUM(rp.principal),0) as prin_recovery,
+               COALESCE(SUM(rp.interest),0) as int_recovery,
+               COALESCE((SELECT SUM(pt.amount) FROM prepaid_transactions pt
+                         LEFT JOIN loan_disbursements ld2 ON pt.disbursement_id=ld2.id
+                         LEFT JOIN loan_applications la2 ON ld2.application_id=la2.id
+                         WHERE la2.member_id=m.id AND pt.is_undo=0),0) as prepaid_amount,
+               COALESCE((SELECT SUM(ar.amount) FROM advance_recoveries ar
+                         LEFT JOIN loan_disbursements ld3 ON ar.disbursement_id=ld3.id
+                         LEFT JOIN loan_applications la3 ON ld3.application_id=la3.id
+                         WHERE la3.member_id=m.id),0) as advance_collected,
+               COALESCE(SUM(la.insurance_fee + la.nominee_insurance_fee),0) as insurance_collected,
+               COALESCE(SUM(la.processing_fee),0) as process_fee,
+               COALESCE(SUM(ld.disbursed_amount),0) as disb_amount
         FROM members m
         LEFT JOIN centers c ON m.center_id=c.id
         LEFT JOIN loan_applications la ON la.member_id=m.id
@@ -1773,7 +1844,7 @@ def report_member_wise_summary():
     centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
     db.close()
     return render_template('reports/member_wise_summary.html', data=data,
-                           centers=centers, center_filter=center_filter)
+                           centers=centers, center_filter=center_filter, report_date=report_date)
 
 @app.route('/reports/advance/collected')
 @login_required
@@ -1892,13 +1963,16 @@ def report_disbursement():
     to_date = request.args.get('to_date', '')
     query = """
         SELECT ld.*, la.application_no, la.purpose, la.loan_cycle, la.processing_fee, la.insurance_fee,
+               la.nominee_name,
                m.full_name as member_name, m.member_code,
                c.center_name, c.center_code,
                lt.loan_type_name,
-               u.full_name as disbursed_by_name
+               u.full_name as disbursed_by_name,
+               COALESCE(mn.relationship, '') as nominee_relation
         FROM loan_disbursements ld
         LEFT JOIN loan_applications la ON ld.application_id=la.id
         LEFT JOIN members m ON la.member_id=m.id
+        LEFT JOIN member_nominees mn ON mn.member_id=m.id
         LEFT JOIN centers c ON la.center_id=c.id
         LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
         LEFT JOIN users u ON ld.disbursed_by=u.id WHERE 1=1
@@ -1998,9 +2072,11 @@ def report_arrears_member_wise():
                la.application_no, la.loan_cycle,
                m.full_name as member_name, m.member_code, m.grp,
                c.center_name, c.center_code,
-               lt.loan_type_name,
+               lt.loan_type_name, lt.interest_rate,
                COUNT(rp.id) as paid_count,
                COALESCE(SUM(rp.paid_amount),0) as total_paid,
+               COALESCE(SUM(rp.principal),0) as prin_paid,
+               COALESCE(SUM(rp.interest),0) as int_paid,
                ld.disbursed_amount - COALESCE(SUM(rp.paid_amount),0) as outstanding,
                ld.total_installments - COUNT(rp.id) as pending_installments
         FROM loan_disbursements ld
@@ -2208,10 +2284,10 @@ def report_insurance():
     db = get_db()
     center_filter = request.args.get('center_id', '')
     data = db.execute("""
-        SELECT m.member_code, m.full_name, m.date_of_birth, m.spouse_name,
+        SELECT m.member_code, m.full_name, m.date_of_birth, m.spouse_name, m.kyc_type, m.gender,
                la.nominee_name, la.nominee_kyc_type, la.nominee_kyc_number,
-               la.insurance_fee, la.nominee_insurance_fee,
-               ld.loan_id, ld.disbursement_date, ld.disbursed_amount,
+               la.insurance_fee, la.nominee_insurance_fee, la.loan_cycle,
+               ld.loan_id, ld.disbursement_date, ld.disbursed_amount, ld.total_installments,
                c.center_name, c.center_code,
                lt.loan_type_name
         FROM loan_disbursements ld

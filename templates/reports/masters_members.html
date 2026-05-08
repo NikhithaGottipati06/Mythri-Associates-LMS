@@ -1,15 +1,22 @@
 {% extends 'base.html' %}
 {% block title %}Members Report{% endblock %}
 {% block content %}
-<div class="page-header">
+
+<div class="print-header">
+  <h4>MYTHRI ASSOCIATES – Vijayawada</h4>
+  <h5>Members Master Report</h5>
+</div>
+
+<div class="page-header no-print">
   <i class="bi bi-people" style="font-size:20px;color:#1a3c6e;"></i>
   <h5>Members Report</h5>
 </div>
-<div class="action-bar">
+<div class="action-bar no-print">
   <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
-  <button onclick="window.print()" class="btn btn-outline-primary btn-sm ms-2"><i class="bi bi-printer me-1"></i>Print</button>
+  <button onclick="window.print()" class="btn-print-pdf ms-2"><i class="bi bi-printer-fill"></i> Print / PDF</button>
 </div>
-<form method="GET" class="form-card mb-3">
+
+<form method="GET" class="form-card mb-3 no-print">
   <div class="row g-2 align-items-end">
     <div class="col-md-4">
       <label class="form-label">Center</label>
@@ -31,33 +38,37 @@
     <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
   </div>
 </form>
-<div class="lms-table">
-  <table class="table table-hover mb-0">
+
+<div class="form-card">
+  <div style="overflow-x:auto;">
+  <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:900px;">
     <thead>
       <tr>
-        <th>#</th><th>Code</th><th>Name</th><th>Center</th><th>Group</th>
-        <th>Joined</th><th>Phone</th><th>Gender</th><th>KYC</th><th>Status</th>
+        <th>S.No</th><th>Center Code</th><th>Center Name</th>
+        <th>Mem Code</th><th>Member Name</th><th>DOB</th><th>Phone</th>
       </tr>
     </thead>
     <tbody>
     {% for m in members %}
       <tr>
         <td>{{ loop.index }}</td>
+        <td>{{ m.center_code }}</td>
+        <td>{{ m.center_name }}</td>
         <td class="fw-semibold text-primary">{{ m.member_code }}</td>
         <td class="fw-semibold">{{ m.full_name }}</td>
-        <td>{{ m.center_code }} – {{ m.center_name }}</td>
-        <td>{{ m.grp }}</td>
-        <td>{{ m.date_of_join }}</td>
+        <td>{{ m.date_of_birth or '—' }}</td>
         <td>{{ m.phone1 or '—' }}</td>
-        <td>{{ m.gender or '—' }}</td>
-        <td>{{ m.kyc_type or '—' }}</td>
-        <td><span class="badge-{{ m.status|lower }}">{{ m.status }}</span></td>
       </tr>
     {% else %}
-      <tr><td colspan="10" class="text-center text-muted py-4">No members found.</td></tr>
+      <tr><td colspan="7" class="text-center text-muted py-4">No members found.</td></tr>
     {% endfor %}
     </tbody>
-    <tfoot><tr><td colspan="10" class="text-end fw-semibold">Total: {{ members|length }}</td></tr></tfoot>
+    <tfoot>
+      <tr style="background:#dce8f8;font-weight:700;">
+        <td colspan="7" class="text-end">Total: {{ members|length }}</td>
+      </tr>
+    </tfoot>
   </table>
+  </div>
 </div>
 {% endblock %}
