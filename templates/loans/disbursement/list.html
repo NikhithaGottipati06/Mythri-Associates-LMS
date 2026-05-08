@@ -109,7 +109,8 @@
           <td>{{ d.total_installments }}</td>
           <td>₹{{ '{:,.2f}'.format(d.installment_amount or 0) }}</td>
           <td>{{ d.disbursed_by_name }}</td>
-          <td>
+          <td class="d-flex gap-1">
+            <a href="{{ url_for('loan_schedule', did=d.id) }}" class="btn btn-outline-info btn-icon" title="Schedule"><i class="bi bi-calendar3"></i></a>
             {% if session.role == 'Admin' %}
             <form method="POST" action="{{ url_for('loan_disbursement_delete', did=d.id) }}" style="display:inline;"
                   onsubmit="return confirm('Delete disbursement {{ d.loan_id or d.disbursement_no }}? This will revert the application to Approved and delete related recovery postings and savings transactions.')">

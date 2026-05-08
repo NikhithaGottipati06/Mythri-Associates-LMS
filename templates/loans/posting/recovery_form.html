@@ -132,13 +132,23 @@
 {% endblock %}
 {% block scripts %}
 <script>
-const rate = {{ loan.interest_rate or 0 }};
+const disbursedAmount   = {{ loan.disbursed_amount }};
+const totalInstallments = {{ loan.total_installments }};
+const interestRate      = {{ loan.interest_rate or 0 }};
+const interestType      = '{{ loan.interest_type or "Percent" }}';
+
+const totalInterest    = interestType === 'Fixed' ? interestRate : disbursedAmount * interestRate / 100;
+const principalPerInst = parseFloat((disbursedAmount / totalInstallments).toFixed(2));
+const interestPerInst  = parseFloat((totalInterest / totalInstallments).toFixed(2));
+
+document.addEventListener('DOMContentLoaded', function(){
+  document.getElementById('principal').value = principalPerInst;
+  document.getElementById('interest').value  = interestPerInst;
+});
+
 function splitAmount(val){
-  const paid = parseFloat(val) || 0;
-  const interest = parseFloat((paid * rate / 100).toFixed(2));
-  const principal = parseFloat((paid - interest).toFixed(2));
-  document.getElementById('interest').value = interest;
-  document.getElementById('principal').value = principal < 0 ? 0 : principal;
+  document.getElementById('principal').value = principalPerInst;
+  document.getElementById('interest').value  = interestPerInst;
 }
 </script>
 {% endblock %}

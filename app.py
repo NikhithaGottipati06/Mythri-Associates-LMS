@@ -847,7 +847,15 @@ def loan_disburse_new():
                 INSERT INTO loan_approvals (application_id,approved_amount,approved_date,approved_by,status)
                 VALUES (?,?,?,?,'Approved')
             """, (app_id, amount, app_date, session['user_id']))
-            inst_amount = round(amount / tenure, 2) if tenure else 0
+            if lt:
+            rate = float(lt['interest_rate'] or 0)
+            if lt.get('interest_type') == 'Fixed':
+                total_interest = rate
+            else:
+                total_interest = amount * rate / 100
+        else:
+            total_interest = 0
+        inst_amount = round((amount + total_interest) / tenure, 2) if tenure else 0
             db.execute("""
                 INSERT INTO loan_disbursements (application_id,disbursement_no,loan_id,disbursed_amount,
                 disbursement_date,mode,account_no,disbursed_by,status,total_installments,installment_amount,remarks)
@@ -868,7 +876,7 @@ def loan_disburse_new():
         "SELECT id, member_code, full_name, center_id, income, kyc_type, kyc_number FROM members WHERE status='ACTIVE'"
     ).fetchall()
     loan_types = db.execute(
-        "SELECT id, loan_type_code, loan_type_name, tenure_weeks, processing_fee, insurance_fee FROM loan_types WHERE active=1"
+        "SELECT id, loan_type_code, loan_type_name, tenure_weeks, processing_fee, insurance_fee, interest_rate, interest_type, interest_method FROM loan_types WHERE active=1"
     ).fetchall()
     members_json = json.dumps([dict(m) for m in members])
     loan_types_json = json.dumps([dict(lt) for lt in loan_types])
@@ -954,7 +962,8 @@ def recovery_post(did):
     db = get_db()
     loan = db.execute("""
         SELECT ld.*, la.application_no, la.member_id, la.center_id,
-               m.full_name as member_name, m.member_code, lt.interest_rate
+               m.full_name as member_name, m.member_code,
+               lt.interest_rate, lt.interest_type, lt.interest_method
         FROM loan_disbursements ld
         LEFT JOIN loan_applications la ON ld.application_id=la.id
         LEFT JOIN members m ON la.member_id=m.id
@@ -1285,6 +1294,85 @@ def savings_withdraw(mid):
     db.close()
     flash(f'Withdrawal of ₹{withdraw_amount:,.0f} posted successfully.', 'success')
     return redirect(url_for('savings_list'))
+
+# ── Loan Schedule ─────────────────────────────────────────────────────────────
+
+@app.route('/loans/disbursement/<int:did>/schedule')
+@login_required
+def loan_schedule(did):
+    db = get_db()
+    loan = db.execute("""
+        SELECT ld.*, la.application_no, la.member_id, la.center_id,
+               m.full_name as member_name, m.member_code, c.center_name, c.center_code,
+               lt.interest_rate, lt.interest_type, lt.interest_method, lt.loan_type_name
+        FROM loan_disbursements ld
+        LEFT JOIN loan_applications la ON ld.application_id=la.id
+        LEFT JOIN members m ON la.member_id=m.id
+        LEFT JOIN centers c ON la.center_id=c.id
+        LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
+        WHERE ld.id=?
+    """, (did,)).fetchone()
+    postings = db.execute(
+        "SELECT * FROM recovery_postings WHERE disbursement_id=? ORDER BY installment_no",
+        (did,)
+    ).fetchall()
+    db.close()
+
+    amount = float(loan['disbursed_amount'])
+    tenure = int(loan['total_installments'])
+    rate = float(loan['interest_rate'] or 0)
+    interest_type = loan['interest_type'] or 'Percent'
+
+    if interest_type == 'Fixed':
+        total_interest = rate
+    else:
+        total_interest = round(amount * rate / 100, 2)
+
+    total_payable = amount + total_interest
+    weekly_principal = round(amount / tenure, 2)
+    weekly_interest = round(total_interest / tenure, 2)
+    weekly_installment = weekly_principal + weekly_interest
+
+    paid_weeks = {p['installment_no'] for p in postings}
+
+    try:
+        start_date = datetime.strptime(loan['disbursement_date'], '%d/%m/%Y')
+    except Exception:
+        start_date = datetime.now()
+
+    schedule = []
+    opening = amount
+    for week in range(1, tenure + 1):
+        date = start_date + timedelta(weeks=week)
+        if week == tenure:
+            p = round(opening, 2)
+            i = round(total_interest - weekly_interest * (tenure - 1), 2)
+            inst = round(p + i, 2)
+        else:
+            p = weekly_principal
+            i = weekly_interest
+            inst = weekly_installment
+        closing = round(max(opening - p, 0), 2)
+        schedule.append({
+            'week': week,
+            'date': date.strftime('%d/%m/%Y'),
+            'opening': opening,
+            'principal': p,
+            'interest': i,
+            'installment': inst,
+            'closing': closing,
+            'paid': week in paid_weeks
+        })
+        opening = closing
+
+    return render_template('loans/disbursement/schedule.html',
+                           loan=loan, schedule=schedule,
+                           total_interest=total_interest,
+                           total_payable=total_payable,
+                           weekly_installment=weekly_installment,
+                           weekly_principal=weekly_principal,
+                           weekly_interest=weekly_interest,
+                           paid_count=len(postings))
 
 # ── Settings ──────────────────────────────────────────────────────────────────
 
