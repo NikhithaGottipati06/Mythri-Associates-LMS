@@ -10,8 +10,14 @@
 </head>
 <body>
 
+<!-- Sidebar overlay (mobile) -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
 <!-- Topbar -->
 <div class="topbar">
+  <button class="btn-hamburger" id="sidebarToggle" aria-label="Menu" onclick="toggleSidebar()">
+    <i class="bi bi-list"></i>
+  </button>
   <a class="brand me-auto" href="{{ url_for('dashboard') }}">
     <span>MYTHRI</span> LMS &nbsp;<small style="font-size:11px;opacity:.7;">– Vijayawada</small>
   </a>
@@ -131,6 +137,21 @@ document.querySelectorAll('.collapse-toggle').forEach(el => {
     target.addEventListener('show.bs.collapse', () => el.classList.remove('collapsed'));
     target.addEventListener('hide.bs.collapse', () => el.classList.add('collapsed'));
   }
+});
+
+// Mobile sidebar toggle
+function toggleSidebar() {
+  document.querySelector('.sidebar').classList.toggle('sidebar-open');
+  document.getElementById('sidebarOverlay').classList.toggle('show');
+}
+function closeSidebar() {
+  document.querySelector('.sidebar').classList.remove('sidebar-open');
+  document.getElementById('sidebarOverlay').classList.remove('show');
+}
+document.querySelectorAll('.sidebar .nav-link:not(.collapse-toggle)').forEach(link => {
+  link.addEventListener('click', () => {
+    if (window.innerWidth < 768) closeSidebar();
+  });
 });
 </script>
 {% block scripts %}{% endblock %}

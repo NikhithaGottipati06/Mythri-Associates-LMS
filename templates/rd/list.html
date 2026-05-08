@@ -88,9 +88,9 @@ function fetchRdMemberInfo(mid) {
 
 <!-- Filter -->
 <div class="action-bar mb-2">
-  <form method="GET" class="d-flex gap-2 align-items-center">
+  <form method="GET" class="d-flex flex-wrap gap-2 align-items-center">
     <label class="fw-semibold" style="font-size:13px;">Center:</label>
-    <select name="center_id" class="form-select form-select-sm" style="width:200px;" onchange="this.form.submit()">
+    <select name="center_id" class="form-select form-select-sm" style="min-width:160px;max-width:240px;" onchange="this.form.submit()">
       <option value="">All Centers</option>
       {% for c in centers %}
       <option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} {{ c.center_name }}</option>

@@ -116,9 +116,37 @@ body { background: #eef2f7; font-family: 'Segoe UI', sans-serif; font-size: 14px
 .total-bar { background: #dce8f8; border-radius: 6px; padding: 6px 14px;
   font-size: 12.5px; font-weight: 600; color: var(--primary); }
 
-@media (max-width: 768px) {
-  .sidebar { transform: translateX(-220px); }
-  .main-content { margin-left: 0; }
+/* ── Mobile hamburger ── */
+.btn-hamburger {
+  display: none;
+  background: none; border: none; color: #fff;
+  font-size: 22px; padding: 4px 8px; cursor: pointer;
+  align-items: center; line-height: 1; margin-right: 6px; flex-shrink: 0;
+}
+
+@media (max-width: 767px) {
+  .btn-hamburger { display: inline-flex; }
+  .sidebar {
+    transform: translateX(-220px);
+    transition: transform .25s ease;
+    z-index: 1041;
+  }
+  .sidebar.sidebar-open { transform: translateX(0); box-shadow: 4px 0 20px rgba(0,0,0,.35); }
+  .sidebar-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.45); z-index: 1036;
+  }
+  .sidebar-overlay.show { display: block; }
+  .main-content { margin-left: 0; padding: 10px; }
+  .topbar .user-info { display: none !important; }
+  .form-card { padding: 14px; }
+  .stat-card { padding: 12px 14px; }
+  .stat-card .stat-num { font-size: 22px; }
+  .stat-card .stat-icon { width: 40px; height: 40px; font-size: 18px; }
+  .action-bar { flex-direction: column; align-items: stretch; }
+  .action-bar form { width: 100%; }
+  .action-bar .total-bar { text-align: center; }
+  .total-bar { display: block; text-align: center; }
 }
 
 /* ── Print / PDF ── */

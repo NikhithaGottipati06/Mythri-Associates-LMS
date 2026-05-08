@@ -124,7 +124,7 @@
               id="collectForm{{ ae.id }}"
               onsubmit="return confirm('Collect arrear for {{ ae.member_name }} (due {{ ae.arrear_date }})?')">
           <input type="text" name="collected_date" class="form-control form-control-sm d-inline"
-                 style="width:120px;" value="{{ date_filter }}" placeholder="DD/MM/YYYY">
+                 style="width:120px;max-width:100%;" value="{{ date_filter }}" placeholder="DD/MM/YYYY">
         </form>
       </td>
       <td class="d-flex gap-1">
