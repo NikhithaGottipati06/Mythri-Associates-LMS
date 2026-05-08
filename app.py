@@ -1161,6 +1161,29 @@ def _to_iso(date_str):
     except Exception:
         return date_str
 
+def _days_since(date_str):
+    """Days from DD/MM/YYYY date to today."""
+    try:
+        d = datetime.strptime(date_str, '%d/%m/%Y')
+        return max((datetime.today() - d).days, 0)
+    except Exception:
+        return 0
+
+def _days_between(d1_str, d2_str):
+    """Days between two DD/MM/YYYY dates."""
+    try:
+        d1 = datetime.strptime(d1_str, '%d/%m/%Y')
+        d2 = datetime.strptime(d2_str, '%d/%m/%Y')
+        return max((d2 - d1).days, 0)
+    except Exception:
+        return 0
+
+def _calc_interest(principal, roi, days):
+    """Simple interest = principal × roi/100 × days/365."""
+    if principal <= 0 or not roi or days <= 0:
+        return 0.0
+    return round(principal * (roi / 100) * (days / 365), 2)
+
 def _number_to_words(n):
     """Convert a number to Indian rupee words (e.g. 31250.00 → 'Thirty One Thousand Two Hundred Fifty Only')."""
     ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
@@ -1519,10 +1542,12 @@ def secure_deposits_list():
         where += " AND sd.center_id=?"
         params.append(center_filter)
 
-    summary = db.execute(f"""
+    summary_rows = db.execute(f"""
         SELECT m.id, m.member_code, m.full_name, c.center_code, c.center_name,
                COALESCE(SUM(sd.deposit_amount),0) as total_deposits,
-               COALESCE(SUM(sd.withdraw_amount),0) as total_withdrawals
+               COALESCE(SUM(sd.withdraw_amount),0) as total_withdrawals,
+               MIN(CASE WHEN sd.deposit_amount>0 THEN sd.transaction_date END) as first_date,
+               MAX(sd.interest_rate) as interest_rate
         FROM members m
         LEFT JOIN centers c ON m.center_id=c.id
         LEFT JOIN secure_deposits sd ON sd.member_id=m.id
@@ -1530,6 +1555,12 @@ def secure_deposits_list():
         GROUP BY m.id HAVING total_deposits > 0 OR total_withdrawals > 0
         ORDER BY m.member_code
     """, params).fetchall()
+    summary = []
+    for s in summary_rows:
+        bal = (s['total_deposits'] or 0) - (s['total_withdrawals'] or 0)
+        days = _days_since(s['first_date']) if s['first_date'] else 0
+        interest = _calc_interest(bal, s['interest_rate'] or 0, days)
+        summary.append({**dict(s), 'balance': bal, 'days': days, 'interest': interest})
 
     transactions = db.execute(f"""
         SELECT sd.*, m.member_code, m.full_name, c.center_code, c.center_name,
@@ -1560,7 +1591,7 @@ def secure_deposits_member_info():
     db = get_db()
     mid = request.args.get('mid', '')
     if not mid:
-        return {'center': '', 'balance': 0}
+        return {'center': '', 'balance': 0, 'loan_amount': 0}
     member = db.execute("""
         SELECT m.*, c.center_code, c.center_name FROM members m
         LEFT JOIN centers c ON m.center_id=c.id WHERE m.id=?
@@ -1568,10 +1599,17 @@ def secure_deposits_member_info():
     bal = db.execute(
         "SELECT COALESCE(SUM(deposit_amount),0)-COALESCE(SUM(withdraw_amount),0) as b FROM secure_deposits WHERE member_id=?",
         (mid,)).fetchone()['b']
+    loan_amt = db.execute("""
+        SELECT COALESCE(SUM(ld.disbursed_amount),0) as la
+        FROM loan_disbursements ld
+        LEFT JOIN loan_applications la ON ld.application_id=la.id
+        WHERE la.member_id=? AND ld.status='Disbursed'
+    """, (mid,)).fetchone()['la']
     db.close()
     if not member:
-        return {'center': '', 'balance': 0}
-    return {'center': f"{member['center_code']} {member['center_name']}", 'balance': bal or 0}
+        return {'center': '', 'balance': 0, 'loan_amount': 0}
+    return {'center': f"{member['center_code']} {member['center_name']}",
+            'balance': bal or 0, 'loan_amount': loan_amt or 0}
 
 @app.route('/secure-deposits/deposit/<int:mid>', methods=['POST'])
 @login_required
@@ -1580,6 +1618,8 @@ def secure_deposit_add(mid):
     amount = float(request.form.get('deposit_amount', 0))
     date = request.form.get('transaction_date', '').strip()
     remarks = request.form.get('remarks', '').strip()
+    percentage = float(request.form.get('percentage', 0) or 0)
+    interest_rate = float(request.form.get('interest_rate', 0) or 0)
     if amount <= 0 or not date:
         flash('Invalid amount or date.', 'danger')
         return redirect(url_for('secure_deposits_list'))
@@ -1588,9 +1628,9 @@ def secure_deposit_add(mid):
         "SELECT COALESCE(SUM(deposit_amount),0)-COALESCE(SUM(withdraw_amount),0) FROM secure_deposits WHERE member_id=?",
         (mid,)).fetchone()[0] or 0
     db.execute("""
-        INSERT INTO secure_deposits (member_id,center_id,transaction_date,deposit_amount,withdraw_amount,balance,remarks,posted_by)
-        VALUES (?,?,?,?,0,?,?,?)
-    """, (mid, member['center_id'], date, amount, prev + amount, remarks, session['user_id']))
+        INSERT INTO secure_deposits (member_id,center_id,transaction_date,deposit_amount,withdraw_amount,balance,percentage,interest_rate,remarks,posted_by)
+        VALUES (?,?,?,?,0,?,?,?,?,?)
+    """, (mid, member['center_id'], date, amount, prev + amount, percentage, interest_rate, remarks, session['user_id']))
     db.commit()
     db.close()
     flash(f'Secure deposit of ₹{amount:,.0f} recorded.', 'success')
@@ -1638,7 +1678,7 @@ def report_secure_deposits():
         where += " AND substr(sd.transaction_date,7,4)||'-'||substr(sd.transaction_date,4,2)||'-'||substr(sd.transaction_date,1,2) >= ?"; params.append(_to_iso(from_date))
     if to_date:
         where += " AND substr(sd.transaction_date,7,4)||'-'||substr(sd.transaction_date,4,2)||'-'||substr(sd.transaction_date,1,2) <= ?"; params.append(_to_iso(to_date))
-    transactions = db.execute(f"""
+    raw = db.execute(f"""
         SELECT sd.*, m.member_code, m.full_name, c.center_code, c.center_name,
                u.full_name as posted_by_name
         FROM secure_deposits sd
@@ -1648,6 +1688,12 @@ def report_secure_deposits():
         {where} ORDER BY sd.transaction_date, m.member_code
     """, params).fetchall()
     db.close()
+    today_str = datetime.today().strftime('%d/%m/%Y')
+    transactions = []
+    for t in raw:
+        days = _days_between(t['transaction_date'], today_str)
+        interest = _calc_interest(t['deposit_amount'] or 0, t['interest_rate'] or 0, days) if t['deposit_amount'] else 0
+        transactions.append({**dict(t), 'days': days, 'interest': interest})
     return render_template('reports/secure_deposit_report.html', transactions=transactions, centers=centers,
                            center_filter=center_filter, from_date=from_date, to_date=to_date)
 
@@ -1682,6 +1728,28 @@ def rd_list():
     return render_template('rd/list.html', accounts=accounts, all_members=all_members,
                            centers=centers, center_filter=center_filter)
 
+@app.route('/rd/member-info')
+@login_required
+def rd_member_info():
+    db = get_db()
+    mid = request.args.get('mid', '')
+    if not mid:
+        return {'center': '', 'loan_amount': 0}
+    member = db.execute("""
+        SELECT m.*, c.center_code, c.center_name FROM members m
+        LEFT JOIN centers c ON m.center_id=c.id WHERE m.id=?
+    """, (mid,)).fetchone()
+    loan_amt = db.execute("""
+        SELECT COALESCE(SUM(ld.disbursed_amount),0) as la
+        FROM loan_disbursements ld
+        LEFT JOIN loan_applications la ON ld.application_id=la.id
+        WHERE la.member_id=? AND ld.status='Disbursed'
+    """, (mid,)).fetchone()['la']
+    db.close()
+    if not member:
+        return {'center': '', 'loan_amount': 0}
+    return {'center': f"{member['center_code']} {member['center_name']}", 'loan_amount': loan_amt or 0}
+
 @app.route('/rd/new', methods=['POST'])
 @login_required
 def rd_new():
@@ -1691,6 +1759,8 @@ def rd_new():
     installment_amount = float(request.form.get('installment_amount', 0))
     total_installments = int(request.form.get('total_installments', 0))
     frequency = request.form.get('frequency', 'Weekly')
+    percentage = float(request.form.get('percentage', 0) or 0)
+    interest_rate = float(request.form.get('interest_rate', 0) or 0)
     remarks = request.form.get('remarks', '').strip()
     if not mid or not start_date or installment_amount <= 0 or total_installments <= 0:
         flash('All fields are required.', 'danger')
@@ -1706,9 +1776,10 @@ def rd_new():
         num = 1
     rd_no = f"RD-{num:04d}"
     db.execute("""
-        INSERT INTO rd_accounts (rd_no,member_id,center_id,start_date,installment_amount,total_installments,frequency,status,remarks,created_by)
-        VALUES (?,?,?,?,?,?,?,?,?,?)
-    """, (rd_no, mid, member['center_id'], start_date, installment_amount, total_installments, frequency, 'Active', remarks, session['user_id']))
+        INSERT INTO rd_accounts (rd_no,member_id,center_id,start_date,installment_amount,total_installments,frequency,percentage,interest_rate,status,remarks,created_by)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+    """, (rd_no, mid, member['center_id'], start_date, installment_amount, total_installments,
+          frequency, percentage, interest_rate, 'Active', remarks, session['user_id']))
     db.commit()
     db.close()
     flash(f'RD Account {rd_no} opened successfully.', 'success')

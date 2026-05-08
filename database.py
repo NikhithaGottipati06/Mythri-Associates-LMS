@@ -310,6 +310,10 @@ def migrate_db():
         "ALTER TABLE loan_applications ADD COLUMN nominee_insurance_fee REAL DEFAULT 0",
         "ALTER TABLE loan_applications ADD COLUMN other_charges REAL DEFAULT 0",
         "ALTER TABLE loan_disbursements ADD COLUMN loan_id TEXT",
+        "ALTER TABLE secure_deposits ADD COLUMN percentage REAL DEFAULT 0",
+        "ALTER TABLE secure_deposits ADD COLUMN interest_rate REAL DEFAULT 0",
+        "ALTER TABLE rd_accounts ADD COLUMN percentage REAL DEFAULT 0",
+        "ALTER TABLE rd_accounts ADD COLUMN interest_rate REAL DEFAULT 0",
         """CREATE TABLE IF NOT EXISTS day_end (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             day_date TEXT NOT NULL UNIQUE,

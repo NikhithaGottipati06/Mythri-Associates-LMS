@@ -19,9 +19,13 @@
         {% endfor %}
       </select>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
       <label class="form-label fw-semibold" style="font-size:13px;">Center</label>
       <input type="text" id="memberCenter" class="form-control form-control-sm" readonly placeholder="—">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label fw-semibold" style="font-size:13px;">Loan Amount</label>
+      <input type="text" id="memberLoanAmt" class="form-control form-control-sm fw-bold text-primary" readonly placeholder="₹0">
     </div>
     <div class="col-md-2">
       <label class="form-label fw-semibold" style="font-size:13px;">Balance</label>
@@ -39,11 +43,19 @@
         <label class="form-label fw-semibold" style="font-size:13px;">Date</label>
         <input type="text" id="entryDate" class="form-control form-control-sm" placeholder="DD/MM/YYYY">
       </div>
-      <div class="col-md-3">
+      <div class="col-md-1">
+        <label class="form-label fw-semibold" style="font-size:13px;">% of Loan</label>
+        <input type="number" id="entryPercentage" class="form-control form-control-sm" min="0" step="0.01" placeholder="e.g. 5">
+      </div>
+      <div class="col-md-1">
+        <label class="form-label fw-semibold" style="font-size:13px;">Int. Rate %</label>
+        <input type="number" id="entryInterestRate" class="form-control form-control-sm" min="0" step="0.01" placeholder="e.g. 6">
+      </div>
+      <div class="col-md-2">
         <label class="form-label fw-semibold" style="font-size:13px;">Remarks</label>
         <input type="text" id="entryRemarks" class="form-control form-control-sm" placeholder="Optional">
       </div>
-      <div class="col-md-4 d-flex gap-2">
+      <div class="col-md-3 d-flex gap-2">
         <button class="btn btn-success btn-sm fw-semibold" onclick="submitEntry('deposit')">
           <i class="bi bi-plus-circle me-1"></i>Deposit
         </button>
@@ -60,6 +72,8 @@
       <input type="hidden" name="deposit_amount" id="hDepositAmt">
       <input type="hidden" name="transaction_date" id="hDepositDate">
       <input type="hidden" name="remarks" id="hDepositRemarks">
+      <input type="hidden" name="percentage" id="hDepositPercentage">
+      <input type="hidden" name="interest_rate" id="hDepositInterestRate">
     </form>
     <form id="withdrawForm" method="POST" style="display:none;">
       <input type="hidden" name="withdraw_amount" id="hWithdrawAmt">
@@ -124,6 +138,7 @@
         <tr>
           <th>Member Code</th><th>Member Name</th><th>Center</th>
           <th>Total Deposits</th><th>Total Withdrawals</th><th>Balance</th>
+          <th>Int. Rate %</th><th>Interest Earned</th>
         </tr>
       </thead>
       <tbody>
@@ -134,10 +149,12 @@
           <td>{{ s.center_code }} {{ s.center_name }}</td>
           <td class="text-success">₹{{ '{:,.0f}'.format(s.total_deposits or 0) }}</td>
           <td class="text-danger">₹{{ '{:,.0f}'.format(s.total_withdrawals or 0) }}</td>
-          <td class="fw-semibold text-primary">₹{{ '{:,.0f}'.format((s.total_deposits or 0) - (s.total_withdrawals or 0)) }}</td>
+          <td class="fw-semibold text-primary">₹{{ '{:,.0f}'.format(s.balance or 0) }}</td>
+          <td class="text-center">{{ '{:.2f}'.format(s.interest_rate or 0) }}%</td>
+          <td class="fw-semibold text-success">₹{{ '{:,.2f}'.format(s.interest or 0) }}</td>
         </tr>
       {% else %}
-        <tr><td colspan="6" class="text-center text-muted py-4">No secure deposit transactions found.</td></tr>
+        <tr><td colspan="8" class="text-center text-muted py-4">No secure deposit transactions found.</td></tr>
       {% endfor %}
       </tbody>
     </table>
@@ -184,6 +201,7 @@ function fetchMemberInfo(mid) {
   currentMemberId = mid;
   if (!mid) {
     document.getElementById('memberCenter').value = '';
+    document.getElementById('memberLoanAmt').value = '';
     document.getElementById('memberBalance').value = '';
     document.getElementById('entryForm').style.display = 'none';
     return;
@@ -192,6 +210,8 @@ function fetchMemberInfo(mid) {
     .then(r => r.json())
     .then(data => {
       document.getElementById('memberCenter').value = data.center || '';
+      const loan = data.loan_amount || 0;
+      document.getElementById('memberLoanAmt').value = '₹' + loan.toLocaleString('en-IN');
       currentBalance = data.balance || 0;
       document.getElementById('memberBalance').value = '₹' + currentBalance.toLocaleString('en-IN');
       document.getElementById('entryForm').style.display = 'block';
@@ -200,9 +220,11 @@ function fetchMemberInfo(mid) {
 }
 
 function submitEntry(type) {
-  const amount  = parseFloat(document.getElementById('entryAmount').value);
-  const date    = document.getElementById('entryDate').value.trim();
-  const remarks = document.getElementById('entryRemarks').value.trim();
+  const amount       = parseFloat(document.getElementById('entryAmount').value);
+  const date         = document.getElementById('entryDate').value.trim();
+  const remarks      = document.getElementById('entryRemarks').value.trim();
+  const percentage   = parseFloat(document.getElementById('entryPercentage').value) || 0;
+  const interestRate = parseFloat(document.getElementById('entryInterestRate').value) || 0;
   if (!currentMemberId) { alert('Please select a member.'); return; }
   if (!amount || amount <= 0) { alert('Enter a valid amount.'); return; }
   if (!date) { alert('Enter a date (DD/MM/YYYY).'); return; }
@@ -212,9 +234,11 @@ function submitEntry(type) {
   }
   if (type === 'deposit') {
     document.getElementById('depositForm').action = `/secure-deposits/deposit/${currentMemberId}`;
-    document.getElementById('hDepositAmt').value     = amount;
-    document.getElementById('hDepositDate').value    = date;
-    document.getElementById('hDepositRemarks').value = remarks;
+    document.getElementById('hDepositAmt').value          = amount;
+    document.getElementById('hDepositDate').value         = date;
+    document.getElementById('hDepositRemarks').value      = remarks;
+    document.getElementById('hDepositPercentage').value   = percentage;
+    document.getElementById('hDepositInterestRate').value = interestRate;
     document.getElementById('depositForm').submit();
   } else {
     document.getElementById('withdrawForm').action = `/secure-deposits/withdraw/${currentMemberId}`;

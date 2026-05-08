@@ -39,10 +39,11 @@
   </div>
 </form>
 
-{% set ns = namespace(dep=0, wdr=0) %}
+{% set ns = namespace(dep=0, wdr=0, interest=0) %}
 {% for t in transactions %}
   {% set ns.dep = ns.dep + (t.deposit_amount or 0) %}
   {% set ns.wdr = ns.wdr + (t.withdraw_amount or 0) %}
+  {% set ns.interest = ns.interest + (t.interest or 0) %}
 {% endfor %}
 
 {% if transactions %}
@@ -51,6 +52,7 @@
     <div class="col-auto"><span class="badge bg-success fs-6">Total Deposits: ₹{{ '{:,.2f}'.format(ns.dep) }}</span></div>
     <div class="col-auto"><span class="badge bg-warning text-dark fs-6">Total Withdrawals: ₹{{ '{:,.2f}'.format(ns.wdr) }}</span></div>
     <div class="col-auto"><span class="badge bg-primary fs-6">Net Balance: ₹{{ '{:,.2f}'.format(ns.dep - ns.wdr) }}</span></div>
+    <div class="col-auto"><span class="badge bg-info text-dark fs-6">Total Interest: ₹{{ '{:,.2f}'.format(ns.interest) }}</span></div>
   </div>
 </div>
 {% endif %}
@@ -60,7 +62,8 @@
     <thead>
       <tr style="background:#1a3c6e;color:#fff;">
         <th>S.No</th><th>Date</th><th>Mem Code</th><th>Member Name</th><th>Center</th>
-        <th>Deposit</th><th>Withdrawal</th><th>Balance</th><th>Remarks</th>
+        <th>Deposit</th><th>Withdrawal</th><th>Balance</th>
+        <th>Int. Rate %</th><th>Days</th><th>Interest</th><th>Remarks</th>
       </tr>
     </thead>
     <tbody>
@@ -76,10 +79,13 @@
         <td class="text-success">{% if t.deposit_amount %}{{ '{:,.2f}'.format(t.deposit_amount) }}{% else %}—{% endif %}</td>
         <td class="text-danger">{% if t.withdraw_amount %}{{ '{:,.2f}'.format(t.withdraw_amount) }}{% else %}—{% endif %}</td>
         <td class="fw-semibold">{{ '{:,.2f}'.format(t.balance) }}</td>
+        <td class="text-center">{{ '{:.2f}'.format(t.interest_rate or 0) }}%</td>
+        <td class="text-center">{{ t.days or 0 }}</td>
+        <td class="text-success fw-semibold">{{ '{:,.2f}'.format(t.interest or 0) }}</td>
         <td>{{ t.remarks or '—' }}</td>
       </tr>
     {% else %}
-      <tr><td colspan="9" class="text-center text-muted py-4">No transactions found for selected filters.</td></tr>
+      <tr><td colspan="12" class="text-center text-muted py-4">No transactions found for selected filters.</td></tr>
     {% endfor %}
     </tbody>
     {% if transactions %}
@@ -89,6 +95,8 @@
         <td class="text-success">{{ '{:,.2f}'.format(ns.dep) }}</td>
         <td class="text-danger">{{ '{:,.2f}'.format(ns.wdr) }}</td>
         <td>{{ '{:,.2f}'.format(ns.dep - ns.wdr) }}</td>
+        <td></td><td></td>
+        <td class="text-success">{{ '{:,.2f}'.format(ns.interest) }}</td>
         <td></td>
       </tr>
     </tfoot>

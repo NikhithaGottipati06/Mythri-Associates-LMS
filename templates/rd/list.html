@@ -11,14 +11,22 @@
   <div class="section-title"><i class="bi bi-plus-circle me-1"></i>Open New RD Account</div>
   <form method="POST" action="{{ url_for('rd_new') }}">
     <div class="row g-3 align-items-end">
-      <div class="col-md-4">
+      <div class="col-md-3">
         <label class="form-label fw-semibold" style="font-size:13px;">Member</label>
-        <select name="member_id" class="form-select form-select-sm" required>
+        <select name="member_id" id="rdMemberSelect" class="form-select form-select-sm" required onchange="fetchRdMemberInfo(this.value)">
           <option value="">— Select Member —</option>
           {% for m in all_members %}
           <option value="{{ m.id }}">{{ m.member_code }} – {{ m.full_name }} ({{ m.center_code }})</option>
           {% endfor %}
         </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-semibold" style="font-size:13px;">Center</label>
+        <input type="text" id="rdMemberCenter" class="form-control form-control-sm" readonly placeholder="—">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-semibold" style="font-size:13px;">Loan Amount</label>
+        <input type="text" id="rdLoanAmt" class="form-control form-control-sm fw-bold text-primary" readonly placeholder="₹0">
       </div>
       <div class="col-md-2">
         <label class="form-label fw-semibold" style="font-size:13px;">Start Date</label>
@@ -28,6 +36,8 @@
         <label class="form-label fw-semibold" style="font-size:13px;">Installment Amount (₹)</label>
         <input type="number" name="installment_amount" class="form-control form-control-sm" min="1" step="0.01" placeholder="e.g. 500" required>
       </div>
+    </div>
+    <div class="row g-3 align-items-end mt-1">
       <div class="col-md-1">
         <label class="form-label fw-semibold" style="font-size:13px;">Total Inst.</label>
         <input type="number" name="total_installments" class="form-control form-control-sm" min="1" placeholder="e.g. 50" required>
@@ -39,9 +49,15 @@
           <option value="Monthly">Monthly</option>
         </select>
       </div>
-    </div>
-    <div class="row g-3 align-items-end mt-1">
-      <div class="col-md-6">
+      <div class="col-md-1">
+        <label class="form-label fw-semibold" style="font-size:13px;">% of Loan</label>
+        <input type="number" name="percentage" class="form-control form-control-sm" min="0" step="0.01" placeholder="e.g. 5">
+      </div>
+      <div class="col-md-1">
+        <label class="form-label fw-semibold" style="font-size:13px;">Int. Rate %</label>
+        <input type="number" name="interest_rate" class="form-control form-control-sm" min="0" step="0.01" placeholder="e.g. 6">
+      </div>
+      <div class="col-md-3">
         <label class="form-label fw-semibold" style="font-size:13px;">Remarks (optional)</label>
         <input type="text" name="remarks" class="form-control form-control-sm" placeholder="e.g. Linked to loan L-0001">
       </div>
@@ -52,6 +68,23 @@
   </form>
 </div>
 {% endif %}
+
+<script>
+function fetchRdMemberInfo(mid) {
+  if (!mid) {
+    document.getElementById('rdMemberCenter').value = '';
+    document.getElementById('rdLoanAmt').value = '';
+    return;
+  }
+  fetch(`/rd/member-info?mid=${mid}`)
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('rdMemberCenter').value = data.center || '';
+      const loan = data.loan_amount || 0;
+      document.getElementById('rdLoanAmt').value = '₹' + loan.toLocaleString('en-IN');
+    });
+}
+</script>
 
 <!-- Filter -->
 <div class="action-bar mb-2">
