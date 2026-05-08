@@ -93,10 +93,10 @@
   <table class="table table-bordered table-sm mb-0" style="font-size:11.5px;">
     <thead>
       <tr style="background:#1a3c6e;color:#fff;">
-        <th colspan="9" class="text-center">{{ loan.member_code }} – {{ loan.member_name }} &nbsp;|&nbsp; {{ loan.loan_type_name }} &nbsp;|&nbsp; {{ loan.total_installments }} Weeks</th>
+        <th colspan="8" class="text-center">{{ loan.member_code }} – {{ loan.member_name }} &nbsp;|&nbsp; {{ loan.loan_type_name }} &nbsp;|&nbsp; {{ loan.total_installments }} Weeks</th>
       </tr>
       <tr>
-        <th>S.No</th><th>Due Date</th><th>Rec Date</th>
+        <th>S.No</th><th>Rec Date</th>
         <th>Prin Due</th><th>Int Due</th><th>Total Due</th>
         <th>Prin Bal</th><th>Staff</th><th>Others</th>
       </tr>
@@ -107,7 +107,6 @@
     <tr>
       <td>0</td>
       <td>{{ loan.disbursement_date }}</td>
-      <td></td>
       <td>0.00</td><td>0.00</td><td>0.00</td>
       <td class="fw-semibold">{{ '{:,.2f}'.format(loan.disbursed_amount) }}</td>
       <td></td><td></td>
@@ -121,7 +120,6 @@
       {% for p in postings %}{% if p.installment_no == inst %}{% set rec_date = p.posting_date %}{% endif %}{% endfor %}
       <tr {% if loop.index % 2 == 0 %}style="background:#f5f8ff;"{% endif %}>
         <td>{{ inst }}</td>
-        <td></td>
         <td>{{ rec_date }}</td>
         <td>{{ '{:,.2f}'.format(prin_week) }}</td>
         <td class="text-danger">{{ '{:,.2f}'.format(int_week) }}</td>
@@ -133,7 +131,7 @@
     </tbody>
     <tfoot>
       <tr style="background:#dce8f8;font-weight:700;">
-        <td colspan="3" class="text-end">Totals:</td>
+        <td colspan="2" class="text-end">Totals:</td>
         <td>{{ '{:,.2f}'.format(prin_week * loan.total_installments) }}</td>
         <td>{{ '{:,.2f}'.format(int_week * loan.total_installments) }}</td>
         <td>{{ '{:,.2f}'.format(total_week * loan.total_installments) }}</td>
