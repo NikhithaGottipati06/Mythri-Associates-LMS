@@ -943,18 +943,117 @@ def loan_disbursement_delete(did):
 @login_required
 def recovery_posting_list():
     db = get_db()
-    loans = db.execute("""
-        SELECT ld.*, la.application_no, m.full_name as member_name, m.member_code,
-               c.center_name,
-               (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id) as paid_count
+    date_filter = request.args.get('date', datetime.now().strftime('%d/%m/%Y'))
+    center_filter = request.args.get('center_id', '')
+    try:
+        selected_date = datetime.strptime(date_filter, '%d/%m/%Y')
+        day_name = selected_date.strftime('%A')
+    except Exception:
+        selected_date = datetime.now()
+        day_name = selected_date.strftime('%A')
+        date_filter = selected_date.strftime('%d/%m/%Y')
+
+    params = {'date': date_filter}
+    query = """
+        SELECT ld.*, la.application_no, la.member_id, la.center_id,
+               m.full_name as member_name, m.member_code,
+               c.center_name, c.center_code, c.meeting_week, c.meeting_type,
+               lt.interest_rate, lt.interest_type,
+               (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id) as paid_count,
+               (SELECT rp2.id FROM recovery_postings rp2
+                WHERE rp2.disbursement_id=ld.id AND rp2.posting_date=:date
+                ORDER BY rp2.id DESC LIMIT 1) as today_posting_id
         FROM loan_disbursements ld
         LEFT JOIN loan_applications la ON ld.application_id=la.id
         LEFT JOIN members m ON la.member_id=m.id
         LEFT JOIN centers c ON la.center_id=c.id
-        WHERE ld.status='Disbursed' ORDER BY ld.id DESC
-    """).fetchall()
+        LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
+        WHERE ld.status='Disbursed'
+        AND (SELECT COUNT(*) FROM recovery_postings rp3 WHERE rp3.disbursement_id=ld.id) < ld.total_installments
+    """
+    if center_filter:
+        query += " AND la.center_id=:center_id"
+        params['center_id'] = center_filter
+    else:
+        query += " AND c.meeting_week=:day"
+        params['day'] = day_name
+    query += " ORDER BY c.center_code, m.member_code"
+
+    loans = db.execute(query, params).fetchall()
+    centers = db.execute(
+        "SELECT id, center_code, center_name, meeting_week FROM centers WHERE active=1 ORDER BY center_code"
+    ).fetchall()
     db.close()
-    return render_template('loans/posting/recovery_list.html', loans=loans)
+    return render_template('loans/posting/recovery_list.html',
+                           loans=loans, centers=centers,
+                           date_filter=date_filter, center_filter=center_filter,
+                           day_name=day_name)
+
+@app.route('/loans/posting/recovery/bulk', methods=['POST'])
+@login_required
+def recovery_bulk_post():
+    db = get_db()
+    selected_ids = request.form.getlist('selected_loans')
+    posting_date = request.form.get('posting_date', datetime.now().strftime('%d/%m/%Y'))
+    savings_amount = float(request.form.get('savings_amount', 100))
+    posted = 0
+    for did in selected_ids:
+        did = int(did)
+        loan = db.execute("""
+            SELECT ld.*, la.member_id, la.center_id, lt.interest_rate, lt.interest_type
+            FROM loan_disbursements ld
+            LEFT JOIN loan_applications la ON ld.application_id=la.id
+            LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
+            WHERE ld.id=?
+        """, (did,)).fetchone()
+        if not loan:
+            continue
+        paid_count = db.execute(
+            "SELECT COUNT(*) FROM recovery_postings WHERE disbursement_id=?", (did,)
+        ).fetchone()[0]
+        if paid_count >= loan['total_installments']:
+            continue
+        # Skip if already posted on this date
+        already = db.execute(
+            "SELECT id FROM recovery_postings WHERE disbursement_id=? AND posting_date=?",
+            (did, posting_date)
+        ).fetchone()
+        if already:
+            continue
+        amount = float(loan['disbursed_amount'])
+        tenure = int(loan['total_installments'])
+        rate = float(loan['interest_rate'] or 0)
+        interest_type = loan['interest_type'] or 'Percent'
+        total_interest = rate if interest_type == 'Fixed' else amount * rate / 100
+        principal_inst = round(amount / tenure, 2)
+        interest_inst = round(total_interest / tenure, 2)
+        inst_amount = principal_inst + interest_inst
+        installment_no = paid_count + 1
+        db.execute("""
+            INSERT INTO recovery_postings
+            (disbursement_id,posting_date,installment_no,due_amount,paid_amount,
+             principal,interest,penalty,mode,narration,posted_by)
+            VALUES (?,?,?,?,?,?,?,0,'Cash','Weekly recovery',?)
+        """, (did, posting_date, installment_no, inst_amount, inst_amount,
+              principal_inst, interest_inst, session['user_id']))
+        recovery_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+        if savings_amount > 0 and loan['member_id']:
+            prev = db.execute(
+                "SELECT COALESCE(SUM(deposit_amount),0)-COALESCE(SUM(withdraw_amount),0) FROM savings_transactions WHERE member_id=?",
+                (loan['member_id'],)
+            ).fetchone()[0]
+            db.execute("""
+                INSERT INTO savings_transactions
+                (member_id,center_id,disbursement_id,recovery_posting_id,
+                 transaction_date,deposit_amount,withdraw_amount,balance,posted_by)
+                VALUES (?,?,?,?,?,?,0,?,?)
+            """, (loan['member_id'], loan['center_id'], did, recovery_id,
+                  posting_date, savings_amount, prev + savings_amount, session['user_id']))
+        posted += 1
+    db.commit()
+    db.close()
+    flash(f'{posted} recovery posting(s) saved for {posting_date}.', 'success')
+    return redirect(url_for('recovery_posting_list', date=posting_date))
 
 @app.route('/loans/posting/recovery/<int:did>', methods=['GET', 'POST'])
 @login_required
