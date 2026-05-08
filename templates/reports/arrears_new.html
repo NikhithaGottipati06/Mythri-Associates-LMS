@@ -1,21 +1,18 @@
 {% extends 'base.html' %}
-{% block title %}New Arrears Report{% endblock %}
+{% block title %}Pending Arrears Report{% endblock %}
 {% block content %}
-
 <div class="print-header">
   <h4>MYTHRI ASSOCIATES – Vijayawada</h4>
-  <h5>New Arrears Report</h5>
+  <h5>Pending Arrears Report</h5>
 </div>
-
 <div class="page-header no-print">
   <i class="bi bi-bell" style="font-size:20px;color:#1a3c6e;"></i>
-  <h5>New Arrears Report</h5>
+  <h5>Pending Arrears Report</h5>
 </div>
 <div class="action-bar no-print">
   <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
   <button onclick="window.print()" class="btn-print-pdf ms-2"><i class="bi bi-printer-fill"></i> Print / PDF</button>
 </div>
-
 <form method="GET" class="form-card mb-3 no-print">
   <div class="row g-2 align-items-end">
     <div class="col-md-4">
@@ -30,40 +27,38 @@
     <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
   </div>
 </form>
-
 <div class="form-card">
   <div style="overflow-x:auto;">
-  <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:800px;">
+  <table class="table table-bordered table-sm mb-0" style="font-size:11.5px;min-width:800px;">
     <thead>
       <tr>
-        <th>S.No</th><th>Loan ID</th><th>Mem Code</th><th>Member Name</th>
-        <th>Center</th><th>Loan Type</th><th>Loan Amt</th><th>Inst. Amt</th><th>Outstanding</th>
+        <th>S.No</th><th>Arrear Date</th><th>Loan ID</th><th>Mem Code</th><th>Member Name</th>
+        <th>Center</th><th>Inst#</th><th>Due Amount</th>
       </tr>
     </thead>
     <tbody>
-    {% set ns = namespace(sno=0, t_os=0) %}
+    {% set ns = namespace(sno=0, t_due=0) %}
     {% for d in data %}
       {% set ns.sno = ns.sno + 1 %}
-      {% set ns.t_os = ns.t_os + d.outstanding %}
-      <tr>
+      {% set ns.t_due = ns.t_due + (d.due_amount or 0) %}
+      <tr class="table-warning">
         <td>{{ ns.sno }}</td>
-        <td class="fw-semibold text-primary">{{ d.loan_id or '—' }}</td>
+        <td class="fw-semibold text-danger">{{ d.arrear_date }}</td>
+        <td class="text-primary">{{ d.loan_id or '—' }}</td>
         <td>{{ d.member_code }}</td>
         <td>{{ d.member_name }}</td>
         <td>{{ d.center_code }}</td>
-        <td>{{ d.loan_type_name or '—' }}</td>
-        <td>{{ '{:,.0f}'.format(d.disbursed_amount) }}</td>
-        <td>{{ '{:,.2f}'.format(d.installment_amount or 0) }}</td>
-        <td class="text-danger fw-semibold">{{ '{:,.2f}'.format(d.outstanding) }}</td>
+        <td class="text-center">{{ d.installment_no }}</td>
+        <td class="fw-semibold text-danger">₹{{ '{:,.2f}'.format(d.due_amount or 0) }}</td>
       </tr>
     {% else %}
-      <tr><td colspan="9" class="text-center text-success py-4">No new arrears.</td></tr>
+      <tr><td colspan="8" class="text-center text-success py-4">No pending arrears found.</td></tr>
     {% endfor %}
     </tbody>
     <tfoot>
       <tr style="background:#dce8f8;font-weight:700;">
-        <td colspan="8" class="text-end">Total Outstanding:</td>
-        <td class="text-danger">{{ '{:,.2f}'.format(ns.t_os) }}</td>
+        <td colspan="7" class="text-end">Total Due:</td>
+        <td class="text-danger">₹{{ '{:,.2f}'.format(ns.t_due) }}</td>
       </tr>
     </tfoot>
   </table>

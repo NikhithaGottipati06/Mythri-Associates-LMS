@@ -1,14 +1,10 @@
 {% extends 'base.html' %}
 {% block title %}Arrears Collected Report{% endblock %}
 {% block content %}
-
 <div class="print-header">
   <h4>MYTHRI ASSOCIATES – Vijayawada</h4>
-  <h5>Arrears Collected Report
-    {% if from_date or to_date %}– {{ from_date }}{% if to_date %} to {{ to_date }}{% endif %}{% endif %}
-  </h5>
+  <h5>Arrears Collected Report{% if from_date or to_date %} – {{ from_date }}{% if to_date %} to {{ to_date }}{% endif %}{% endif %}</h5>
 </div>
-
 <div class="page-header no-print">
   <i class="bi bi-check2-all" style="font-size:20px;color:#1a3c6e;"></i>
   <h5>Arrears Collected Report</h5>
@@ -17,7 +13,6 @@
   <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
   <button onclick="window.print()" class="btn-print-pdf ms-2"><i class="bi bi-printer-fill"></i> Print / PDF</button>
 </div>
-
 <form method="GET" class="form-card mb-3 no-print">
   <div class="row g-2 align-items-end">
     <div class="col-md-3">
@@ -40,41 +35,39 @@
     <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
   </div>
 </form>
-
 <div class="form-card">
   <div style="overflow-x:auto;">
-  <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:800px;">
+  <table class="table table-bordered table-sm mb-0" style="font-size:11.5px;min-width:900px;">
     <thead>
       <tr>
-        <th>S.No</th><th>Date</th><th>Loan ID</th><th>Mem Code</th><th>Member Name</th>
-        <th>Center</th><th>Inst#</th><th>Paid Amt</th><th>Penalty</th>
+        <th>S.No</th><th>Arrear Date</th><th>Collected On</th><th>Loan ID</th>
+        <th>Mem Code</th><th>Member Name</th><th>Center</th><th>Inst#</th><th>Collected Amt</th>
       </tr>
     </thead>
     <tbody>
-    {% set ns = namespace(sno=0, t_paid=0) %}
+    {% set ns = namespace(sno=0, t_amt=0) %}
     {% for r in records %}
       {% set ns.sno = ns.sno + 1 %}
-      {% set ns.t_paid = ns.t_paid + (r.paid_amount or 0) %}
+      {% set ns.t_amt = ns.t_amt + (r.collected_amount or 0) %}
       <tr>
         <td>{{ ns.sno }}</td>
-        <td>{{ r.posting_date }}</td>
-        <td class="text-primary fw-semibold">{{ r.loan_id or '—' }}</td>
+        <td class="text-danger">{{ r.arrear_date }}</td>
+        <td class="text-success fw-semibold">{{ r.collected_date }}</td>
+        <td class="text-primary">{{ r.loan_id or '—' }}</td>
         <td>{{ r.member_code }}</td>
         <td>{{ r.member_name }}</td>
         <td>{{ r.center_code }}</td>
-        <td>{{ r.installment_no }}</td>
-        <td class="fw-semibold">{{ '{:,.2f}'.format(r.paid_amount or 0) }}</td>
-        <td>{{ '{:,.2f}'.format(r.penalty or 0) }}</td>
+        <td class="text-center">{{ r.installment_no }}</td>
+        <td class="fw-semibold">₹{{ '{:,.2f}'.format(r.collected_amount or 0) }}</td>
       </tr>
     {% else %}
-      <tr><td colspan="9" class="text-center text-muted py-4">No arrears collections found.</td></tr>
+      <tr><td colspan="9" class="text-center text-muted py-4">No arrear collections found.</td></tr>
     {% endfor %}
     </tbody>
     <tfoot>
       <tr style="background:#dce8f8;font-weight:700;">
-        <td colspan="7" class="text-end">Total Collected:</td>
-        <td>{{ '{:,.2f}'.format(ns.t_paid) }}</td>
-        <td></td>
+        <td colspan="8" class="text-end">Total Collected:</td>
+        <td>₹{{ '{:,.2f}'.format(ns.t_amt) }}</td>
       </tr>
     </tfoot>
   </table>

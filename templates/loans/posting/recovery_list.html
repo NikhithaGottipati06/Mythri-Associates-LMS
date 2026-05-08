@@ -89,7 +89,14 @@
           <td><input class="form-check-input loan-cb" type="checkbox" name="selected_loans"
                      value="{{ l.id }}" onchange="updateCount()"></td>
           <td class="fw-semibold text-primary">{{ l.loan_id or l.disbursement_no }}</td>
-          <td>{{ l.member_code }} – {{ l.member_name }}</td>
+          <td>
+            {{ l.member_code }} – {{ l.member_name }}
+            {% if l.pending_arrears > 0 %}
+            <span class="badge bg-danger ms-1" title="{{ l.pending_arrears }} arrear(s) pending">
+              <i class="bi bi-exclamation-circle"></i> {{ l.pending_arrears }} Arrear{{ 's' if l.pending_arrears > 1 }}
+            </span>
+            {% endif %}
+          </td>
           <td>₹{{ '{:,.0f}'.format(l.disbursed_amount) }}</td>
           <td>
             <div class="progress" style="height:6px;width:80px;">

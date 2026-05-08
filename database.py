@@ -278,6 +278,19 @@ def migrate_db():
             closed_at TEXT DEFAULT (datetime('now')),
             notes TEXT
         )""",
+        """CREATE TABLE IF NOT EXISTS arrear_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            disbursement_id INTEGER REFERENCES loan_disbursements(id),
+            arrear_date TEXT NOT NULL,
+            installment_no INTEGER,
+            due_amount REAL DEFAULT 0,
+            status TEXT DEFAULT 'Pending',
+            collected_date TEXT,
+            collected_amount REAL DEFAULT 0,
+            marked_by INTEGER REFERENCES users(id),
+            cleared_by INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT (datetime('now'))
+        )""",
     ]
     for sql in migrations:
         try:

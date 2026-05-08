@@ -144,6 +144,23 @@
 
   <div class="col-md-4">
     <div class="form-card h-100">
+      <div class="section-title"><i class="bi bi-receipt me-1"></i>Vouchers</div>
+      <div class="list-group list-group-flush">
+        <a href="{{ url_for('report_voucher_debit') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-arrow-up-right-circle me-2 text-danger"></i>Debit Voucher (Disbursements)
+        </a>
+        <a href="{{ url_for('report_voucher_credit') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-arrow-down-left-circle me-2 text-success"></i>Credit Voucher (Collections)
+        </a>
+        <a href="{{ url_for('report_voucher_details') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-receipt me-2 text-secondary"></i>Voucher Details (Line-by-line)
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="form-card h-100">
       <div class="section-title"><i class="bi bi-file-earmark-text me-1"></i>Other Reports</div>
       <div class="list-group list-group-flush">
         <a href="{{ url_for('report_glance') }}" class="list-group-item list-group-item-action">

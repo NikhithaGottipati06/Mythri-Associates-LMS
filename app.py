@@ -962,7 +962,8 @@ def recovery_posting_list():
                (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id) as paid_count,
                (SELECT rp2.id FROM recovery_postings rp2
                 WHERE rp2.disbursement_id=ld.id AND rp2.posting_date=:date
-                ORDER BY rp2.id DESC LIMIT 1) as today_posting_id
+                ORDER BY rp2.id DESC LIMIT 1) as today_posting_id,
+               (SELECT COUNT(*) FROM arrear_entries ae WHERE ae.disbursement_id=ld.id AND ae.status='Pending') as pending_arrears
         FROM loan_disbursements ld
         LEFT JOIN loan_applications la ON ld.application_id=la.id
         LEFT JOIN members m ON la.member_id=m.id
@@ -1147,6 +1148,14 @@ def recovery_posting_delete(rid):
 
 def _is_day_locked(db, date_str):
     return db.execute("SELECT id FROM day_end WHERE day_date=?", (date_str,)).fetchone() is not None
+
+def _to_iso(date_str):
+    """Convert DD/MM/YYYY to YYYY-MM-DD for SQLite string comparison."""
+    try:
+        p = date_str.split('/')
+        return f"{p[2]}-{p[1]}-{p[0]}"
+    except Exception:
+        return date_str
 
 def _posting_loans(db, date_filter, center_filter):
     """Loans with ≥1 recovery posting, filtered by center meeting day or specific center."""
@@ -1545,114 +1554,171 @@ def arrears_collection_list():
     except Exception:
         day_name = datetime.now().strftime('%A')
     locked = _is_day_locked(db, date_filter)
+    date_iso = _to_iso(date_filter)
 
-    params = {'date': date_filter}
-    query = """
+    # Loans that had no recovery posted on this date → eligible to mark as arrear
+    p = {'date': date_filter, 'date_iso': date_iso}
+    q = """
         SELECT ld.*, la.application_no, la.center_id, la.member_id,
                m.full_name as member_name, m.member_code,
                c.center_name, c.center_code, c.meeting_week,
                lt.interest_rate, lt.interest_type,
-               (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id) as paid_count,
-               (SELECT COUNT(*) FROM recovery_postings rp2
-                WHERE rp2.disbursement_id=ld.id AND rp2.posting_date=:date) as posted_today
+               (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id) as paid_count
         FROM loan_disbursements ld
         LEFT JOIN loan_applications la ON ld.application_id=la.id
         LEFT JOIN members m ON la.member_id=m.id
         LEFT JOIN centers c ON la.center_id=c.id
         LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
         WHERE ld.status='Disbursed'
-        AND (SELECT COUNT(*) FROM recovery_postings rp3 WHERE rp3.disbursement_id=ld.id) > 0
-        AND (SELECT COUNT(*) FROM recovery_postings rp4 WHERE rp4.disbursement_id=ld.id) < ld.total_installments
-        AND substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2)
-            < substr(:date,7,4)||'-'||substr(:date,4,2)||'-'||substr(:date,1,2)
+        AND (SELECT COUNT(*) FROM recovery_postings rp2 WHERE rp2.disbursement_id=ld.id) < ld.total_installments
+        AND substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2) < :date_iso
+        AND (SELECT COUNT(*) FROM recovery_postings rp3 WHERE rp3.disbursement_id=ld.id AND rp3.posting_date=:date) = 0
+        AND (SELECT COUNT(*) FROM arrear_entries ae WHERE ae.disbursement_id=ld.id AND ae.arrear_date=:date) = 0
     """
     if center_filter:
-        query += " AND la.center_id=:center_id"
-        params['center_id'] = center_filter
+        q += " AND la.center_id=:center_id"
+        p['center_id'] = center_filter
     else:
-        query += " AND c.meeting_week=:day"
-        params['day'] = day_name
-    query += " ORDER BY c.center_code, m.member_code"
+        q += " AND c.meeting_week=:day"
+        p['day'] = day_name
+    q += " ORDER BY c.center_code, m.member_code"
+    to_mark = db.execute(q, p).fetchall()
 
-    rows = db.execute(query, params).fetchall()
-    today = datetime.now()
-    loans = []
-    for r in rows:
-        r = dict(r)
-        try:
-            disb_date = datetime.strptime(r['disbursement_date'], '%d/%m/%Y')
-        except Exception:
-            try:
-                disb_date = datetime.strptime(r['disbursement_date'], '%Y-%m-%d')
-            except Exception:
-                disb_date = today
-        weeks_elapsed = max(0, (today - disb_date).days // 7)
-        arrear_count = max(0, weeks_elapsed - int(r['paid_count']))
-        rate = float(r['interest_rate'] or 0)
-        total_int = rate if (r['interest_type'] or 'Percent') == 'Fixed' else float(r['disbursed_amount']) * rate / 100
-        inst_amount = round((float(r['disbursed_amount']) + total_int) / int(r['total_installments']), 2) if r['total_installments'] else 0
-        r['arrear_count'] = arrear_count
-        r['inst_amount'] = inst_amount
-        loans.append(r)
+    # Pending arrear entries for this center/day
+    p2 = {}
+    pq = """
+        SELECT ae.*,
+               m.full_name as member_name, m.member_code,
+               c.center_code, c.center_name, c.meeting_week,
+               ld.disbursed_amount, ld.loan_id, ld.disbursement_no, ld.total_installments,
+               lt.interest_rate, lt.interest_type,
+               (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ae.disbursement_id) as paid_count
+        FROM arrear_entries ae
+        LEFT JOIN loan_disbursements ld ON ae.disbursement_id=ld.id
+        LEFT JOIN loan_applications la ON ld.application_id=la.id
+        LEFT JOIN members m ON la.member_id=m.id
+        LEFT JOIN centers c ON la.center_id=c.id
+        LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
+        WHERE ae.status='Pending'
+    """
+    if center_filter:
+        pq += " AND la.center_id=:center_id"
+        p2['center_id'] = center_filter
+    else:
+        pq += " AND c.meeting_week=:day"
+        p2['day'] = day_name
+    pq += " ORDER BY ae.arrear_date, c.center_code, m.member_code"
+    pending_arrears = db.execute(pq, p2).fetchall()
 
     centers = db.execute(
         "SELECT id, center_code, center_name, meeting_week FROM centers WHERE active=1 ORDER BY center_code"
     ).fetchall()
     db.close()
     return render_template('loans/posting/arrears_list.html',
-                           loans=loans, centers=centers,
-                           date_filter=date_filter, center_filter=center_filter,
-                           day_name=day_name, locked=locked)
+                           to_mark=to_mark, pending_arrears=pending_arrears,
+                           centers=centers, date_filter=date_filter,
+                           center_filter=center_filter, day_name=day_name, locked=locked)
 
 
-@app.route('/loans/posting/arrears/bulk', methods=['POST'])
+@app.route('/loans/posting/arrears/mark/<int:did>', methods=['POST'])
 @login_required
-def arrears_bulk_post():
+def arrears_mark(did):
     db = get_db()
-    selected_ids = request.form.getlist('selected_loans')
-    posting_date = request.form.get('posting_date', datetime.now().strftime('%d/%m/%Y'))
-    if _is_day_locked(db, posting_date):
-        flash(f'Day {posting_date} is closed. Undo Day End first.', 'danger')
+    arrear_date = request.form.get('arrear_date', datetime.now().strftime('%d/%m/%Y'))
+    if _is_day_locked(db, arrear_date):
+        flash(f'Day {arrear_date} is closed. Undo Day End first.', 'danger')
         db.close()
-        return redirect(url_for('arrears_collection_list', date=posting_date))
-    posted = 0
-    for did in selected_ids:
-        did = int(did)
-        loan = db.execute("""
-            SELECT ld.*, la.member_id, la.center_id, lt.interest_rate, lt.interest_type
-            FROM loan_disbursements ld
-            LEFT JOIN loan_applications la ON ld.application_id=la.id
-            LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
-            WHERE ld.id=?
-        """, (did,)).fetchone()
-        if not loan:
-            continue
-        paid_count = db.execute(
-            "SELECT COUNT(*) FROM recovery_postings WHERE disbursement_id=?", (did,)
-        ).fetchone()[0]
-        if paid_count >= loan['total_installments']:
-            continue
-        amount = float(loan['disbursed_amount'])
-        tenure = int(loan['total_installments'])
-        rate = float(loan['interest_rate'] or 0)
-        interest_type = loan['interest_type'] or 'Percent'
-        total_interest = rate if interest_type == 'Fixed' else amount * rate / 100
-        principal_inst = round(amount / tenure, 2)
-        interest_inst = round(total_interest / tenure, 2)
-        inst_amount = principal_inst + interest_inst
-        installment_no = paid_count + 1
-        db.execute("""
-            INSERT INTO recovery_postings
-            (disbursement_id,posting_date,installment_no,due_amount,paid_amount,
-             principal,interest,penalty,mode,narration,posted_by)
-            VALUES (?,?,?,?,?,?,?,0,'Cash','Arrear recovery',?)
-        """, (did, posting_date, installment_no, inst_amount, inst_amount,
-              principal_inst, interest_inst, session['user_id']))
-        posted += 1
+        return redirect(url_for('arrears_collection_list', date=arrear_date))
+    if db.execute("SELECT id FROM arrear_entries WHERE disbursement_id=? AND arrear_date=?", (did, arrear_date)).fetchone():
+        flash('Arrear already marked for this date.', 'warning')
+        db.close()
+        return redirect(url_for('arrears_collection_list', date=arrear_date))
+    loan = db.execute("""
+        SELECT ld.*, lt.interest_rate, lt.interest_type
+        FROM loan_disbursements ld
+        LEFT JOIN loan_applications la ON ld.application_id=la.id
+        LEFT JOIN loan_types lt ON la.loan_type_id=lt.id WHERE ld.id=?
+    """, (did,)).fetchone()
+    if not loan:
+        flash('Loan not found.', 'danger')
+        db.close()
+        return redirect(url_for('arrears_collection_list', date=arrear_date))
+    paid_count = db.execute("SELECT COUNT(*) FROM recovery_postings WHERE disbursement_id=?", (did,)).fetchone()[0]
+    amount = float(loan['disbursed_amount'])
+    tenure = int(loan['total_installments'])
+    rate = float(loan['interest_rate'] or 0)
+    total_interest = rate if (loan['interest_type'] or 'Percent') == 'Fixed' else amount * rate / 100
+    inst_amount = round((amount + total_interest) / tenure, 2) if tenure else 0
+    db.execute("""
+        INSERT INTO arrear_entries (disbursement_id, arrear_date, installment_no, due_amount, status, marked_by)
+        VALUES (?,?,?,?,'Pending',?)
+    """, (did, arrear_date, paid_count + 1, inst_amount, session['user_id']))
     db.commit()
     db.close()
-    flash(f'{posted} arrear posting(s) saved for {posting_date}.', 'success')
-    return redirect(url_for('arrears_collection_list', date=posting_date))
+    flash(f'Marked as arrear for {arrear_date}.', 'warning')
+    return redirect(url_for('arrears_collection_list', date=arrear_date))
+
+
+@app.route('/loans/posting/arrears/collect/<int:aeid>', methods=['POST'])
+@login_required
+def arrears_collect(aeid):
+    db = get_db()
+    ae = db.execute("""
+        SELECT ae.*, ld.disbursed_amount, ld.total_installments, la.member_id, la.center_id,
+               lt.interest_rate, lt.interest_type
+        FROM arrear_entries ae
+        LEFT JOIN loan_disbursements ld ON ae.disbursement_id=ld.id
+        LEFT JOIN loan_applications la ON ld.application_id=la.id
+        LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
+        WHERE ae.id=?
+    """, (aeid,)).fetchone()
+    if not ae:
+        flash('Arrear entry not found.', 'danger')
+        db.close()
+        return redirect(url_for('arrears_collection_list'))
+    collected_date = request.form.get('collected_date', datetime.now().strftime('%d/%m/%Y'))
+    if _is_day_locked(db, collected_date):
+        flash(f'Day {collected_date} is closed. Undo Day End first.', 'danger')
+        db.close()
+        return redirect(url_for('arrears_collection_list'))
+    amount = float(ae['disbursed_amount'])
+    tenure = int(ae['total_installments'])
+    rate = float(ae['interest_rate'] or 0)
+    total_interest = rate if (ae['interest_type'] or 'Percent') == 'Fixed' else amount * rate / 100
+    principal_inst = round(amount / tenure, 2)
+    interest_inst = round(total_interest / tenure, 2)
+    inst_amount = principal_inst + interest_inst
+    paid_count = db.execute("SELECT COUNT(*) FROM recovery_postings WHERE disbursement_id=?", (ae['disbursement_id'],)).fetchone()[0]
+    db.execute("""
+        INSERT INTO recovery_postings
+        (disbursement_id,posting_date,installment_no,due_amount,paid_amount,
+         principal,interest,penalty,mode,narration,posted_by)
+        VALUES (?,?,?,?,?,?,?,0,'Cash',?,?)
+    """, (ae['disbursement_id'], collected_date, paid_count + 1, inst_amount, inst_amount,
+          principal_inst, interest_inst, f'Arrear (due {ae["arrear_date"]})', session['user_id']))
+    db.execute("""
+        UPDATE arrear_entries SET status='Collected', collected_date=?, collected_amount=?, cleared_by=?
+        WHERE id=?
+    """, (collected_date, inst_amount, session['user_id'], aeid))
+    db.commit()
+    db.close()
+    flash(f'Arrear collected and recovery posted for {collected_date}.', 'success')
+    return redirect(url_for('arrears_collection_list'))
+
+
+@app.route('/loans/posting/arrears/undo/<int:aeid>', methods=['POST'])
+@admin_required
+def arrears_mark_undo(aeid):
+    db = get_db()
+    ae = db.execute("SELECT * FROM arrear_entries WHERE id=?", (aeid,)).fetchone()
+    if ae:
+        db.execute("DELETE FROM arrear_entries WHERE id=?", (aeid,))
+        db.commit()
+        flash(f'Arrear entry for {ae["arrear_date"]} removed.', 'success')
+    else:
+        flash('Arrear entry not found.', 'danger')
+    db.close()
+    return redirect(url_for('arrears_collection_list'))
 
 
 # ── Undo Recovery Posting (Admin) ──────────────────────────────────────────────
@@ -2237,30 +2303,25 @@ def report_outstanding():
 def report_arrears_member_wise():
     db = get_db()
     center_filter = request.args.get('center_id', '')
-    data = db.execute("""
-        SELECT ld.loan_id, ld.disbursed_amount, ld.installment_amount, ld.total_installments,
-               ld.disbursement_date,
-               la.application_no, la.loan_cycle,
-               m.full_name as member_name, m.member_code, m.grp,
-               c.center_name, c.center_code,
-               lt.loan_type_name, lt.interest_rate,
-               COUNT(rp.id) as paid_count,
-               COALESCE(SUM(rp.paid_amount),0) as total_paid,
-               COALESCE(SUM(rp.principal),0) as prin_paid,
-               COALESCE(SUM(rp.interest),0) as int_paid,
-               ld.disbursed_amount - COALESCE(SUM(rp.principal),0) as outstanding,
-               ld.total_installments - COUNT(rp.id) as pending_installments
-        FROM loan_disbursements ld
+    query = """
+        SELECT m.member_code, m.full_name,
+               c.center_code, c.center_name,
+               ld.loan_id, ld.disbursed_amount, ld.total_installments,
+               COUNT(ae.id) as total_arrears,
+               SUM(CASE WHEN ae.status='Pending' THEN 1 ELSE 0 END) as pending_count,
+               SUM(CASE WHEN ae.status='Pending' THEN ae.due_amount ELSE 0 END) as pending_amount,
+               SUM(CASE WHEN ae.status='Collected' THEN 1 ELSE 0 END) as collected_count,
+               MIN(CASE WHEN ae.status='Pending' THEN ae.arrear_date END) as oldest_arrear
+        FROM arrear_entries ae
+        LEFT JOIN loan_disbursements ld ON ae.disbursement_id=ld.id
         LEFT JOIN loan_applications la ON ld.application_id=la.id
         LEFT JOIN members m ON la.member_id=m.id
         LEFT JOIN centers c ON la.center_id=c.id
-        LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
-        LEFT JOIN recovery_postings rp ON rp.disbursement_id=ld.id
-        WHERE ld.status='Disbursed'
-        """ + (" AND la.center_id=?" if center_filter else "") + """
-        GROUP BY ld.id HAVING pending_installments > 0
-        ORDER BY c.center_code, m.grp, m.member_code
-    """, ([center_filter] if center_filter else [])).fetchall()
+        WHERE 1=1
+    """ + (" AND la.center_id=?" if center_filter else "") + """
+        GROUP BY ae.disbursement_id ORDER BY c.center_code, m.member_code
+    """
+    data = db.execute(query, ([center_filter] if center_filter else [])).fetchall()
     centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
     db.close()
     return render_template('reports/arrears_member_wise.html', data=data,
@@ -2271,30 +2332,25 @@ def report_arrears_member_wise():
 def report_arrears_new():
     db = get_db()
     center_filter = request.args.get('center_id', '')
-    from_date = request.args.get('from_date', '')
-    to_date = request.args.get('to_date', '')
-    data = db.execute("""
-        SELECT ld.loan_id, ld.disbursed_amount, ld.installment_amount,
-               la.application_no, la.loan_cycle,
+    query = """
+        SELECT ae.id, ae.arrear_date, ae.installment_no, ae.due_amount,
                m.full_name as member_name, m.member_code,
-               c.center_name, c.center_code,
-               lt.loan_type_name,
-               ld.disbursed_amount - COALESCE(SUM(rp.principal),0) as outstanding
-        FROM loan_disbursements ld
+               c.center_code, c.center_name,
+               ld.loan_id, ld.disbursed_amount, ld.disbursement_no
+        FROM arrear_entries ae
+        LEFT JOIN loan_disbursements ld ON ae.disbursement_id=ld.id
         LEFT JOIN loan_applications la ON ld.application_id=la.id
         LEFT JOIN members m ON la.member_id=m.id
         LEFT JOIN centers c ON la.center_id=c.id
-        LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
-        LEFT JOIN recovery_postings rp ON rp.disbursement_id=ld.id
-        WHERE ld.status='Disbursed'
-        """ + (" AND la.center_id=?" if center_filter else "") + """
-        GROUP BY ld.id HAVING outstanding > 0
-        ORDER BY c.center_code
-    """, ([center_filter] if center_filter else [])).fetchall()
+        WHERE ae.status='Pending'
+    """ + (" AND la.center_id=?" if center_filter else "") + """
+        ORDER BY ae.arrear_date, c.center_code, m.member_code
+    """
+    data = db.execute(query, ([center_filter] if center_filter else [])).fetchall()
     centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
     db.close()
     return render_template('reports/arrears_new.html', data=data, centers=centers,
-                           center_filter=center_filter, from_date=from_date, to_date=to_date)
+                           center_filter=center_filter)
 
 @app.route('/reports/arrears/collected')
 @login_required
@@ -2304,15 +2360,55 @@ def report_arrears_collected():
     from_date = request.args.get('from_date', '')
     to_date = request.args.get('to_date', '')
     query = """
-        SELECT rp.posting_date, rp.paid_amount, rp.installment_no, rp.penalty,
-               la.application_no, la.loan_cycle,
+        SELECT ae.arrear_date, ae.collected_date, ae.due_amount, ae.collected_amount,
+               ae.installment_no,
                m.full_name as member_name, m.member_code,
-               c.center_name, c.center_code, ld.loan_id
-        FROM recovery_postings rp
-        LEFT JOIN loan_disbursements ld ON rp.disbursement_id=ld.id
+               c.center_code, c.center_name,
+               ld.loan_id, ld.disbursed_amount
+        FROM arrear_entries ae
+        LEFT JOIN loan_disbursements ld ON ae.disbursement_id=ld.id
         LEFT JOIN loan_applications la ON ld.application_id=la.id
         LEFT JOIN members m ON la.member_id=m.id
         LEFT JOIN centers c ON la.center_id=c.id
+        WHERE ae.status='Collected'
+    """
+    params = []
+    if center_filter:
+        query += " AND la.center_id=?"
+        params.append(center_filter)
+    if from_date:
+        query += " AND substr(ae.collected_date,7,4)||'-'||substr(ae.collected_date,4,2)||'-'||substr(ae.collected_date,1,2) >= ?"
+        params.append(_to_iso(from_date))
+    if to_date:
+        query += " AND substr(ae.collected_date,7,4)||'-'||substr(ae.collected_date,4,2)||'-'||substr(ae.collected_date,1,2) <= ?"
+        params.append(_to_iso(to_date))
+    query += " ORDER BY ae.collected_date, c.center_code, m.member_code"
+    records = db.execute(query, params).fetchall()
+    centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
+    db.close()
+    return render_template('reports/arrears_collected.html', records=records, centers=centers,
+                           center_filter=center_filter, from_date=from_date, to_date=to_date)
+
+@app.route('/reports/voucher/debit')
+@login_required
+def report_voucher_debit():
+    db = get_db()
+    center_filter = request.args.get('center_id', '')
+    from_date = request.args.get('from_date', '')
+    to_date = request.args.get('to_date', '')
+    query = """
+        SELECT ld.loan_id, ld.disbursement_no, ld.disbursement_date, ld.disbursed_amount, ld.mode,
+               la.processing_fee, la.insurance_fee, la.nominee_insurance_fee, la.other_charges,
+               m.full_name as member_name, m.member_code,
+               c.center_code, c.center_name,
+               lt.loan_type_name,
+               u.full_name as disbursed_by_name
+        FROM loan_disbursements ld
+        LEFT JOIN loan_applications la ON ld.application_id=la.id
+        LEFT JOIN members m ON la.member_id=m.id
+        LEFT JOIN centers c ON la.center_id=c.id
+        LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
+        LEFT JOIN users u ON ld.disbursed_by=u.id
         WHERE 1=1
     """
     params = []
@@ -2320,16 +2416,80 @@ def report_arrears_collected():
         query += " AND la.center_id=?"
         params.append(center_filter)
     if from_date:
-        query += " AND rp.posting_date >= ?"
-        params.append(from_date)
+        query += " AND substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2) >= ?"
+        params.append(_to_iso(from_date))
     if to_date:
-        query += " AND rp.posting_date <= ?"
-        params.append(to_date)
-    query += " ORDER BY rp.posting_date, c.center_code"
+        query += " AND substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2) <= ?"
+        params.append(_to_iso(to_date))
+    query += " ORDER BY ld.disbursement_date, c.center_code, m.member_code"
     records = db.execute(query, params).fetchall()
     centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
     db.close()
-    return render_template('reports/arrears_collected.html', records=records, centers=centers,
+    return render_template('reports/voucher_debit.html', records=records, centers=centers,
+                           center_filter=center_filter, from_date=from_date, to_date=to_date)
+
+@app.route('/reports/voucher/credit')
+@login_required
+def report_voucher_credit():
+    db = get_db()
+    center_filter = request.args.get('center_id', '')
+    from_date = request.args.get('from_date', '')
+    to_date = request.args.get('to_date', '')
+
+    def _rp_sum(field):
+        q = f"SELECT COALESCE(SUM(rp.{field}),0) FROM recovery_postings rp LEFT JOIN loan_disbursements ld ON rp.disbursement_id=ld.id LEFT JOIN loan_applications la ON ld.application_id=la.id WHERE 1=1"
+        p = []
+        if center_filter:
+            q += " AND la.center_id=?"; p.append(center_filter)
+        if from_date:
+            q += " AND substr(rp.posting_date,7,4)||'-'||substr(rp.posting_date,4,2)||'-'||substr(rp.posting_date,1,2) >= ?"; p.append(_to_iso(from_date))
+        if to_date:
+            q += " AND substr(rp.posting_date,7,4)||'-'||substr(rp.posting_date,4,2)||'-'||substr(rp.posting_date,1,2) <= ?"; p.append(_to_iso(to_date))
+        return db.execute(q, p).fetchone()[0] or 0
+
+    def _disb_sum(field):
+        q = f"SELECT COALESCE(SUM(la.{field}),0) FROM loan_applications la LEFT JOIN loan_disbursements ld ON ld.application_id=la.id WHERE 1=1"
+        p = []
+        if center_filter:
+            q += " AND la.center_id=?"; p.append(center_filter)
+        if from_date:
+            q += " AND substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2) >= ?"; p.append(_to_iso(from_date))
+        if to_date:
+            q += " AND substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2) <= ?"; p.append(_to_iso(to_date))
+        return db.execute(q, p).fetchone()[0] or 0
+
+    prepaid_q = "SELECT COALESCE(SUM(pt.amount),0) FROM prepaid_transactions pt LEFT JOIN loan_disbursements ld ON pt.disbursement_id=ld.id LEFT JOIN loan_applications la ON ld.application_id=la.id WHERE pt.is_undo=0"
+    prepaid_p = []
+    if center_filter:
+        prepaid_q += " AND la.center_id=?"; prepaid_p.append(center_filter)
+    if from_date:
+        prepaid_q += " AND substr(pt.transaction_date,7,4)||'-'||substr(pt.transaction_date,4,2)||'-'||substr(pt.transaction_date,1,2) >= ?"; prepaid_p.append(_to_iso(from_date))
+    if to_date:
+        prepaid_q += " AND substr(pt.transaction_date,7,4)||'-'||substr(pt.transaction_date,4,2)||'-'||substr(pt.transaction_date,1,2) <= ?"; prepaid_p.append(_to_iso(to_date))
+    prepaid_total = db.execute(prepaid_q, prepaid_p).fetchone()[0] or 0
+
+    member_fee_q = "SELECT COALESCE(SUM(m.total_fees),0) FROM members m WHERE 1=1"
+    member_fee_p = []
+    if center_filter:
+        member_fee_q += " AND m.center_id=?"; member_fee_p.append(center_filter)
+    if from_date:
+        member_fee_q += " AND substr(m.date_of_join,7,4)||'-'||substr(m.date_of_join,4,2)||'-'||substr(m.date_of_join,1,2) >= ?"; member_fee_p.append(_to_iso(from_date))
+    if to_date:
+        member_fee_q += " AND substr(m.date_of_join,7,4)||'-'||substr(m.date_of_join,4,2)||'-'||substr(m.date_of_join,1,2) <= ?"; member_fee_p.append(_to_iso(to_date))
+    member_fee_total = db.execute(member_fee_q, member_fee_p).fetchone()[0] or 0
+
+    totals = {
+        'loan_recovery': _rp_sum('principal'),
+        'interest_on_loans': _rp_sum('interest'),
+        'processing_fee': _disb_sum('processing_fee'),
+        'insurance': _disb_sum('insurance_fee') + _disb_sum('nominee_insurance_fee'),
+        'prepaid': prepaid_total,
+        'member_fee': member_fee_total,
+    }
+    totals['grand_total'] = sum(totals.values())
+    centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
+    db.close()
+    return render_template('reports/voucher_credit.html', totals=totals, centers=centers,
                            center_filter=center_filter, from_date=from_date, to_date=to_date)
 
 @app.route('/reports/glance')

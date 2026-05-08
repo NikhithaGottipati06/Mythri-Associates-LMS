@@ -2,8 +2,8 @@
 {% block title %}Arrears Collection{% endblock %}
 {% block content %}
 <div class="page-header">
-  <i class="bi bi-exclamation-circle" style="font-size:20px;color:#1a3c6e;"></i>
-  <h5>Arrears Collection</h5>
+  <i class="bi bi-exclamation-circle" style="font-size:20px;color:#c0392b;"></i>
+  <h5>Arrears</h5>
 </div>
 
 {% if locked %}
@@ -13,7 +13,6 @@
 </div>
 {% endif %}
 
-<!-- Filters -->
 <div class="form-card mb-3">
   <form method="GET" class="row g-2 align-items-end">
     <div class="col-md-3">
@@ -40,110 +39,126 @@
   </form>
 </div>
 
-<div class="action-bar mb-2">
-  <span style="font-size:13px;">
-    <strong>{{ day_name }}, {{ date_filter }}</strong> &nbsp;|&nbsp;
-    <span class="badge bg-warning text-dark">{{ loans|length }} loans with arrears</span>
-    <span class="ms-2 text-muted" style="font-size:12px;">(Loans behind schedule — select to post missed installment)</span>
-  </span>
-</div>
-
-{% if not locked %}
-<form method="POST" action="{{ url_for('arrears_bulk_post') }}" id="bulkForm">
-  <input type="hidden" name="posting_date" value="{{ date_filter }}">
-
-  <div class="form-card mb-2 py-2 px-3 d-flex align-items-center gap-3 flex-wrap">
-    <div class="form-check mb-0">
-      <input class="form-check-input" type="checkbox" id="selectAll" onchange="toggleAll(this)">
-      <label class="form-check-label fw-semibold" for="selectAll">Select All</label>
-    </div>
-    <button type="submit" class="btn btn-warning btn-sm fw-semibold" id="postBtn" disabled>
-      <i class="bi bi-exclamation-circle me-1"></i>Post Arrears (<span id="selCount">0</span>)
-    </button>
+<!-- ── Section 1: Mark as Arrear ─────────────────────────────────────────── -->
+<div class="form-card mb-3">
+  <div class="section-title" style="color:#c0392b;">
+    <i class="bi bi-exclamation-triangle me-1"></i>
+    Mark as Arrear – {{ day_name }}, {{ date_filter }}
+    <span class="badge bg-secondary ms-2">{{ to_mark|length }} loans without recovery today</span>
   </div>
 
-  {% set ns = namespace(cur_center='') %}
-  {% for l in loans %}
-    {% if l.center_code != ns.cur_center %}
-      {% if ns.cur_center != '' %}</tbody></table></div></div>{% endif %}
-      {% set ns.cur_center = l.center_code %}
-      <div class="form-card mb-2">
-        <div class="section-title">
-          <i class="bi bi-building me-1"></i>{{ l.center_code }} – {{ l.center_name }}
-          <span class="text-muted fw-normal ms-2" style="font-size:12px;">({{ l.meeting_week or '—' }})</span>
-        </div>
-        <div class="lms-table" style="margin:0;overflow-x:auto;">
-        <table class="table table-hover table-sm mb-0">
-          <thead><tr>
-            <th style="width:40px;"></th>
-            <th>Loan ID</th><th>Member</th><th>Disbursed</th>
-            <th>Progress</th><th>Arrear Wks</th><th>Inst. Amt</th>
-          </tr></thead>
-          <tbody>
+  {% if to_mark %}
+  {% set ns = namespace(cur='') %}
+  {% for l in to_mark %}
+    {% if l.center_code != ns.cur %}
+      {% if ns.cur != '' %}</tbody></table></div>{% endif %}
+      {% set ns.cur = l.center_code %}
+      <div class="lms-table mb-2" style="margin:0;overflow-x:auto;">
+      <table class="table table-sm table-hover mb-0">
+        <thead><tr>
+          <th colspan="6" style="background:#f8d7da;color:#842029;font-size:12px;">
+            <i class="bi bi-building me-1"></i>{{ l.center_code }} – {{ l.center_name }}
+          </th>
+        </tr>
+        <tr><th>Loan ID</th><th>Member</th><th>Progress</th><th>Inst. Amt</th><th>Action</th></tr></thead>
+        <tbody>
     {% endif %}
-    <tr {% if l.arrear_count > 0 %}class="table-warning"{% endif %}>
-      <td>
-        <input class="form-check-input loan-cb" type="checkbox" name="selected_loans"
-               value="{{ l.id }}" onchange="updateCount()"
-               {% if l.posted_today > 0 %}disabled title="Already posted today"{% endif %}>
-      </td>
+    {% set rate = l.interest_rate or 0 %}
+    {% set total_int = rate if (l.interest_type or 'Percent') == 'Fixed' else l.disbursed_amount * rate / 100 %}
+    {% set inst = (l.disbursed_amount + total_int) / l.total_installments if l.total_installments else 0 %}
+    <tr>
       <td class="fw-semibold text-primary">{{ l.loan_id or l.disbursement_no }}</td>
       <td>{{ l.member_code }} – {{ l.member_name }}</td>
-      <td>₹{{ '{:,.0f}'.format(l.disbursed_amount) }}</td>
+      <td><small class="text-muted">{{ l.paid_count }}/{{ l.total_installments }}</small></td>
+      <td>₹{{ '{:,.2f}'.format(inst) }}</td>
       <td>
-        <div class="progress" style="height:6px;width:80px;">
-          <div class="progress-bar bg-success" style="width:{{ ((l.paid_count / l.total_installments) * 100)|int if l.total_installments else 0 }}%"></div>
-        </div>
-        <small class="text-muted">{{ l.paid_count }}/{{ l.total_installments }}</small>
-      </td>
-      <td>
-        {% if l.arrear_count > 0 %}
-          <span class="badge bg-danger">{{ l.arrear_count }} wk{{ 's' if l.arrear_count != 1 }}</span>
+        {% if locked %}
+        <span class="text-muted" style="font-size:12px;"><i class="bi bi-lock"></i> Locked</span>
         {% else %}
-          <span class="text-muted">—</span>
-        {% endif %}
-      </td>
-      <td class="fw-semibold">
-        ₹{{ '{:,.2f}'.format(l.inst_amount) }}
-        {% if l.posted_today > 0 %}
-          <span class="badge bg-success ms-1" style="font-size:10px;">Posted</span>
+        <form method="POST" action="{{ url_for('arrears_mark', did=l.id) }}"
+              onsubmit="return confirm('Mark {{ l.member_name }} as arrear for {{ date_filter }}?')">
+          <input type="hidden" name="arrear_date" value="{{ date_filter }}">
+          <button class="btn btn-danger btn-sm">
+            <i class="bi bi-exclamation-circle me-1"></i>Mark Arrear
+          </button>
+        </form>
         {% endif %}
       </td>
     </tr>
-  {% else %}
-    <div class="form-card text-center text-muted py-4">
-      <i class="bi bi-check-circle" style="font-size:30px;color:#198754;"></i>
-      <div class="mt-2">No loans with arrears found for {{ day_name }} centers on {{ date_filter }}.</div>
-    </div>
   {% endfor %}
-  {% if loans %}</tbody></table></div></div>{% endif %}
+  {% if to_mark %}</tbody></table></div>{% endif %}
+  {% else %}
+  <div class="text-muted py-2" style="font-size:13px;">
+    <i class="bi bi-check-circle text-success me-1"></i>
+    All loans for {{ day_name }} centers have recovery posted on {{ date_filter }}, or no loans eligible.
+  </div>
+  {% endif %}
+</div>
 
-</form>
-{% else %}
+<!-- ── Section 2: Pending Arrears ────────────────────────────────────────── -->
 <div class="form-card">
+  <div class="section-title" style="color:#856404;">
+    <i class="bi bi-clock-history me-1"></i>
+    Pending Arrears
+    <span class="badge bg-warning text-dark ms-2">{{ pending_arrears|length }}</span>
+  </div>
+
+  {% if pending_arrears %}
   <div class="lms-table" style="margin:0;overflow-x:auto;">
-  <table class="table table-sm mb-0">
+  <table class="table table-sm table-hover mb-0">
     <thead><tr>
-      <th>Loan ID</th><th>Member</th><th>Center</th><th>Progress</th><th>Arrear Wks</th><th>Inst. Amt</th>
+      <th>Arrear Date</th><th>Loan ID</th><th>Member</th><th>Center</th>
+      <th>Inst#</th><th>Due Amt</th><th>Collect On</th><th>Actions</th>
     </tr></thead>
     <tbody>
-    {% for l in loans %}
-    <tr {% if l.arrear_count > 0 %}class="table-warning"{% endif %}>
-      <td class="fw-semibold text-primary">{{ l.loan_id or l.disbursement_no }}</td>
-      <td>{{ l.member_code }} – {{ l.member_name }}</td>
-      <td>{{ l.center_code }} {{ l.center_name }}</td>
-      <td><small>{{ l.paid_count }}/{{ l.total_installments }}</small></td>
-      <td>{% if l.arrear_count > 0 %}<span class="badge bg-danger">{{ l.arrear_count }} wk{{ 's' if l.arrear_count != 1 }}</span>{% else %}—{% endif %}</td>
-      <td><span class="text-muted"><i class="bi bi-lock"></i> Locked</span></td>
+    {% for ae in pending_arrears %}
+    <tr class="table-warning">
+      <td class="fw-semibold text-danger">{{ ae.arrear_date }}</td>
+      <td class="text-primary">{{ ae.loan_id or ae.disbursement_no }}</td>
+      <td>{{ ae.member_code }} – {{ ae.member_name }}</td>
+      <td>{{ ae.center_code }}</td>
+      <td class="text-center">{{ ae.installment_no }}</td>
+      <td class="fw-semibold">₹{{ '{:,.2f}'.format(ae.due_amount) }}</td>
+      <td>
+        <form method="POST" action="{{ url_for('arrears_collect', aeid=ae.id) }}"
+              id="collectForm{{ ae.id }}"
+              onsubmit="return confirm('Collect arrear for {{ ae.member_name }} (due {{ ae.arrear_date }})?')">
+          <input type="text" name="collected_date" class="form-control form-control-sm d-inline"
+                 style="width:120px;" value="{{ date_filter }}" placeholder="DD/MM/YYYY">
+        </form>
+      </td>
+      <td class="d-flex gap-1">
+        <button type="submit" form="collectForm{{ ae.id }}" class="btn btn-success btn-sm"
+                {% if locked %}disabled{% endif %}>
+          <i class="bi bi-check-circle me-1"></i>Collect
+        </button>
+        {% if session.role == 'Admin' %}
+        <form method="POST" action="{{ url_for('arrears_mark_undo', aeid=ae.id) }}"
+              onsubmit="return confirm('Remove this arrear entry?')">
+          <button class="btn btn-outline-danger btn-sm">
+            <i class="bi bi-x-circle"></i>
+          </button>
+        </form>
+        {% endif %}
+      </td>
     </tr>
-    {% else %}
-    <tr><td colspan="6" class="text-center text-muted py-4">No loans with arrears found.</td></tr>
     {% endfor %}
     </tbody>
+    <tfoot class="fw-bold table-secondary">
+      <tr>
+        <td colspan="5" class="text-end">Total Pending:</td>
+        <td>₹{{ '{:,.2f}'.format(pending_arrears|sum(attribute='due_amount')) }}</td>
+        <td colspan="2"></td>
+      </tr>
+    </tfoot>
   </table>
   </div>
+  {% else %}
+  <div class="text-muted py-2" style="font-size:13px;">
+    <i class="bi bi-check-circle text-success me-1"></i>No pending arrears for this center/day.
+  </div>
+  {% endif %}
 </div>
-{% endif %}
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -152,17 +167,5 @@ flatpickr("#datePicker", {
   dateFormat: "d/m/Y", allowInput: true,
   onChange: function() { document.querySelector('form[method=GET]').submit(); }
 });
-function toggleAll(cb) {
-  document.querySelectorAll('.loan-cb:not([disabled])').forEach(c => c.checked = cb.checked);
-  updateCount();
-}
-function updateCount() {
-  const checked = document.querySelectorAll('.loan-cb:checked').length;
-  document.getElementById('selCount').textContent = checked;
-  document.getElementById('postBtn').disabled = checked === 0;
-  const total = document.querySelectorAll('.loan-cb:not([disabled])').length;
-  document.getElementById('selectAll').indeterminate = checked > 0 && checked < total;
-  document.getElementById('selectAll').checked = checked === total && total > 0;
-}
 </script>
 {% endblock %}
