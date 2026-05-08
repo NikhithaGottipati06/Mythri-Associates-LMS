@@ -1,29 +1,17 @@
 {% extends 'base.html' %}
 {% block title %}Debit Voucher{% endblock %}
 {% block content %}
-<div class="print-header">
-  <h4>MYTHRI ASSOCIATES – Vijayawada</h4>
-  <h5>Debit Voucher – Loan Disbursements</h5>
-  <div style="font-size:11px;margin-top:2px;display:flex;gap:30px;">
-    <span>V.No: <span id="vno-print"></span></span>
-    <span>Date:
-      {% if from_date and to_date %}{{ from_date }} to {{ to_date }}
-      {% elif from_date %}{{ from_date }}
-      {% elif to_date %}{{ to_date }}
-      {% else %}—{% endif %}
-    </span>
-  </div>
-</div>
 
 <div class="page-header no-print">
   <i class="bi bi-arrow-up-right-circle" style="font-size:20px;color:#c0392b;"></i>
-  <h5>Debit Voucher <small class="text-muted fw-normal" style="font-size:13px;">Loan Disbursements</small></h5>
+  <h5>Debit Voucher <small class="text-muted fw-normal" style="font-size:13px;">Disbursements</small></h5>
 </div>
 <div class="action-bar no-print">
   <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
   <button onclick="window.print()" class="btn-print-pdf ms-2"><i class="bi bi-printer-fill"></i> Print / PDF</button>
 </div>
 
+<!-- Filter form -->
 <form method="GET" class="form-card mb-3 no-print">
   <div class="row g-2 align-items-end">
     <div class="col-md-3">
@@ -47,12 +35,13 @@
   </div>
 </form>
 
-<!-- V.No and custom fields (no-print) -->
+<!-- V.No input and custom rows (no-print) -->
 <div class="form-card mb-3 no-print">
   <div class="row g-2 align-items-end">
     <div class="col-md-3">
       <label class="form-label fw-semibold">V.No (Voucher Number)</label>
-      <input type="text" id="vnoInput" class="form-control form-control-sm" placeholder="e.g. DV-001" oninput="document.getElementById('vno-print').textContent=this.value">
+      <input type="text" id="vnoInput" class="form-control form-control-sm" placeholder="e.g. DV-001"
+             oninput="document.getElementById('vno-display').textContent=this.value||''">
     </div>
   </div>
   <div class="section-title mt-3"><i class="bi bi-plus-circle me-1"></i>Add Custom Rows Before Printing</div>
@@ -62,129 +51,116 @@
   </button>
 </div>
 
-{% set ns = namespace(t_disb=0, t_fee=0, t_ins=0, t_net=0) %}
+{% set ns = namespace(t_disb=0) %}
 {% for r in records %}
-  {% set ins = (r.insurance_fee or 0) + (r.nominee_insurance_fee or 0) %}
-  {% set net = (r.disbursed_amount or 0) - (r.processing_fee or 0) - ins - (r.other_charges or 0) %}
   {% set ns.t_disb = ns.t_disb + (r.disbursed_amount or 0) %}
-  {% set ns.t_fee = ns.t_fee + (r.processing_fee or 0) %}
-  {% set ns.t_ins = ns.t_ins + ins %}
-  {% set ns.t_net = ns.t_net + net %}
 {% endfor %}
 
-<div class="form-card">
-  <div style="overflow-x:auto;">
-  <table class="table table-bordered mb-0" style="font-size:12px;max-width:600px;">
+<!-- VOUCHER DOCUMENT -->
+<div class="form-card" style="max-width:640px;">
+  <!-- Company header -->
+  <div style="text-align:center;margin-bottom:12px;line-height:1.6;">
+    <div style="font-size:16px;font-weight:700;letter-spacing:0.5px;">MYTHRI ASSOCIATES</div>
+    <div style="font-size:13px;font-weight:600;">Vijayawada</div>
+    <div style="font-size:14px;font-weight:700;margin-top:2px;">Debit Voucher</div>
+  </div>
+
+  <!-- V.No and Date row -->
+  <div style="display:flex;justify-content:space-between;margin-bottom:10px;font-size:12px;">
+    <span><strong>V.No:</strong> <span id="vno-display"></span></span>
+    <span><strong>Date:</strong>
+      {% if from_date and to_date %}{{ from_date }} to {{ to_date }}
+      {% elif from_date %}{{ from_date }}
+      {% elif to_date %}{{ to_date }}
+      {% else %}—{% endif %}
+    </span>
+  </div>
+
+  <!-- Account / Value table -->
+  <table class="table mb-0" style="font-size:12px;border:1px solid #333;border-collapse:collapse;">
     <thead>
-      <tr style="background:#1a3c6e;color:#fff;">
-        <th style="width:40px;">S.No</th>
-        <th>Account</th>
-        <th class="text-end" style="width:160px;">Amount (₹)</th>
+      <tr>
+        <th style="border:1px solid #333;padding:5px 10px;text-align:center;background:#f8f9fa;">Account</th>
+        <th style="border:1px solid #333;padding:5px 10px;text-align:center;background:#f8f9fa;width:160px;">Value</th>
       </tr>
     </thead>
     <tbody id="debitTableBody">
       <tr>
-        <td>1</td>
-        <td>Loan Disbursement Amount A/c</td>
-        <td class="text-end fw-semibold text-danger">{{ '{:,.2f}'.format(ns.t_disb) }}</td>
+        <td style="border:1px dashed #888;padding:5px 10px;">Loan Disbursement Amount A/c</td>
+        <td style="border:1px dashed #888;padding:5px 10px;text-align:right;">{{ '{:,.2f}'.format(ns.t_disb) }}</td>
       </tr>
-      <tr>
-        <td>2</td>
-        <td>Less: Processing Fee Deducted</td>
-        <td class="text-end">{{ '{:,.2f}'.format(ns.t_fee) }}</td>
-      </tr>
-      <tr>
-        <td>3</td>
-        <td>Less: Insurance Premium Deducted</td>
-        <td class="text-end">{{ '{:,.2f}'.format(ns.t_ins) }}</td>
-      </tr>
-      <!-- Custom rows injected by JS on print -->
+      <!-- Custom rows printed here by JS -->
     </tbody>
     <tfoot>
-      <tr style="background:#f8d7da;font-weight:700;font-size:13px;">
-        <td colspan="2" class="text-end">NET AMOUNT DISBURSED</td>
-        <td class="text-end text-danger" id="grandTotal">{{ '{:,.2f}'.format(ns.t_net) }}</td>
-      </tr>
       <tr>
-        <td colspan="3" style="font-size:11px;font-style:italic;" id="amountWords">
-          {{ _number_to_words(ns.t_net) }}
-        </td>
+        <td style="border:1px solid #333;padding:5px 10px;text-align:right;font-weight:700;color:#0d6efd;">Total:</td>
+        <td style="border:1px solid #333;padding:5px 10px;text-align:right;font-weight:700;color:#0d6efd;" id="grandTotal">{{ '{:,.2f}'.format(ns.t_disb) }}</td>
       </tr>
     </tfoot>
   </table>
-  </div>
 
-  <!-- Disbursement detail list (prints below voucher) -->
-  {% if records %}
-  <div class="mt-3">
-    <div class="section-title" style="font-size:11px;font-weight:600;color:#555;">Disbursement Details</div>
-    <div style="overflow-x:auto;">
-    <table class="table table-bordered table-sm mb-0" style="font-size:10.5px;">
-      <thead>
-        <tr style="background:#eaf0fb;">
-          <th>S.No</th><th>Date</th><th>Loan ID</th><th>Mem Code</th><th>Member Name</th>
-          <th>Center</th><th>Mode</th>
-          <th class="text-end">Disbursed</th>
-          <th class="text-end">Proc. Fee</th>
-          <th class="text-end">Insurance</th>
-          <th class="text-end">Net Paid</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% set ns2 = namespace(sno=0) %}
-      {% for r in records %}
-        {% set ins = (r.insurance_fee or 0) + (r.nominee_insurance_fee or 0) %}
-        {% set net = (r.disbursed_amount or 0) - (r.processing_fee or 0) - ins - (r.other_charges or 0) %}
-        {% set ns2.sno = ns2.sno + 1 %}
-        <tr>
-          <td>{{ ns2.sno }}</td>
-          <td>{{ r.disbursement_date }}</td>
-          <td class="fw-semibold text-primary">{{ r.loan_id or r.disbursement_no }}</td>
-          <td>{{ r.member_code }}</td>
-          <td>{{ r.member_name }}</td>
-          <td>{{ r.center_code }}</td>
-          <td>{{ r.mode or 'Cash' }}</td>
-          <td class="text-end text-danger fw-semibold">{{ '{:,.2f}'.format(r.disbursed_amount or 0) }}</td>
-          <td class="text-end">{{ '{:,.2f}'.format(r.processing_fee or 0) }}</td>
-          <td class="text-end">{{ '{:,.2f}'.format(ins) }}</td>
-          <td class="text-end fw-semibold">{{ '{:,.2f}'.format(net) }}</td>
-        </tr>
-      {% else %}
-        <tr><td colspan="11" class="text-center text-muted py-3">No disbursements found.</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
-    </div>
+  <div class="mt-2" style="font-size:12px;" id="amountWords">
+    <strong>Rupees in words:</strong> {{ _number_to_words(ns.t_disb) }}
   </div>
-  {% endif %}
 
   <div class="mt-4 row" style="font-size:12px;">
-    <div class="col-md-4">
+    <div class="col-4">
       <strong>Prepared By:</strong><br>
-      <div style="border-top:1px solid #333;margin-top:40px;padding-top:4px;">Signature</div>
+      <div style="border-top:1px solid #333;margin-top:36px;padding-top:4px;">Signature</div>
     </div>
-    <div class="col-md-4">
+    <div class="col-4">
       <strong>Checked By:</strong><br>
-      <div style="border-top:1px solid #333;margin-top:40px;padding-top:4px;">Signature</div>
+      <div style="border-top:1px solid #333;margin-top:36px;padding-top:4px;">Signature</div>
     </div>
-    <div class="col-md-4">
+    <div class="col-4">
       <strong>Authorised By:</strong><br>
-      <div style="border-top:1px solid #333;margin-top:40px;padding-top:4px;">Signature</div>
+      <div style="border-top:1px solid #333;margin-top:36px;padding-top:4px;">Signature</div>
     </div>
   </div>
 </div>
 
+<!-- Disbursement detail list (no-print) -->
+{% if records %}
+<div class="form-card mt-3 no-print">
+  <div class="section-title">Disbursement Details</div>
+  <div style="overflow-x:auto;">
+  <table class="table table-bordered table-sm mb-0" style="font-size:11px;">
+    <thead>
+      <tr style="background:#eaf0fb;">
+        <th>S.No</th><th>Date</th><th>Loan ID</th><th>Mem Code</th><th>Member Name</th>
+        <th>Center</th><th>Mode</th><th class="text-end">Disbursed</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% set ns2 = namespace(sno=0) %}
+    {% for r in records %}
+      {% set ns2.sno = ns2.sno + 1 %}
+      <tr>
+        <td>{{ ns2.sno }}</td>
+        <td>{{ r.disbursement_date }}</td>
+        <td class="text-primary fw-semibold">{{ r.loan_id or r.disbursement_no }}</td>
+        <td>{{ r.member_code }}</td>
+        <td>{{ r.member_name }}</td>
+        <td>{{ r.center_code }}</td>
+        <td>{{ r.mode or 'Cash' }}</td>
+        <td class="text-end text-danger fw-semibold">{{ '{:,.2f}'.format(r.disbursed_amount or 0) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+
 <script>
-const BASE_TOTAL = {{ ns.t_net }};
+const BASE_TOTAL = {{ ns.t_disb }};
 let customTotal = 0;
-let rowCount = 3;
 
 function addCustomRow() {
-  rowCount++;
   const div = document.createElement('div');
   div.className = 'd-flex gap-2 mb-2 align-items-center';
   div.innerHTML = `
-    <input type="text" class="form-control form-control-sm custom-label" placeholder="Field name" style="max-width:260px;">
+    <input type="text" class="form-control form-control-sm custom-label" placeholder="Account name" style="max-width:260px;">
     <input type="number" class="form-control form-control-sm custom-amount" placeholder="0.00" step="0.01" style="max-width:130px;" oninput="updateTotal()">
     <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove();updateTotal()"><i class="bi bi-trash"></i></button>
   `;
@@ -192,32 +168,21 @@ function addCustomRow() {
 }
 
 function inWords(n) {
-  const ones = ['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine',
-    'Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
-  const tens = ['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+  const ones=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+  const tens=['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
   function b100(n){return n<20?ones[n]:tens[Math.floor(n/10)]+(n%10?' '+ones[n%10]:'');}
-  function b1000(n){return n<100?b100(n):ones[Math.floor(n/100)]+' Hundred'+(n%100?' '+b100(n%100):'');}
-  function words(n){
-    if(!n)return'';
-    if(n<1000)return b1000(n);
-    if(n<100000)return b1000(Math.floor(n/1000))+' Thousand'+(n%1000?' '+b1000(n%1000):'');
-    if(n<10000000)return b1000(Math.floor(n/100000))+' Lakh'+(n%100000?' '+words(n%100000):'');
-    return b1000(Math.floor(n/10000000))+' Crore'+(n%10000000?' '+words(n%10000000):'');
-  }
-  const r=Math.floor(n), p=Math.round((n-r)*100);
-  let s='Rupees '+(words(r)||'Zero');
-  if(p) s+=' and '+b100(p)+' Paise';
-  return s+' Only';
+  function b1k(n){return n<100?b100(n):ones[Math.floor(n/100)]+' Hundred'+(n%100?' '+b100(n%100):'');}
+  function w(n){if(!n)return'';if(n<1000)return b1k(n);if(n<100000)return b1k(Math.floor(n/1000))+' Thousand'+(n%1000?' '+b1k(n%1000):'');if(n<10000000)return b1k(Math.floor(n/100000))+' Lakh'+(n%100000?' '+w(n%100000):'');return b1k(Math.floor(n/10000000))+' Crore'+(n%10000000?' '+w(n%10000000):'');}
+  const r=Math.floor(n),p=Math.round((n-r)*100);
+  return 'Rupees '+(w(r)||'Zero')+(p?' and '+b100(p)+' Paise':'')+' Only';
 }
 
 function updateTotal() {
   customTotal = 0;
-  document.querySelectorAll('.custom-amount').forEach(el => {
-    customTotal += parseFloat(el.value || 0);
-  });
+  document.querySelectorAll('.custom-amount').forEach(el => { customTotal += parseFloat(el.value||0); });
   const grand = BASE_TOTAL + customTotal;
-  document.getElementById('grandTotal').textContent = grand.toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
-  document.getElementById('amountWords').textContent = inWords(grand);
+  document.getElementById('grandTotal').textContent = grand.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('amountWords').innerHTML = '<strong>Rupees in words:</strong> ' + inWords(grand);
 }
 
 window.addEventListener('beforeprint', function() {
@@ -225,12 +190,11 @@ window.addEventListener('beforeprint', function() {
   document.querySelectorAll('.custom-print-row').forEach(r => r.remove());
   document.querySelectorAll('#customRows .d-flex').forEach(function(div) {
     const label = div.querySelector('.custom-label').value.trim();
-    const amount = parseFloat(div.querySelector('.custom-amount').value || 0);
+    const amount = parseFloat(div.querySelector('.custom-amount').value||0);
     if (label || amount) {
-      rowCount++;
       const tr = document.createElement('tr');
       tr.className = 'custom-print-row';
-      tr.innerHTML = `<td>${rowCount}</td><td>${label||'Custom'}</td><td class="text-end">${amount.toLocaleString('en-IN',{minimumFractionDigits:2})}</td>`;
+      tr.innerHTML = `<td style="border:1px dashed #888;padding:5px 10px;">${label||'Custom'} A/c</td><td style="border:1px dashed #888;padding:5px 10px;text-align:right;">${amount.toLocaleString('en-IN',{minimumFractionDigits:2})}</td>`;
       tbody.appendChild(tr);
     }
   });
