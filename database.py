@@ -271,6 +271,13 @@ def migrate_db():
         "ALTER TABLE loan_applications ADD COLUMN nominee_insurance_fee REAL DEFAULT 0",
         "ALTER TABLE loan_applications ADD COLUMN other_charges REAL DEFAULT 0",
         "ALTER TABLE loan_disbursements ADD COLUMN loan_id TEXT",
+        """CREATE TABLE IF NOT EXISTS day_end (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            day_date TEXT NOT NULL UNIQUE,
+            closed_by INTEGER REFERENCES users(id),
+            closed_at TEXT DEFAULT (datetime('now')),
+            notes TEXT
+        )""",
     ]
     for sql in migrations:
         try:

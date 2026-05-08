@@ -995,6 +995,10 @@ def recovery_bulk_post():
     db = get_db()
     selected_ids = request.form.getlist('selected_loans')
     posting_date = request.form.get('posting_date', datetime.now().strftime('%d/%m/%Y'))
+    if _is_day_locked(db, posting_date):
+        flash(f'Day {posting_date} is closed. Undo Day End first to make changes.', 'danger')
+        db.close()
+        return redirect(url_for('recovery_posting_list', date=posting_date))
     savings_amount = float(request.form.get('savings_amount', 100))
     posted = 0
     for did in selected_ids:
@@ -1071,6 +1075,10 @@ def recovery_post(did):
     """, (did,)).fetchone()
     if request.method == 'POST':
         posting_date = request.form.get('posting_date', datetime.now().strftime('%d/%m/%Y'))
+        if _is_day_locked(db, posting_date):
+            flash(f'Day {posting_date} is closed. Undo Day End first to make changes.', 'danger')
+            db.close()
+            return redirect(url_for('recovery_post', did=did))
         db.execute("""
             INSERT INTO recovery_postings (disbursement_id,posting_date,installment_no,
             due_amount,paid_amount,principal,interest,penalty,mode,narration,posted_by)
@@ -1132,19 +1140,50 @@ def recovery_posting_delete(rid):
 
 # ── Any Day Prepaid/Undo ──────────────────────────────────────────────────────
 
+def _is_day_locked(db, date_str):
+    return db.execute("SELECT id FROM day_end WHERE day_date=?", (date_str,)).fetchone() is not None
+
+def _posting_loans(db, date_filter, center_filter):
+    """Loans with ≥1 recovery posting, filtered by center meeting day or specific center."""
+    try:
+        day_name = datetime.strptime(date_filter, '%d/%m/%Y').strftime('%A')
+    except Exception:
+        day_name = datetime.now().strftime('%A')
+    params = {'date': date_filter}
+    query = """
+        SELECT ld.*, la.application_no, la.center_id,
+               m.full_name as member_name, m.member_code,
+               c.center_name, c.center_code, c.meeting_week,
+               (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id) as paid_count
+        FROM loan_disbursements ld
+        LEFT JOIN loan_applications la ON ld.application_id=la.id
+        LEFT JOIN members m ON la.member_id=m.id
+        LEFT JOIN centers c ON la.center_id=c.id
+        WHERE ld.status='Disbursed'
+        AND (SELECT COUNT(*) FROM recovery_postings rp2 WHERE rp2.disbursement_id=ld.id) > 0
+    """
+    if center_filter:
+        query += " AND la.center_id=:center_id"
+        params['center_id'] = center_filter
+    else:
+        query += " AND c.meeting_week=:day"
+        params['day'] = day_name
+    query += " ORDER BY c.center_code, m.member_code"
+    return db.execute(query, params).fetchall(), day_name
+
 @app.route('/loans/posting/prepaid')
 @login_required
 def prepaid_list():
     db = get_db()
-    loans = db.execute("""
-        SELECT ld.*, la.application_no, m.full_name as member_name, m.member_code
-        FROM loan_disbursements ld
-        LEFT JOIN loan_applications la ON ld.application_id=la.id
-        LEFT JOIN members m ON la.member_id=m.id
-        WHERE ld.status='Disbursed' ORDER BY ld.id DESC
-    """).fetchall()
+    date_filter = request.args.get('date', datetime.now().strftime('%d/%m/%Y'))
+    center_filter = request.args.get('center_id', '')
+    loans, day_name = _posting_loans(db, date_filter, center_filter)
+    centers = db.execute("SELECT id, center_code, center_name, meeting_week FROM centers WHERE active=1 ORDER BY center_code").fetchall()
+    locked = _is_day_locked(db, date_filter)
     db.close()
-    return render_template('loans/posting/prepaid_list.html', loans=loans)
+    return render_template('loans/posting/prepaid_list.html', loans=loans, centers=centers,
+                           date_filter=date_filter, center_filter=center_filter,
+                           day_name=day_name, locked=locked)
 
 @app.route('/loans/posting/prepaid/<int:did>', methods=['GET', 'POST'])
 @login_required
@@ -1157,12 +1196,16 @@ def prepaid_post(did):
         LEFT JOIN members m ON la.member_id=m.id WHERE ld.id=?
     """, (did,)).fetchone()
     if request.method == 'POST':
+        txn_date = request.form.get('transaction_date', datetime.now().strftime('%d/%m/%Y'))
+        if _is_day_locked(db, txn_date):
+            flash(f'Day {txn_date} is closed. Undo Day End first to make changes.', 'danger')
+            db.close()
+            return redirect(url_for('prepaid_list'))
         db.execute("""
             INSERT INTO prepaid_transactions (disbursement_id,prepaid_type_id,transaction_date,
             amount,mode,narration,is_undo,posted_by)
             VALUES (?,?,?,?,?,?,?,?)
-        """, (did, request.form.get('prepaid_type_id') or None,
-              request.form.get('transaction_date', datetime.now().strftime('%d/%m/%Y')),
+        """, (did, request.form.get('prepaid_type_id') or None, txn_date,
               request.form.get('amount', 0), request.form.get('mode', 'Cash'),
               request.form.get('narration', ''), 1 if request.form.get('is_undo') else 0,
               session['user_id']))
@@ -1185,15 +1228,15 @@ def prepaid_post(did):
 @login_required
 def advance_recovery_list():
     db = get_db()
-    loans = db.execute("""
-        SELECT ld.*, la.application_no, m.full_name as member_name, m.member_code
-        FROM loan_disbursements ld
-        LEFT JOIN loan_applications la ON ld.application_id=la.id
-        LEFT JOIN members m ON la.member_id=m.id
-        WHERE ld.status='Disbursed' ORDER BY ld.id DESC
-    """).fetchall()
+    date_filter = request.args.get('date', datetime.now().strftime('%d/%m/%Y'))
+    center_filter = request.args.get('center_id', '')
+    loans, day_name = _posting_loans(db, date_filter, center_filter)
+    centers = db.execute("SELECT id, center_code, center_name, meeting_week FROM centers WHERE active=1 ORDER BY center_code").fetchall()
+    locked = _is_day_locked(db, date_filter)
     db.close()
-    return render_template('loans/posting/advance_list.html', loans=loans)
+    return render_template('loans/posting/advance_list.html', loans=loans, centers=centers,
+                           date_filter=date_filter, center_filter=center_filter,
+                           day_name=day_name, locked=locked)
 
 @app.route('/loans/posting/advance-recovery/<int:did>', methods=['GET', 'POST'])
 @login_required
@@ -1206,11 +1249,15 @@ def advance_recovery_post(did):
         LEFT JOIN members m ON la.member_id=m.id WHERE ld.id=?
     """, (did,)).fetchone()
     if request.method == 'POST':
+        rec_date = request.form.get('recovery_date', datetime.now().strftime('%d/%m/%Y'))
+        if _is_day_locked(db, rec_date):
+            flash(f'Day {rec_date} is closed. Undo Day End first to make changes.', 'danger')
+            db.close()
+            return redirect(url_for('advance_recovery_list'))
         db.execute("""
             INSERT INTO advance_recoveries (disbursement_id,recovery_date,amount,mode,narration,posted_by)
             VALUES (?,?,?,?,?,?)
-        """, (did, request.form.get('recovery_date', datetime.now().strftime('%d/%m/%Y')),
-              request.form.get('amount', 0), request.form.get('mode', 'Cash'),
+        """, (did, rec_date, request.form.get('amount', 0), request.form.get('mode', 'Cash'),
               request.form.get('narration', ''), session['user_id']))
         db.commit()
         flash('Advance recovery posted.', 'success')
@@ -1227,15 +1274,15 @@ def advance_recovery_post(did):
 @login_required
 def moratorium_list():
     db = get_db()
-    loans = db.execute("""
-        SELECT ld.*, la.application_no, m.full_name as member_name, m.member_code
-        FROM loan_disbursements ld
-        LEFT JOIN loan_applications la ON ld.application_id=la.id
-        LEFT JOIN members m ON la.member_id=m.id
-        WHERE ld.status='Disbursed' ORDER BY ld.id DESC
-    """).fetchall()
+    date_filter = request.args.get('date', datetime.now().strftime('%d/%m/%Y'))
+    center_filter = request.args.get('center_id', '')
+    loans, day_name = _posting_loans(db, date_filter, center_filter)
+    centers = db.execute("SELECT id, center_code, center_name, meeting_week FROM centers WHERE active=1 ORDER BY center_code").fetchall()
+    locked = _is_day_locked(db, date_filter)
     db.close()
-    return render_template('loans/posting/moratorium_list.html', loans=loans)
+    return render_template('loans/posting/moratorium_list.html', loans=loans, centers=centers,
+                           date_filter=date_filter, center_filter=center_filter,
+                           day_name=day_name, locked=locked)
 
 @app.route('/loans/posting/moratorium/<int:did>', methods=['GET', 'POST'])
 @login_required
@@ -1248,10 +1295,15 @@ def moratorium_post(did):
         LEFT JOIN members m ON la.member_id=m.id WHERE ld.id=?
     """, (did,)).fetchone()
     if request.method == 'POST':
+        from_date = request.form.get('from_date', '')
+        if from_date and _is_day_locked(db, from_date):
+            flash(f'Day {from_date} is closed. Undo Day End first to make changes.', 'danger')
+            db.close()
+            return redirect(url_for('moratorium_list'))
         db.execute("""
             INSERT INTO moratoriums (disbursement_id,from_date,to_date,reason,applied_by)
             VALUES (?,?,?,?,?)
-        """, (did, request.form.get('from_date', ''), request.form.get('to_date', ''),
+        """, (did, from_date, request.form.get('to_date', ''),
               request.form.get('reason', ''), session['user_id']))
         db.commit()
         flash('Moratorium applied.', 'success')
@@ -1473,6 +1525,77 @@ def loan_schedule(did):
                            weekly_interest=weekly_interest,
                            paid_count=len(postings))
 
+# ── Day End ───────────────────────────────────────────────────────────────────
+
+@app.route('/day-end', methods=['GET', 'POST'])
+@login_required
+def day_end():
+    db = get_db()
+    if request.method == 'POST':
+        day_date = request.form.get('day_date', '').strip()
+        notes = request.form.get('notes', '').strip()
+        if not day_date:
+            flash('Please select a date.', 'danger')
+            db.close()
+            return redirect(url_for('day_end'))
+        existing = db.execute("SELECT id FROM day_end WHERE day_date=?", (day_date,)).fetchone()
+        if existing:
+            flash(f'{day_date} is already closed.', 'warning')
+            db.close()
+            return redirect(url_for('day_end'))
+        db.execute("INSERT INTO day_end (day_date, closed_by, notes) VALUES (?,?,?)",
+                   (day_date, session['user_id'], notes))
+        db.commit()
+        flash(f'Day End completed for {day_date}. No further changes allowed for this date.', 'success')
+        db.close()
+        return redirect(url_for('day_end'))
+
+    date_filter = request.args.get('date', datetime.now().strftime('%d/%m/%Y'))
+    # Summary for selected date
+    recovery_summary = db.execute("""
+        SELECT c.center_code, c.center_name,
+               COUNT(rp.id) as postings,
+               COALESCE(SUM(rp.paid_amount),0) as total_collected,
+               COALESCE(SUM(rp.principal),0) as total_principal,
+               COALESCE(SUM(rp.interest),0) as total_interest
+        FROM recovery_postings rp
+        LEFT JOIN loan_disbursements ld ON rp.disbursement_id=ld.id
+        LEFT JOIN loan_applications la ON ld.application_id=la.id
+        LEFT JOIN centers c ON la.center_id=c.id
+        WHERE rp.posting_date=?
+        GROUP BY la.center_id ORDER BY c.center_code
+    """, (date_filter,)).fetchall()
+    savings_summary = db.execute("""
+        SELECT COALESCE(SUM(deposit_amount),0) as deposits,
+               COALESCE(SUM(withdraw_amount),0) as withdrawals
+        FROM savings_transactions WHERE transaction_date=?
+    """, (date_filter,)).fetchone()
+    closed_days = db.execute("""
+        SELECT de.*, u.full_name as closed_by_name
+        FROM day_end de LEFT JOIN users u ON de.closed_by=u.id
+        ORDER BY de.day_date DESC LIMIT 30
+    """).fetchall()
+    locked = _is_day_locked(db, date_filter)
+    db.close()
+    return render_template('day_end.html', date_filter=date_filter,
+                           recovery_summary=recovery_summary,
+                           savings_summary=savings_summary,
+                           closed_days=closed_days, locked=locked)
+
+@app.route('/day-end/<int:did>/undo', methods=['POST'])
+@admin_required
+def day_end_undo(did):
+    db = get_db()
+    rec = db.execute("SELECT * FROM day_end WHERE id=?", (did,)).fetchone()
+    if rec:
+        db.execute("DELETE FROM day_end WHERE id=?", (did,))
+        db.commit()
+        flash(f'Day End for {rec["day_date"]} has been reversed. Changes are now allowed.', 'success')
+    else:
+        flash('Record not found.', 'danger')
+    db.close()
+    return redirect(url_for('day_end'))
+
 # ── Settings ──────────────────────────────────────────────────────────────────
 
 @app.route('/settings')
@@ -1485,7 +1608,12 @@ def settings():
 @app.route('/reports')
 @login_required
 def reports():
-    return render_template('reports.html')
+    db = get_db()
+    today = datetime.now().strftime('%d/%m/%Y')
+    today_locked = _is_day_locked(db, today)
+    any_day_end = db.execute("SELECT id FROM day_end LIMIT 1").fetchone() is not None
+    db.close()
+    return render_template('reports.html', today_locked=today_locked, any_day_end=any_day_end, today=today)
 
 @app.route('/reports/masters/centers')
 @login_required

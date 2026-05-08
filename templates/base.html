@@ -85,6 +85,8 @@
 
   <!-- Settings & Reports -->
   <div class="nav-section">More</div>
+  <a class="nav-link {% if 'day_end' in request.endpoint %}active{% endif %}"
+     href="{{ url_for('day_end') }}"><i class="bi bi-moon-stars"></i> Day End</a>
   {% if session.role == 'Admin' %}
   <a class="nav-link {% if request.endpoint=='settings' %}active{% endif %}"
      href="{{ url_for('settings') }}"><i class="bi bi-gear"></i> Settings</a>
