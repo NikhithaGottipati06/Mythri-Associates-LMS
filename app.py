@@ -785,7 +785,7 @@ def loan_disbursement_list():
     """).fetchall()
     disbursed = db.execute("""
         SELECT ld.*, la.application_no, m.full_name as member_name, m.member_code,
-               lt.loan_type_name, la.loan_cycle,
+               lt.loan_type_name, lt.interest_rate, lt.interest_type, la.loan_cycle,
                u.full_name as disbursed_by_name
         FROM loan_disbursements ld
         LEFT JOIN loan_applications la ON ld.application_id=la.id

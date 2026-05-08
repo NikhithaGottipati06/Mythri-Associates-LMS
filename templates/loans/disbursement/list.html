@@ -92,7 +92,7 @@
       <thead>
         <tr>
           <th>Loan ID</th><th>App No</th><th>Member</th><th>Loan Type</th><th>Cycle#</th>
-          <th>Amount</th><th>Date</th><th>Mode</th><th>Installments</th><th>Inst. Amt</th><th>By</th><th>Actions</th>
+          <th>Amount</th><th>Date</th><th>Mode</th><th>Installments</th><th>Principal/Week</th><th>Interest/Week</th><th>Inst. Amt</th><th>By</th><th>Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -107,7 +107,9 @@
           <td>{{ d.disbursement_date }}</td>
           <td>{{ d.mode }}</td>
           <td>{{ d.total_installments }}</td>
-          <td>₹{{ '{:,.2f}'.format(d.installment_amount or 0) }}</td>
+          <td>₹{{ '{:,.2f}'.format(d.disbursed_amount / d.total_installments if d.total_installments else 0) }}</td>
+          <td class="text-danger">₹{{ '{:,.2f}'.format(((d.disbursed_amount * (d.interest_rate or 0) / 100) if (d.interest_type or 'Percent') != 'Fixed' else (d.interest_rate or 0)) / d.total_installments if d.total_installments else 0) }}</td>
+          <td class="fw-semibold">₹{{ '{:,.2f}'.format(d.installment_amount or 0) }}</td>
           <td>{{ d.disbursed_by_name }}</td>
           <td class="d-flex gap-1">
             <a href="{{ url_for('loan_schedule', did=d.id) }}" class="btn btn-outline-info btn-icon" title="Schedule"><i class="bi bi-calendar3"></i></a>
@@ -120,7 +122,7 @@
           </td>
         </tr>
       {% else %}
-        <tr><td colspan="12" class="text-center text-muted py-3">No disbursements yet.</td></tr>
+        <tr><td colspan="14" class="text-center text-muted py-3">No disbursements yet.</td></tr>
       {% endfor %}
       </tbody>
     </table>
