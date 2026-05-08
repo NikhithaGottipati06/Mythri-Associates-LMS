@@ -1192,6 +1192,11 @@ def savings_list():
     transactions = db.execute(query_trans, trans_params).fetchall()
 
     centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
+    all_members = db.execute("""
+        SELECT m.id, m.member_code, m.full_name, c.center_code, c.center_name
+        FROM members m LEFT JOIN centers c ON m.center_id=c.id
+        WHERE m.status='ACTIVE' ORDER BY c.center_code, m.member_code
+    """).fetchall()
 
     total_deposits = sum(s['total_deposits'] for s in summary)
     total_withdrawals = sum(s['total_withdrawals'] for s in summary)
@@ -1199,7 +1204,60 @@ def savings_list():
 
     db.close()
     return render_template('savings/list.html', summary=summary, transactions=transactions,
-                           centers=centers, center_filter=center_filter, totals=totals)
+                           centers=centers, center_filter=center_filter, totals=totals,
+                           all_members=all_members)
+
+@app.route('/savings/member-info')
+@login_required
+def savings_member_info():
+    mid = request.args.get('mid', '')
+    if not mid:
+        return jsonify({})
+    db = get_db()
+    member = db.execute("""
+        SELECT m.id, m.member_code, m.full_name, c.center_name, c.center_code, m.center_id
+        FROM members m LEFT JOIN centers c ON m.center_id=c.id WHERE m.id=?
+    """, (mid,)).fetchone()
+    if not member:
+        db.close()
+        return jsonify({})
+    row = db.execute(
+        "SELECT COALESCE(SUM(deposit_amount),0) as d, COALESCE(SUM(withdraw_amount),0) as w FROM savings_transactions WHERE member_id=?",
+        (mid,)
+    ).fetchone()
+    db.close()
+    balance = (row['d'] or 0) - (row['w'] or 0)
+    return jsonify({
+        'member_code': member['member_code'],
+        'full_name': member['full_name'],
+        'center': f"{member['center_code']} {member['center_name']}",
+        'balance': balance
+    })
+
+@app.route('/savings/deposit/<int:mid>', methods=['POST'])
+@admin_required
+def savings_deposit(mid):
+    db = get_db()
+    deposit_amount = float(request.form.get('deposit_amount', 0))
+    transaction_date = request.form.get('transaction_date', datetime.now().strftime('%d/%m/%Y'))
+    if deposit_amount <= 0:
+        flash('Invalid deposit amount.', 'danger')
+        db.close()
+        return redirect(url_for('savings_list'))
+    member = db.execute("SELECT center_id FROM members WHERE id=?", (mid,)).fetchone()
+    prev = db.execute(
+        "SELECT COALESCE(SUM(deposit_amount),0) - COALESCE(SUM(withdraw_amount),0) as balance FROM savings_transactions WHERE member_id=?",
+        (mid,)
+    ).fetchone()
+    new_balance = (prev['balance'] or 0) + deposit_amount
+    db.execute("""
+        INSERT INTO savings_transactions (member_id,center_id,transaction_date,deposit_amount,withdraw_amount,balance,posted_by)
+        VALUES (?,?,?,?,0,?,?)
+    """, (mid, member['center_id'] if member else None, transaction_date, deposit_amount, new_balance, session['user_id']))
+    db.commit()
+    db.close()
+    flash(f'Deposit of ₹{deposit_amount:,.0f} posted successfully.', 'success')
+    return redirect(url_for('savings_list'))
 
 @app.route('/savings/withdraw/<int:mid>', methods=['POST'])
 @admin_required

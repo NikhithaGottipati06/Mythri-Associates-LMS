@@ -6,20 +6,64 @@
   <h5>Savings Account</h5>
 </div>
 
-<div class="action-bar">
-  <form method="GET" class="d-flex gap-2 align-items-center">
-    <label class="fw-semibold" style="font-size:13px;">Center:</label>
-    <select name="center_id" class="form-select form-select-sm" style="width:200px;" onchange="this.form.submit()">
-      <option value="">All Centers</option>
-      {% for c in centers %}
-      <option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} {{ c.center_name }}</option>
-      {% endfor %}
-    </select>
-  </form>
-  <span class="ms-auto total-bar">Total Members: {{ summary|length }}</span>
-</div>
+{% if session.role == 'Admin' %}
+<!-- ── New Entry Card ────────────────────────────────────────────── -->
+<div class="form-card mb-3">
+  <div class="section-title"><i class="bi bi-plus-circle me-1"></i>New Savings Entry</div>
+  <div class="row g-3 align-items-end">
+    <div class="col-md-4">
+      <label class="form-label fw-semibold" style="font-size:13px;">Select Member</label>
+      <select id="memberSelect" class="form-select form-select-sm" onchange="fetchMemberInfo(this.value)">
+        <option value="">— Choose Member —</option>
+        {% for m in all_members %}
+        <option value="{{ m.id }}">{{ m.member_code }} – {{ m.full_name }} ({{ m.center_code }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label fw-semibold" style="font-size:13px;">Center</label>
+      <input type="text" id="memberCenter" class="form-control form-control-sm" readonly placeholder="—">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label fw-semibold" style="font-size:13px;">Outstanding Balance</label>
+      <input type="text" id="memberBalance" class="form-control form-control-sm fw-bold text-success" readonly placeholder="₹0">
+    </div>
+  </div>
 
-<!-- Summary Cards -->
+  <div id="entryForm" style="display:none;" class="mt-3">
+    <div class="row g-3 align-items-end">
+      <div class="col-md-2">
+        <label class="form-label fw-semibold" style="font-size:13px;">Amount (₹)</label>
+        <input type="number" id="entryAmount" class="form-control form-control-sm" value="100" min="1" step="0.01">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label fw-semibold" style="font-size:13px;">Date</label>
+        <input type="text" id="entryDate" class="form-control form-control-sm" placeholder="DD/MM/YYYY">
+      </div>
+      <div class="col-md-4 d-flex gap-2">
+        <button class="btn btn-success btn-sm fw-semibold" onclick="submitEntry('deposit')">
+          <i class="bi bi-plus-circle me-1"></i>Deposit
+        </button>
+        <button class="btn btn-warning btn-sm fw-semibold" id="withdrawBtn" onclick="submitEntry('withdraw')">
+          <i class="bi bi-cash me-1"></i>Withdraw
+        </button>
+      </div>
+    </div>
+
+    <!-- Hidden forms for deposit and withdraw -->
+    <form id="depositForm" method="POST" style="display:none;">
+      <input type="hidden" name="deposit_amount" id="hDepositAmt">
+      <input type="hidden" name="transaction_date" id="hDepositDate">
+    </form>
+    <form id="withdrawForm" method="POST" style="display:none;">
+      <input type="hidden" name="withdraw_amount" id="hWithdrawAmt">
+      <input type="hidden" name="transaction_date" id="hWithdrawDate">
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Summary Cards ─────────────────────────────────────────────── -->
 <div class="row g-3 mb-3">
   <div class="col-md-4">
     <div class="stat-card" style="border-color:#6f42c1;">
@@ -50,7 +94,21 @@
   </div>
 </div>
 
-<!-- Member-wise Summary -->
+<!-- ── Filter ────────────────────────────────────────────────────── -->
+<div class="action-bar mb-2">
+  <form method="GET" class="d-flex gap-2 align-items-center">
+    <label class="fw-semibold" style="font-size:13px;">Center:</label>
+    <select name="center_id" class="form-select form-select-sm" style="width:200px;" onchange="this.form.submit()">
+      <option value="">All Centers</option>
+      {% for c in centers %}
+      <option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} {{ c.center_name }}</option>
+      {% endfor %}
+    </select>
+  </form>
+  <span class="ms-auto total-bar">Members with savings: {{ summary|length }}</span>
+</div>
+
+<!-- ── Member-wise Summary ───────────────────────────────────────── -->
 <div class="form-card mb-3">
   <div class="section-title"><i class="bi bi-people me-1"></i>Member-wise Savings Summary</div>
   <div class="lms-table" style="margin:0;overflow-x:auto;">
@@ -58,8 +116,7 @@
       <thead>
         <tr>
           <th>Member Code</th><th>Member Name</th><th>Center</th>
-          <th>Total Deposits</th><th>Total Withdrawals</th><th>Balance</th>
-          {% if session.role == 'Admin' %}<th>Actions</th>{% endif %}
+          <th>Total Deposits</th><th>Total Withdrawals</th><th>Outstanding</th>
         </tr>
       </thead>
       <tbody>
@@ -68,56 +125,19 @@
           <td class="fw-semibold text-primary">{{ s.member_code }}</td>
           <td class="fw-semibold">{{ s.full_name }}</td>
           <td>{{ s.center_code }} {{ s.center_name }}</td>
-          <td>₹{{ '{:,.0f}'.format(s.total_deposits or 0) }}</td>
-          <td>₹{{ '{:,.0f}'.format(s.total_withdrawals or 0) }}</td>
+          <td class="text-success">₹{{ '{:,.0f}'.format(s.total_deposits or 0) }}</td>
+          <td class="text-danger">₹{{ '{:,.0f}'.format(s.total_withdrawals or 0) }}</td>
           <td class="fw-semibold text-success">₹{{ '{:,.0f}'.format((s.total_deposits or 0) - (s.total_withdrawals or 0)) }}</td>
-          {% if session.role == 'Admin' %}
-          <td>
-            {% if (s.total_deposits or 0) - (s.total_withdrawals or 0) > 0 %}
-            <button class="btn btn-outline-warning btn-sm" data-bs-toggle="modal" data-bs-target="#withdrawModal{{ s.member_id }}">
-              <i class="bi bi-cash me-1"></i>Withdraw
-            </button>
-            {% endif %}
-          </td>
-          {% endif %}
         </tr>
-        {% if session.role == 'Admin' and (s.total_deposits or 0) - (s.total_withdrawals or 0) > 0 %}
-        <div class="modal fade" id="withdrawModal{{ s.member_id }}" tabindex="-1">
-          <div class="modal-dialog">
-            <div class="modal-content">
-              <form method="POST" action="{{ url_for('savings_withdraw', mid=s.member_id) }}">
-              <div class="modal-header"><h5 class="modal-title">Withdraw Savings – {{ s.full_name }}</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-              <div class="modal-body">
-                <p class="mb-2" style="font-size:13px;">Available Balance: <strong class="text-success">₹{{ '{:,.0f}'.format((s.total_deposits or 0) - (s.total_withdrawals or 0)) }}</strong></p>
-                <div class="mb-3">
-                  <label class="form-label fw-semibold">Withdraw Amount (₹)</label>
-                  <input type="number" name="withdraw_amount" class="form-control" step="0.01" min="1"
-                         max="{{ (s.total_deposits or 0) - (s.total_withdrawals or 0) }}" required>
-                </div>
-                <div class="mb-3">
-                  <label class="form-label fw-semibold">Date</label>
-                  <input type="text" name="transaction_date" class="form-control" placeholder="DD/MM/YYYY" required>
-                </div>
-              </div>
-              <div class="modal-footer">
-                <button type="submit" class="btn btn-warning">Confirm Withdrawal</button>
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-              </div>
-              </form>
-            </div>
-          </div>
-        </div>
-        {% endif %}
       {% else %}
-        <tr><td colspan="{% if session.role == 'Admin' %}7{% else %}6{% endif %}" class="text-center text-muted py-4">No savings transactions found.</td></tr>
+        <tr><td colspan="6" class="text-center text-muted py-4">No savings transactions found.</td></tr>
       {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
 
-<!-- Transaction History -->
+<!-- ── Transaction History ───────────────────────────────────────── -->
 <div class="form-card">
   <div class="section-title"><i class="bi bi-clock-history me-1"></i>Transaction History</div>
   <div class="lms-table" style="margin:0;overflow-x:auto;">
@@ -147,4 +167,51 @@
     </table>
   </div>
 </div>
+
+<script>
+let currentMemberId = null;
+let currentBalance = 0;
+
+function fetchMemberInfo(mid) {
+  currentMemberId = mid;
+  if (!mid) {
+    document.getElementById('memberCenter').value = '';
+    document.getElementById('memberBalance').value = '';
+    document.getElementById('entryForm').style.display = 'none';
+    return;
+  }
+  fetch(`/savings/member-info?mid=${mid}`)
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById('memberCenter').value = data.center || '';
+      currentBalance = data.balance || 0;
+      document.getElementById('memberBalance').value = '₹' + currentBalance.toLocaleString('en-IN');
+      document.getElementById('entryForm').style.display = 'block';
+      document.getElementById('withdrawBtn').disabled = currentBalance <= 0;
+    });
+}
+
+function submitEntry(type) {
+  const amount = parseFloat(document.getElementById('entryAmount').value);
+  const date   = document.getElementById('entryDate').value.trim();
+  if (!currentMemberId) { alert('Please select a member.'); return; }
+  if (!amount || amount <= 0) { alert('Enter a valid amount.'); return; }
+  if (!date) { alert('Enter a date.'); return; }
+  if (type === 'withdraw' && amount > currentBalance) {
+    alert(`Cannot withdraw ₹${amount.toLocaleString('en-IN')}. Available balance: ₹${currentBalance.toLocaleString('en-IN')}`);
+    return;
+  }
+  if (type === 'deposit') {
+    document.getElementById('depositForm').action = `/savings/deposit/${currentMemberId}`;
+    document.getElementById('hDepositAmt').value  = amount;
+    document.getElementById('hDepositDate').value = date;
+    document.getElementById('depositForm').submit();
+  } else {
+    document.getElementById('withdrawForm').action = `/savings/withdraw/${currentMemberId}`;
+    document.getElementById('hWithdrawAmt').value  = amount;
+    document.getElementById('hWithdrawDate').value = date;
+    document.getElementById('withdrawForm').submit();
+  }
+}
+</script>
 {% endblock %}
