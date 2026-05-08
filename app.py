@@ -11,6 +11,10 @@ app.secret_key = os.environ.get('SECRET_KEY', 'mythri-lms-secret-2024')
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'static', 'uploads')
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
+@app.context_processor
+def inject_helpers():
+    return dict(_number_to_words=_number_to_words)
+
 LOAN_PURPOSES = [
     'Agriculture', 'Animal Husbandry', 'Buffalo', 'Cow', 'Goat',
     'Vegetable Business', 'Small Business', 'Trading', 'Tailoring',
@@ -959,7 +963,7 @@ def recovery_posting_list():
                m.full_name as member_name, m.member_code,
                c.center_name, c.center_code, c.meeting_week, c.meeting_type,
                lt.interest_rate, lt.interest_type,
-               (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id) as paid_count,
+               (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0) as paid_count,
                (SELECT rp2.id FROM recovery_postings rp2
                 WHERE rp2.disbursement_id=ld.id AND rp2.posting_date=:date
                 ORDER BY rp2.id DESC LIMIT 1) as today_posting_id,
@@ -970,7 +974,7 @@ def recovery_posting_list():
         LEFT JOIN centers c ON la.center_id=c.id
         LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
         WHERE ld.status='Disbursed'
-        AND (SELECT COUNT(*) FROM recovery_postings rp3 WHERE rp3.disbursement_id=ld.id) < ld.total_installments
+        AND (SELECT COUNT(*) FROM recovery_postings rp3 WHERE rp3.disbursement_id=ld.id AND rp3.installment_no > 0) < ld.total_installments
         AND substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2)
             < substr(:date,7,4)||'-'||substr(:date,4,2)||'-'||substr(:date,1,2)
     """
@@ -1156,6 +1160,39 @@ def _to_iso(date_str):
         return f"{p[2]}-{p[1]}-{p[0]}"
     except Exception:
         return date_str
+
+def _number_to_words(n):
+    """Convert a number to Indian rupee words (e.g. 31250.00 → 'Thirty One Thousand Two Hundred Fifty Only')."""
+    ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+            'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
+            'Seventeen', 'Eighteen', 'Nineteen']
+    tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
+
+    def below_100(n):
+        if n < 20: return ones[n]
+        return tens[n // 10] + (' ' + ones[n % 10] if n % 10 else '')
+
+    def below_1000(n):
+        if n < 100: return below_100(n)
+        return ones[n // 100] + ' Hundred' + (' ' + below_100(n % 100) if n % 100 else '')
+
+    def to_words(n):
+        if n == 0: return ''
+        if n < 1000: return below_1000(n)
+        if n < 100000: return below_1000(n // 1000) + ' Thousand' + (' ' + below_1000(n % 1000) if n % 1000 else '')
+        if n < 10000000: return below_1000(n // 100000) + ' Lakh' + (' ' + to_words(n % 100000) if n % 100000 else '')
+        return below_1000(n // 10000000) + ' Crore' + (' ' + to_words(n % 10000000) if n % 10000000 else '')
+
+    try:
+        n = float(n or 0)
+        rupees = int(n)
+        paise = round((n - rupees) * 100)
+        result = to_words(rupees) or 'Zero'
+        if paise:
+            result += ' and ' + below_100(paise) + ' Paise'
+        return 'Rupees ' + result + ' Only'
+    except Exception:
+        return ''
 
 def _posting_loans(db, date_filter, center_filter):
     """Loans with ≥1 recovery posting, filtered by center meeting day or specific center."""
@@ -1945,9 +1982,9 @@ def report_collection_sheet():
                c.center_name, c.center_code, c.meeting_week,
                lt.loan_type_name, lt.interest_rate, lt.interest_type,
                u.full_name as staff_name,
-               (SELECT COALESCE(SUM(rp.paid_amount),0) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id) as total_paid,
-               (SELECT COALESCE(SUM(rp.principal),0) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id) as principal_paid,
-               (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id) as paid_count,
+               (SELECT COALESCE(SUM(rp.paid_amount),0) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0) as total_paid,
+               (SELECT COALESCE(SUM(rp.principal),0) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0) as principal_paid,
+               (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0) as paid_count,
                (SELECT COALESCE(SUM(ar.amount),0) FROM advance_recoveries ar WHERE ar.disbursement_id=ld.id) as advance_total
         FROM loan_disbursements ld
         LEFT JOIN loan_applications la ON ld.application_id=la.id
@@ -2496,40 +2533,177 @@ def report_voucher_credit():
 @login_required
 def report_glance():
     db = get_db()
-    stats = {
-        'total_centers': db.execute("SELECT COUNT(*) FROM centers WHERE active=1").fetchone()[0],
-        'total_members': db.execute("SELECT COUNT(*) FROM members WHERE status='ACTIVE'").fetchone()[0],
-        'withdrawn_members': db.execute("SELECT COUNT(*) FROM members WHERE status='WITHDRAWN'").fetchone()[0],
-        'total_applications': db.execute("SELECT COUNT(*) FROM loan_applications").fetchone()[0],
-        'pending_applications': db.execute("SELECT COUNT(*) FROM loan_applications WHERE status='Pending'").fetchone()[0],
-        'approved_applications': db.execute("SELECT COUNT(*) FROM loan_applications WHERE status='Approved'").fetchone()[0],
-        'total_disbursements': db.execute("SELECT COUNT(*) FROM loan_disbursements").fetchone()[0],
-        'total_disbursed_amount': db.execute("SELECT COALESCE(SUM(disbursed_amount),0) FROM loan_disbursements").fetchone()[0],
-        'total_collected': db.execute("SELECT COALESCE(SUM(paid_amount),0) FROM recovery_postings").fetchone()[0],
-        'total_principal_collected': db.execute("SELECT COALESCE(SUM(principal),0) FROM recovery_postings").fetchone()[0],
-    }
-    stats['outstanding'] = stats['total_disbursed_amount'] - stats['total_principal_collected']
-    stats['total_savings'] = db.execute("SELECT COALESCE(SUM(deposit_amount),0) FROM savings_transactions").fetchone()[0]
-    stats['savings_withdrawn'] = db.execute("SELECT COALESCE(SUM(withdraw_amount),0) FROM savings_transactions").fetchone()[0]
-    stats['savings_outstanding'] = stats['total_savings'] - stats['savings_withdrawn']
-    center_stats = db.execute("""
-        SELECT c.center_code, c.center_name,
-               COUNT(DISTINCT m.id) as members,
-               COUNT(DISTINCT ld.id) as loans,
-               COALESCE(SUM(ld.disbursed_amount),0) as disbursed,
-               COALESCE(SUM(rp.paid_amount),0) as collected,
-               COALESCE(SUM(rp.principal),0) as principal_collected,
-               COALESCE((SELECT SUM(st.deposit_amount) FROM savings_transactions st WHERE st.center_id=c.id),0) as savings_deposits,
-               COALESCE((SELECT SUM(st.withdraw_amount) FROM savings_transactions st WHERE st.center_id=c.id),0) as savings_withdrawals
-        FROM centers c
-        LEFT JOIN members m ON m.center_id=c.id AND m.status='ACTIVE'
-        LEFT JOIN loan_applications la ON la.center_id=c.id
-        LEFT JOIN loan_disbursements ld ON ld.application_id=la.id
-        LEFT JOIN recovery_postings rp ON rp.disbursement_id=ld.id
-        GROUP BY c.id ORDER BY c.center_code
-    """).fetchall()
+    from_date = request.args.get('from_date', '')
+    to_date   = request.args.get('to_date', '')
+    from_iso  = _to_iso(from_date) if from_date else ''
+    to_iso    = _to_iso(to_date)   if to_date   else ''
+    centers   = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
+
+    def ic(col):
+        return f"substr({col},7,4)||'-'||substr({col},4,2)||'-'||substr({col},1,2)"
+
+    def scalar(sql, params=()):
+        row = db.execute(sql, params).fetchone()
+        return (row[0] or 0) if row else 0
+
+    def dc(col, period):
+        expr = ic(col)
+        if period == 'open':
+            if not from_iso: return '1=0', ()
+            return f'{expr} < ?', (from_iso,)
+        if period == 'during':
+            parts, ps = [], []
+            if from_iso: parts.append(f'{expr} >= ?'); ps.append(from_iso)
+            if to_iso:   parts.append(f'{expr} <= ?'); ps.append(to_iso)
+            return (' AND '.join(parts) if parts else '1=1'), tuple(ps)
+        # 'close'
+        if not to_iso: return '1=1', ()
+        return f'{expr} <= ?', (to_iso,)
+
+    def mem_count(period):
+        c, p = dc('m.date_of_join', period)
+        return scalar(f'SELECT COUNT(*) FROM members m WHERE {c}', p)
+
+    def borrowers(period):
+        c, p = dc('ld.disbursement_date', period)
+        return scalar(
+            f'SELECT COUNT(DISTINCT la.member_id) FROM loan_disbursements ld '
+            f'LEFT JOIN loan_applications la ON ld.application_id=la.id WHERE {c}', p)
+
+    def mem_fee(period):
+        c, p = dc('m.date_of_join', period)
+        return scalar(f'SELECT COALESCE(SUM(m.total_fees),0) FROM members m WHERE {c}', p)
+
+    def disb_count(period):
+        c, p = dc('ld.disbursement_date', period)
+        return scalar(f'SELECT COUNT(*) FROM loan_disbursements ld WHERE {c}', p)
+
+    def disb_amt(period):
+        c, p = dc('ld.disbursement_date', period)
+        return scalar(f'SELECT COALESCE(SUM(ld.disbursed_amount),0) FROM loan_disbursements ld WHERE {c}', p)
+
+    def la_sum(field, period):
+        c, p = dc('ld.disbursement_date', period)
+        return scalar(
+            f'SELECT COALESCE(SUM(la.{field}),0) FROM loan_disbursements ld '
+            f'LEFT JOIN loan_applications la ON ld.application_id=la.id WHERE {c}', p)
+
+    def rp_sum(field, period):
+        c, p = dc('rp.posting_date', period)
+        return scalar(
+            f'SELECT COALESCE(SUM(rp.{field}),0) FROM recovery_postings rp '
+            f'WHERE rp.installment_no>0 AND {c}', p)
+
+    def save_dep(period):
+        c, p = dc('st.transaction_date', period)
+        return scalar(f'SELECT COALESCE(SUM(st.deposit_amount),0) FROM savings_transactions st WHERE {c}', p)
+
+    def save_with(period):
+        c, p = dc('st.transaction_date', period)
+        return scalar(f'SELECT COALESCE(SUM(st.withdraw_amount),0) FROM savings_transactions st WHERE {c}', p)
+
+    def arrear_count(period):
+        c, p = dc('ae.arrear_date', period)
+        return scalar(
+            f'SELECT COUNT(DISTINCT ae.disbursement_id) FROM arrear_entries ae WHERE ae.status="Pending" AND {c}', p)
+
+    def arrear_amt(period):
+        c, p = dc('ae.arrear_date', period)
+        return scalar(
+            f'SELECT COALESCE(SUM(ae.due_amount),0) FROM arrear_entries ae WHERE ae.status="Pending" AND {c}', p)
+
+    def prepaid_count(period):
+        c, p = dc('pt.transaction_date', period)
+        return scalar(
+            f'SELECT COUNT(DISTINCT pt.disbursement_id) FROM prepaid_transactions pt WHERE pt.is_undo=0 AND {c}', p)
+
+    def prepaid_amt(period):
+        c, p = dc('pt.transaction_date', period)
+        return scalar(
+            f'SELECT COALESCE(SUM(pt.amount),0) FROM prepaid_transactions pt WHERE pt.is_undo=0 AND {c}', p)
+
+    total_centers   = scalar("SELECT COUNT(*) FROM centers WHERE active=1")
+    total_withdrawn = scalar("SELECT COUNT(*) FROM members WHERE status='WITHDRAWN'")
+    loans_closed    = scalar("SELECT COUNT(*) FROM loan_disbursements WHERE status='Closed'")
+
+    rows = []
+    def R(sno, name, o, d, cl=None):
+        if cl is None: cl = o + d
+        rows.append({'sno': sno, 'name': name, 'opening': o, 'during': d, 'closing': cl})
+
+    # ── 1 No. Of Centers ──────────────────────────────────────────────────────
+    R(1, 'No. Of Centers', 0, total_centers, total_centers)
+    # ── 2 Members Enrolled ────────────────────────────────────────────────────
+    mo = mem_count('open'); md = mem_count('during'); mc = mem_count('close')
+    R(2, 'Members Enrolled', mo, md, mc)
+    # ── 3 Members Withdrawn ───────────────────────────────────────────────────
+    R(3, 'Members Withdrawn', 0, total_withdrawn, total_withdrawn)
+    # ── 4 Net Members ─────────────────────────────────────────────────────────
+    R(4, 'Net Members', mo, md, mc - total_withdrawn)
+    # ── 5 Borrowers ───────────────────────────────────────────────────────────
+    R(5, 'Borrowers', borrowers('open'), borrowers('during'), borrowers('close'))
+    # ── 6 Member Joining Fee ──────────────────────────────────────────────────
+    R(6, 'Member Joining Fee', mem_fee('open'), mem_fee('during'), mem_fee('close'))
+    # ── 7 Processing Fee ──────────────────────────────────────────────────────
+    R(7, 'Processing Fee', la_sum('processing_fee','open'), la_sum('processing_fee','during'), la_sum('processing_fee','close'))
+    # ── 8 Insurance Premium ───────────────────────────────────────────────────
+    ins_o = la_sum('insurance_fee','open') + la_sum('nominee_insurance_fee','open')
+    ins_d = la_sum('insurance_fee','during') + la_sum('nominee_insurance_fee','during')
+    ins_c = la_sum('insurance_fee','close') + la_sum('nominee_insurance_fee','close')
+    R(8, 'Insurance Premium', ins_o, ins_d, ins_c)
+    # ── 9 Loans Closed ────────────────────────────────────────────────────────
+    R(9, 'Loans Closed', 0, loans_closed, loans_closed)
+    # ── 10 Loans Disbursed ────────────────────────────────────────────────────
+    R(10, 'Loans Disbursed', disb_count('open'), disb_count('during'), disb_count('close'))
+    # ── 11 Loan Amount ────────────────────────────────────────────────────────
+    R(11, 'Loan Amount', disb_amt('open'), disb_amt('during'), disb_amt('close'))
+    # ── 12 Prin Recovery ──────────────────────────────────────────────────────
+    R(12, 'Prin Recovery', rp_sum('principal','open'), rp_sum('principal','during'), rp_sum('principal','close'))
+    # ── 13 Outstanding ────────────────────────────────────────────────────────
+    out_o = disb_amt('open') - rp_sum('principal','open')
+    out_d = disb_amt('during') - rp_sum('principal','during')
+    out_c = disb_amt('close') - rp_sum('principal','close')
+    R(13, 'Outstanding', out_o, out_d, out_c)
+    # ── 14 Interest Recovery ──────────────────────────────────────────────────
+    R(14, 'Interest Recovery', rp_sum('interest','open'), rp_sum('interest','during'), rp_sum('interest','close'))
+    # ── 15 Prin Due Current Period ────────────────────────────────────────────
+    R(15, 'Prin Due Current Period', 0, 0, 0)
+    # ── 16 Int Due Current Period ─────────────────────────────────────────────
+    R(16, 'Int Due Current Period', 0, 0, 0)
+    # ── 17 Savings Current Period ─────────────────────────────────────────────
+    R(17, 'Savings Current Period', save_dep('open'), save_dep('during'), save_dep('close'))
+    # ── 18 Prin Due Next Period ───────────────────────────────────────────────
+    R(18, 'Prin Due Next Period', 0, 0, 0)
+    # ── 19 Int Due Next Period ────────────────────────────────────────────────
+    R(19, 'Int Due Next Period', 0, 0, 0)
+    # ── 20 Arrear Loans ───────────────────────────────────────────────────────
+    R(20, 'Arrear Loans', arrear_count('open'), arrear_count('during'), arrear_count('close'))
+    # ── 21 Arrear Prin ────────────────────────────────────────────────────────
+    R(21, 'Arrear Prin', arrear_amt('open'), arrear_amt('during'), arrear_amt('close'))
+    # ── 22 Arrear Int ─────────────────────────────────────────────────────────
+    R(22, 'Arrear Int', 0, 0, 0)
+    # ── 23 Prepaid Loans ──────────────────────────────────────────────────────
+    R(23, 'Prepaid Loans', prepaid_count('open'), prepaid_count('during'), prepaid_count('close'))
+    # ── 24 Prepaid Amount ─────────────────────────────────────────────────────
+    R(24, 'Prepaid Amount', prepaid_amt('open'), prepaid_amt('during'), prepaid_amt('close'))
+    # ── 25 Death Loans ────────────────────────────────────────────────────────
+    R(25, 'Death Loans', 0, 0, 0)
+    # ── 26 Prepaid on Death ───────────────────────────────────────────────────
+    R(26, 'Prepaid on Death', 0, 0, 0)
+    # ── 27 Prepaid Charges ────────────────────────────────────────────────────
+    R(27, 'Prepaid Charges', 0, 0, 0)
+    # ── 28 Advance Collected (savings deposits) ───────────────────────────────
+    R(28, 'Advance Collected', save_dep('open'), save_dep('during'), save_dep('close'))
+    # ── 29 Advance Withdrawn (savings withdrawals) ────────────────────────────
+    sw_o = save_with('open'); sw_d = save_with('during'); sw_c = save_with('close')
+    R(29, 'Advance Withdrawn', sw_o, sw_d, sw_c)
+    # ── 30 Net Advance Recovery ───────────────────────────────────────────────
+    R(30, 'Net Advance Recovery',
+      save_dep('open') - sw_o, save_dep('during') - sw_d, save_dep('close') - sw_c)
+
     db.close()
-    return render_template('reports/glance_report.html', stats=stats, center_stats=center_stats)
+    return render_template('reports/glance_report.html', rows=rows, centers=centers,
+                           from_date=from_date, to_date=to_date)
 
 @app.route('/reports/passbook')
 @login_required
