@@ -12,10 +12,55 @@
 <div class="login-wrap">
   <div class="login-card">
     <div class="login-logo">
-      <img src="{{ url_for('static', filename='images/logo.png') }}"
-           alt="Mythri Associates" style="height:80px;object-fit:contain;margin-bottom:8px;"
-           onerror="this.style.display='none';document.getElementById('fallbackIcon').style.display='block'">
-      <div id="fallbackIcon" style="display:none;font-size:42px;color:#1a3c6e;"><i class="bi bi-bank2"></i></div>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 180" style="height:100px;margin-bottom:6px;">
+        <!-- Sun rays -->
+        <g transform="translate(110,62)" stroke="#f59e0b" stroke-width="3" stroke-linecap="round">
+          <line x1="0" y1="-38" x2="0" y2="-48"/>
+          <line x1="13" y1="-35" x2="17" y2="-44" transform="rotate(25,0,0)"/>
+          <line x1="0" y1="-38" x2="0" y2="-48" transform="rotate(50,0,0)"/>
+          <line x1="0" y1="-38" x2="0" y2="-48" transform="rotate(75,0,0)"/>
+          <line x1="0" y1="-38" x2="0" y2="-48" transform="rotate(100,0,0)"/>
+          <line x1="0" y1="-38" x2="0" y2="-48" transform="rotate(130,0,0)"/>
+          <line x1="0" y1="-38" x2="0" y2="-48" transform="rotate(155,0,0)"/>
+          <line x1="0" y1="-38" x2="0" y2="-48" transform="rotate(180,0,0)"/>
+          <line x1="0" y1="-38" x2="0" y2="-48" transform="rotate(205,0,0)"/>
+          <line x1="0" y1="-38" x2="0" y2="-48" transform="rotate(230,0,0)"/>
+          <line x1="0" y1="-38" x2="0" y2="-48" transform="rotate(255,0,0)"/>
+          <line x1="0" y1="-38" x2="0" y2="-48" transform="rotate(280,0,0)"/>
+        </g>
+        <!-- Sun half-circle -->
+        <path d="M80,62 A30,30 0 0,1 140,62 Z" fill="#f59e0b"/>
+        <!-- House roof -->
+        <polygon points="110,28 82,60 138,60" fill="#c47c1a"/>
+        <!-- House window -->
+        <rect x="104" y="46" width="12" height="12" rx="1" fill="#f59e0b" opacity="0.8"/>
+        <line x1="110" y1="46" x2="110" y2="58" stroke="#c47c1a" stroke-width="1.5"/>
+        <line x1="104" y1="52" x2="116" y2="52" stroke="#c47c1a" stroke-width="1.5"/>
+        <!-- House walls stub -->
+        <rect x="87" y="60" width="46" height="6" fill="#c47c1a"/>
+
+        <!-- Left leaf -->
+        <ellipse cx="55" cy="80" rx="22" ry="11" fill="#2d7a1f" transform="rotate(-40,55,80)"/>
+        <ellipse cx="55" cy="80" rx="20" ry="9" fill="#3d9a2a" transform="rotate(-40,55,80)"/>
+        <!-- Right leaf -->
+        <ellipse cx="165" cy="80" rx="22" ry="11" fill="#2d7a1f" transform="rotate(40,165,80)"/>
+        <ellipse cx="165" cy="80" rx="20" ry="9" fill="#3d9a2a" transform="rotate(40,165,80)"/>
+
+        <!-- Blue right arc -->
+        <path d="M165,80 Q185,120 140,148" stroke="#1a5cb3" stroke-width="14" fill="none" stroke-linecap="round"/>
+        <!-- Green left arc -->
+        <path d="M55,80 Q35,120 80,148" stroke="#3d9a2a" stroke-width="14" fill="none" stroke-linecap="round"/>
+
+        <!-- Green hand (left) -->
+        <path d="M80,148 Q95,160 110,155 Q115,140 105,130 Q95,120 82,125 Z" fill="#3d9a2a"/>
+        <!-- Blue hand (right) -->
+        <path d="M140,148 Q125,160 110,155 Q105,140 115,130 Q125,120 138,125 Z" fill="#1a5cb3"/>
+        <!-- Handshake highlight -->
+        <ellipse cx="110" cy="148" rx="12" ry="8" fill="white" opacity="0.3"/>
+
+        <!-- Ground shadow lines -->
+        <path d="M60,158 Q110,168 160,158" stroke="#2d5a1b" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
+      </svg>
       <h4>Mythri Associates LMS</h4>
       <p>Loan Monitoring System</p>
     </div>
