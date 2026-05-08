@@ -970,6 +970,8 @@ def recovery_posting_list():
         LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
         WHERE ld.status='Disbursed'
         AND (SELECT COUNT(*) FROM recovery_postings rp3 WHERE rp3.disbursement_id=ld.id) < ld.total_installments
+        AND substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2)
+            < substr(:date,7,4)||'-'||substr(:date,4,2)||'-'||substr(:date,1,2)
     """
     if center_filter:
         query += " AND la.center_id=:center_id"
@@ -1164,6 +1166,8 @@ def _posting_loans(db, date_filter, center_filter):
         LEFT JOIN centers c ON la.center_id=c.id
         WHERE ld.status='Disbursed'
         AND (SELECT COUNT(*) FROM recovery_postings rp2 WHERE rp2.disbursement_id=ld.id) > 0
+        AND substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2)
+            < substr(:date,7,4)||'-'||substr(:date,4,2)||'-'||substr(:date,1,2)
     """
     if center_filter:
         query += " AND la.center_id=:center_id"
@@ -1559,6 +1563,8 @@ def arrears_collection_list():
         WHERE ld.status='Disbursed'
         AND (SELECT COUNT(*) FROM recovery_postings rp3 WHERE rp3.disbursement_id=ld.id) > 0
         AND (SELECT COUNT(*) FROM recovery_postings rp4 WHERE rp4.disbursement_id=ld.id) < ld.total_installments
+        AND substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2)
+            < substr(:date,7,4)||'-'||substr(:date,4,2)||'-'||substr(:date,1,2)
     """
     if center_filter:
         query += " AND la.center_id=:center_id"
