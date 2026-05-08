@@ -1,6 +1,6 @@
-# Mythri Associates LMS
+# Maitri Associates LMS
 
-A web-based **Loan Management System** built for Mythri Associates, Vijayawada, Andhra Pradesh. Manages the full lifecycle of microfinance operations — from member enrollment to loan disbursement, repayment tracking, savings, and reporting.
+A web-based **Loan Management System** built for Maitri Associates, Vijayawada, Andhra Pradesh. Manages the full lifecycle of microfinance operations — from member enrollment to loan disbursement, repayment tracking, savings, and reporting.
 
 ---
 
@@ -39,8 +39,8 @@ A web-based **Loan Management System** built for Mythri Associates, Vijayawada, 
 ### Installation
 
 ```bash
-git clone https://github.com/NikhithaGottipati06/Mythri-Associates-LMS.git
-cd Mythri-Associates-LMS
+git clone https://github.com/NikhithaGottipati06/Maitri-Associates-LMS.git
+cd Maitri-Associates-LMS
 pip install -r requirements.txt
 ```
 
@@ -110,4 +110,4 @@ On first run, the database is initialised with a default admin account:
 
 ## License
 
-This project is proprietary software developed for Mythri Associates, Vijayawada, AP.
+This project is proprietary software developed for Maitri Associates, Vijayawada, AP.

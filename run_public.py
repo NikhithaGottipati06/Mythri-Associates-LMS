@@ -18,7 +18,7 @@ def main():
         tunnel = ngrok.connect(5000, "http")
         public_url = tunnel.public_url
         print("\n" + "="*55)
-        print("  Mythri Associates LMS – Public URL")
+        print("  Maitri Associates LMS – Public URL")
         print("="*55)
         print(f"  {public_url}")
         print("="*55)

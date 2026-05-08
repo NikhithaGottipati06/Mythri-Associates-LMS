@@ -1,4 +1,4 @@
-"""Full integration test for MYTHRI LMS updates."""
+"""Full integration test for MAITRI LMS updates."""
 import requests
 import re
 
@@ -6,7 +6,7 @@ BASE = 'http://127.0.0.1:5000'
 s = requests.Session()
 
 print('=' * 60)
-print('  MYTHRI LMS — Full Integration Test')
+print('  MAITRI LMS — Full Integration Test')
 print('=' * 60)
 
 # ── Phase 1: Branding ────────────────────────────────────

@@ -4,7 +4,7 @@
 
 {% if loan %}
 <div class="print-header">
-  <h4>MYTHRI ASSOCIATES – Vijayawada</h4>
+  <h4>MAITRI ASSOCIATES – Vijayawada</h4>
   <p>Member Code/Name: {{ loan.member_code }} / {{ loan.member_name }} &nbsp;&nbsp; Center: {{ loan.center_name }}</p>
   <p>Loan Amount: {{ '{:,.2f}'.format(loan.disbursed_amount) }} &nbsp;|&nbsp; Loan Tenure: {{ loan.total_installments }} Weeks &nbsp;|&nbsp; Loan Date: {{ loan.disbursement_date }}</p>
   <p>Processing Fee: {{ '{:,.2f}'.format(loan.processing_fee or 0) }} &nbsp;|&nbsp; Insurance Premium: {{ '{:,.2f}'.format((loan.insurance_fee or 0) + (loan.nominee_insurance_fee or 0)) }}</p>
