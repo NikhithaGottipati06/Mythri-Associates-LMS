@@ -1129,14 +1129,17 @@ def recovery_post(did):
 @admin_required
 def recovery_posting_delete(rid):
     db = get_db()
-    # Delete linked savings transaction
+    rp = db.execute("SELECT posting_date FROM recovery_postings WHERE id=?", (rid,)).fetchone()
+    posting_date = rp['posting_date'] if rp else ''
     db.execute("DELETE FROM savings_transactions WHERE recovery_posting_id=?", (rid,))
-    # Delete the recovery posting
     db.execute("DELETE FROM recovery_postings WHERE id=?", (rid,))
     db.commit()
     db.close()
     flash('Recovery posting reversed and linked savings transaction deleted.', 'success')
-    return redirect(url_for('recovery_posting_list'))
+    back = request.form.get('back', '')
+    if back == 'undo':
+        return redirect(url_for('recovery_undo_list', date=posting_date))
+    return redirect(url_for('recovery_posting_list', date=posting_date))
 
 # ── Any Day Prepaid/Undo ──────────────────────────────────────────────────────
 
@@ -1524,6 +1527,167 @@ def loan_schedule(did):
                            weekly_principal=weekly_principal,
                            weekly_interest=weekly_interest,
                            paid_count=len(postings))
+
+# ── Arrears Collection ────────────────────────────────────────────────────────
+
+@app.route('/loans/posting/arrears')
+@login_required
+def arrears_collection_list():
+    db = get_db()
+    date_filter = request.args.get('date', datetime.now().strftime('%d/%m/%Y'))
+    center_filter = request.args.get('center_id', '')
+    try:
+        day_name = datetime.strptime(date_filter, '%d/%m/%Y').strftime('%A')
+    except Exception:
+        day_name = datetime.now().strftime('%A')
+    locked = _is_day_locked(db, date_filter)
+
+    params = {'date': date_filter}
+    query = """
+        SELECT ld.*, la.application_no, la.center_id, la.member_id,
+               m.full_name as member_name, m.member_code,
+               c.center_name, c.center_code, c.meeting_week,
+               lt.interest_rate, lt.interest_type,
+               (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id) as paid_count,
+               (SELECT COUNT(*) FROM recovery_postings rp2
+                WHERE rp2.disbursement_id=ld.id AND rp2.posting_date=:date) as posted_today
+        FROM loan_disbursements ld
+        LEFT JOIN loan_applications la ON ld.application_id=la.id
+        LEFT JOIN members m ON la.member_id=m.id
+        LEFT JOIN centers c ON la.center_id=c.id
+        LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
+        WHERE ld.status='Disbursed'
+        AND (SELECT COUNT(*) FROM recovery_postings rp3 WHERE rp3.disbursement_id=ld.id) > 0
+        AND (SELECT COUNT(*) FROM recovery_postings rp4 WHERE rp4.disbursement_id=ld.id) < ld.total_installments
+    """
+    if center_filter:
+        query += " AND la.center_id=:center_id"
+        params['center_id'] = center_filter
+    else:
+        query += " AND c.meeting_week=:day"
+        params['day'] = day_name
+    query += " ORDER BY c.center_code, m.member_code"
+
+    rows = db.execute(query, params).fetchall()
+    today = datetime.now()
+    loans = []
+    for r in rows:
+        r = dict(r)
+        try:
+            disb_date = datetime.strptime(r['disbursement_date'], '%d/%m/%Y')
+        except Exception:
+            try:
+                disb_date = datetime.strptime(r['disbursement_date'], '%Y-%m-%d')
+            except Exception:
+                disb_date = today
+        weeks_elapsed = max(0, (today - disb_date).days // 7)
+        arrear_count = max(0, weeks_elapsed - int(r['paid_count']))
+        rate = float(r['interest_rate'] or 0)
+        total_int = rate if (r['interest_type'] or 'Percent') == 'Fixed' else float(r['disbursed_amount']) * rate / 100
+        inst_amount = round((float(r['disbursed_amount']) + total_int) / int(r['total_installments']), 2) if r['total_installments'] else 0
+        r['arrear_count'] = arrear_count
+        r['inst_amount'] = inst_amount
+        loans.append(r)
+
+    centers = db.execute(
+        "SELECT id, center_code, center_name, meeting_week FROM centers WHERE active=1 ORDER BY center_code"
+    ).fetchall()
+    db.close()
+    return render_template('loans/posting/arrears_list.html',
+                           loans=loans, centers=centers,
+                           date_filter=date_filter, center_filter=center_filter,
+                           day_name=day_name, locked=locked)
+
+
+@app.route('/loans/posting/arrears/bulk', methods=['POST'])
+@login_required
+def arrears_bulk_post():
+    db = get_db()
+    selected_ids = request.form.getlist('selected_loans')
+    posting_date = request.form.get('posting_date', datetime.now().strftime('%d/%m/%Y'))
+    if _is_day_locked(db, posting_date):
+        flash(f'Day {posting_date} is closed. Undo Day End first.', 'danger')
+        db.close()
+        return redirect(url_for('arrears_collection_list', date=posting_date))
+    posted = 0
+    for did in selected_ids:
+        did = int(did)
+        loan = db.execute("""
+            SELECT ld.*, la.member_id, la.center_id, lt.interest_rate, lt.interest_type
+            FROM loan_disbursements ld
+            LEFT JOIN loan_applications la ON ld.application_id=la.id
+            LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
+            WHERE ld.id=?
+        """, (did,)).fetchone()
+        if not loan:
+            continue
+        paid_count = db.execute(
+            "SELECT COUNT(*) FROM recovery_postings WHERE disbursement_id=?", (did,)
+        ).fetchone()[0]
+        if paid_count >= loan['total_installments']:
+            continue
+        amount = float(loan['disbursed_amount'])
+        tenure = int(loan['total_installments'])
+        rate = float(loan['interest_rate'] or 0)
+        interest_type = loan['interest_type'] or 'Percent'
+        total_interest = rate if interest_type == 'Fixed' else amount * rate / 100
+        principal_inst = round(amount / tenure, 2)
+        interest_inst = round(total_interest / tenure, 2)
+        inst_amount = principal_inst + interest_inst
+        installment_no = paid_count + 1
+        db.execute("""
+            INSERT INTO recovery_postings
+            (disbursement_id,posting_date,installment_no,due_amount,paid_amount,
+             principal,interest,penalty,mode,narration,posted_by)
+            VALUES (?,?,?,?,?,?,?,0,'Cash','Arrear recovery',?)
+        """, (did, posting_date, installment_no, inst_amount, inst_amount,
+              principal_inst, interest_inst, session['user_id']))
+        posted += 1
+    db.commit()
+    db.close()
+    flash(f'{posted} arrear posting(s) saved for {posting_date}.', 'success')
+    return redirect(url_for('arrears_collection_list', date=posting_date))
+
+
+# ── Undo Recovery Posting (Admin) ──────────────────────────────────────────────
+
+@app.route('/admin/recovery-undo')
+@admin_required
+def recovery_undo_list():
+    db = get_db()
+    date_filter = request.args.get('date', datetime.now().strftime('%d/%m/%Y'))
+    center_filter = request.args.get('center_id', '')
+    params = [date_filter]
+    query = """
+        SELECT rp.*,
+               m.full_name as member_name, m.member_code,
+               c.center_code, c.center_name,
+               ld.disbursed_amount, ld.loan_id, ld.disbursement_no,
+               u.full_name as posted_by_name
+        FROM recovery_postings rp
+        LEFT JOIN loan_disbursements ld ON rp.disbursement_id=ld.id
+        LEFT JOIN loan_applications la ON ld.application_id=la.id
+        LEFT JOIN members m ON la.member_id=m.id
+        LEFT JOIN centers c ON la.center_id=c.id
+        LEFT JOIN users u ON rp.posted_by=u.id
+        WHERE rp.posting_date=?
+    """
+    if center_filter:
+        query += " AND la.center_id=?"
+        params.append(center_filter)
+    query += " ORDER BY c.center_code, m.member_code, rp.installment_no"
+    postings = db.execute(query, params).fetchall()
+    centers = db.execute(
+        "SELECT id, center_code, center_name FROM centers WHERE active=1 ORDER BY center_code"
+    ).fetchall()
+    locked = _is_day_locked(db, date_filter)
+    total_collected = sum(p['paid_amount'] or 0 for p in postings)
+    db.close()
+    return render_template('loans/posting/recovery_undo.html',
+                           postings=postings, centers=centers,
+                           date_filter=date_filter, center_filter=center_filter,
+                           locked=locked, total_collected=total_collected)
+
 
 # ── Day End ───────────────────────────────────────────────────────────────────
 

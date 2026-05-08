@@ -68,19 +68,25 @@
   <a class="nav-link {% if 'loan_disbursement' in request.endpoint or 'loan_disburse' in request.endpoint %}active{% endif %}"
      href="{{ url_for('loan_disbursement_list') }}"><i class="bi bi-cash-coin"></i> Loan Disbursement</a>
 
-  <a class="nav-link collapse-toggle {% if 'recovery' in request.endpoint or 'prepaid' in request.endpoint or 'advance' in request.endpoint or 'moratorium' in request.endpoint %}active{% endif %}"
+  <a class="nav-link collapse-toggle {% if 'recovery' in request.endpoint or 'prepaid' in request.endpoint or 'advance' in request.endpoint or 'moratorium' in request.endpoint or 'arrears' in request.endpoint %}active{% endif %}"
      data-bs-toggle="collapse" href="#postingMenu" role="button">
     <i class="bi bi-journal-check"></i> Posting
   </a>
-  <div class="collapse nav-submenu {% if 'recovery' in request.endpoint or 'prepaid' in request.endpoint or 'advance' in request.endpoint or 'moratorium' in request.endpoint %}show{% endif %}" id="postingMenu">
-    <a class="nav-link {% if 'recovery' in request.endpoint %}active{% endif %}"
+  <div class="collapse nav-submenu {% if 'recovery' in request.endpoint or 'prepaid' in request.endpoint or 'advance' in request.endpoint or 'moratorium' in request.endpoint or 'arrears' in request.endpoint %}show{% endif %}" id="postingMenu">
+    <a class="nav-link {% if request.endpoint == 'recovery_posting_list' %}active{% endif %}"
        href="{{ url_for('recovery_posting_list') }}"><i class="bi bi-arrow-repeat"></i> Recovery Posting</a>
+    <a class="nav-link {% if 'arrears' in request.endpoint %}active{% endif %}"
+       href="{{ url_for('arrears_collection_list') }}"><i class="bi bi-exclamation-circle"></i> Arrears Collection</a>
     <a class="nav-link {% if 'prepaid' in request.endpoint %}active{% endif %}"
        href="{{ url_for('prepaid_list') }}"><i class="bi bi-fast-forward"></i> Any Day Prepaid/Undo</a>
     <a class="nav-link {% if 'advance_recovery' in request.endpoint %}active{% endif %}"
        href="{{ url_for('advance_recovery_list') }}"><i class="bi bi-arrow-up-circle"></i> Advance Recovery</a>
     <a class="nav-link {% if 'moratorium' in request.endpoint %}active{% endif %}"
        href="{{ url_for('moratorium_list') }}"><i class="bi bi-pause-circle"></i> Apply Moratorium</a>
+    {% if session.role == 'Admin' %}
+    <a class="nav-link {% if request.endpoint == 'recovery_undo_list' %}active{% endif %}"
+       href="{{ url_for('recovery_undo_list') }}"><i class="bi bi-arrow-counterclockwise"></i> Undo Recovery</a>
+    {% endif %}
   </div>
 
   <!-- Settings & Reports -->
