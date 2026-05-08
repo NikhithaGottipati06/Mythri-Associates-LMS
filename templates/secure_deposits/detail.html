@@ -77,7 +77,7 @@
     <div class="col-4" style="border-right:1px solid rgba(255,255,255,.3);">
       <div style="font-size:11px;opacity:.8;text-transform:uppercase;letter-spacing:.5px;">Interest Earned</div>
       <div class="fw-bold" style="font-size:1.2rem;">₹{{ '{:,.2f}'.format(interest_earned) }}</div>
-      <div style="font-size:11px;opacity:.7;">(SD × {{ account.tenure_months }}m × {{ '{:.2f}'.format(account.roi or 0) }}%)</div>
+      <div style="font-size:11px;opacity:.7;">(SD × {{ '{:.2f}'.format(account.roi or 0) }}% × {{ account.tenure_months }}/12 yrs)</div>
     </div>
     <div class="col-4">
       <div style="font-size:11px;opacity:.8;text-transform:uppercase;letter-spacing:.5px;">Maturity Amount</div>

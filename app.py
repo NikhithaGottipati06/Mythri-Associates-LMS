@@ -1637,7 +1637,7 @@ def secure_deposit_new():
         return redirect(url_for('secure_deposits_list'))
     tenure_months = tenure if tenure_unit == 'Months' else tenure * 12
     sd_amount = loan_amount * percentage / 100
-    maturity_amount = sd_amount + sd_amount * tenure_months * roi / 100
+    maturity_amount = sd_amount + sd_amount * roi / 100 * (tenure_months / 12)
     member = db.execute("SELECT center_id FROM members WHERE id=?", (mid,)).fetchone()
     last = db.execute("SELECT sd_no FROM sd_accounts ORDER BY id DESC LIMIT 1").fetchone()
     if last:
@@ -1678,7 +1678,7 @@ def secure_deposit_detail(sdid):
         flash('SD account not found.', 'danger')
         db.close()
         return redirect(url_for('secure_deposits_list'))
-    interest_earned = (account['sd_amount'] or 0) * (account['tenure_months'] or 0) * (account['roi'] or 0) / 100
+    interest_earned = (account['sd_amount'] or 0) * (account['roi'] or 0) / 100 * ((account['tenure_months'] or 0) / 12)
     maturity_date = _add_months(account['start_date'] or '', account['tenure_months'] or 0)
     db.close()
     return render_template('secure_deposits/detail.html', account=account,

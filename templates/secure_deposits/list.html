@@ -225,7 +225,7 @@ function calcSd() {
   const unit    = document.getElementById('tenureUnit').value;
   const months  = unit === 'Years' ? tenure * 12 : tenure;
   const sdAmt   = currentLoanAmt * pct / 100;
-  const interest = sdAmt * months * roi / 100;
+  const interest = sdAmt * roi / 100 * (months / 12);
   const maturity = sdAmt + interest;
   const fmt = v => '₹' + v.toLocaleString('en-IN', {maximumFractionDigits: 0});
   document.getElementById('sdAmtDisplay').textContent      = fmt(sdAmt);
