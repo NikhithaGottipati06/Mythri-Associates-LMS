@@ -2,18 +2,31 @@ import sqlite3
 import os
 from werkzeug.security import generate_password_hash
 
-DB_PATH = os.environ.get('DATABASE_PATH', os.path.join(os.path.dirname(__file__), 'lms.db'))
+MASTER_DB_PATH = os.path.join(os.path.dirname(__file__), 'master.db')
+BRANCHES_DIR   = os.path.join(os.path.dirname(__file__), 'branches')
 
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
+# ── Master DB (branch list only) ──────────────────────────────────────────────
+
+def get_master_db():
+    conn = sqlite3.connect(MASTER_DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def get_branch_db(db_path):
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
-def init_db():
-    conn = get_db()
-    c = conn.cursor()
+# Legacy alias used by wsgi.py / init_db internals
+def get_db():
+    return get_master_db()
 
+# ── Branch DB schema ──────────────────────────────────────────────────────────
+
+def init_branch_db(db_path):
+    conn = get_branch_db(db_path)
+    c = conn.cursor()
     c.executescript("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -264,9 +277,49 @@ def init_db():
             posted_by INTEGER REFERENCES users(id),
             created_at TEXT DEFAULT (datetime('now'))
         );
+
+        CREATE TABLE IF NOT EXISTS sd_accounts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sd_no TEXT UNIQUE NOT NULL,
+            member_id INTEGER REFERENCES members(id),
+            center_id INTEGER REFERENCES centers(id),
+            loan_amount REAL DEFAULT 0,
+            percentage REAL DEFAULT 0,
+            sd_amount REAL DEFAULT 0,
+            roi REAL DEFAULT 0,
+            tenure_months INTEGER DEFAULT 12,
+            tenure_unit TEXT DEFAULT 'Months',
+            maturity_amount REAL DEFAULT 0,
+            start_date TEXT,
+            status TEXT DEFAULT 'Active',
+            remarks TEXT,
+            created_by INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS day_end (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            day_date TEXT NOT NULL UNIQUE,
+            closed_by INTEGER REFERENCES users(id),
+            closed_at TEXT DEFAULT (datetime('now')),
+            notes TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS arrear_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            disbursement_id INTEGER REFERENCES loan_disbursements(id),
+            arrear_date TEXT NOT NULL,
+            installment_no INTEGER,
+            due_amount REAL DEFAULT 0,
+            status TEXT DEFAULT 'Pending',
+            collected_date TEXT,
+            collected_amount REAL DEFAULT 0,
+            marked_by INTEGER REFERENCES users(id),
+            cleared_by INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT (datetime('now'))
+        );
     """)
 
-    # Seed admin user if no users exist
     existing = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
     if existing == 0:
         users = [
@@ -284,11 +337,11 @@ def init_db():
 
     conn.commit()
     conn.close()
-    migrate_db()
+    migrate_branch_db(db_path)
 
 
-def migrate_db():
-    conn = get_db()
+def migrate_branch_db(db_path):
+    conn = get_branch_db(db_path)
     c = conn.cursor()
     migrations = [
         "ALTER TABLE loan_types ADD COLUMN interest_type TEXT DEFAULT 'Percent'",
@@ -317,45 +370,7 @@ def migrate_db():
         "ALTER TABLE rd_transactions ADD COLUMN transaction_type TEXT DEFAULT 'Payment'",
         "ALTER TABLE rd_accounts ADD COLUMN maturity_amount REAL DEFAULT 0",
         "ALTER TABLE rd_accounts ADD COLUMN tenure_unit TEXT DEFAULT 'Months'",
-        """CREATE TABLE IF NOT EXISTS sd_accounts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sd_no TEXT UNIQUE NOT NULL,
-            member_id INTEGER REFERENCES members(id),
-            center_id INTEGER REFERENCES centers(id),
-            loan_amount REAL DEFAULT 0,
-            percentage REAL DEFAULT 0,
-            sd_amount REAL DEFAULT 0,
-            roi REAL DEFAULT 0,
-            tenure_months INTEGER DEFAULT 12,
-            tenure_unit TEXT DEFAULT 'Months',
-            maturity_amount REAL DEFAULT 0,
-            start_date TEXT,
-            status TEXT DEFAULT 'Active',
-            remarks TEXT,
-            created_by INTEGER REFERENCES users(id),
-            created_at TEXT DEFAULT (datetime('now'))
-        )""",
-        """CREATE TABLE IF NOT EXISTS day_end (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            day_date TEXT NOT NULL UNIQUE,
-            closed_by INTEGER REFERENCES users(id),
-            closed_at TEXT DEFAULT (datetime('now')),
-            notes TEXT
-        )""",
-        """CREATE TABLE IF NOT EXISTS arrear_entries (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            disbursement_id INTEGER REFERENCES loan_disbursements(id),
-            arrear_date TEXT NOT NULL,
-            installment_no INTEGER,
-            due_amount REAL DEFAULT 0,
-            status TEXT DEFAULT 'Pending',
-            collected_date TEXT,
-            collected_amount REAL DEFAULT 0,
-            marked_by INTEGER REFERENCES users(id),
-            cleared_by INTEGER REFERENCES users(id),
-            created_at TEXT DEFAULT (datetime('now'))
-        )""",
-        # Fix maturity_amount for existing SD accounts: interest on SD amount, not loan amount
+        # Fix maturity_amount for existing SD accounts
         "UPDATE sd_accounts SET maturity_amount = sd_amount + sd_amount * roi / 100.0 * (tenure_months / 12.0) WHERE sd_amount > 0",
     ]
     for sql in migrations:
@@ -365,3 +380,42 @@ def migrate_db():
             pass
     conn.commit()
     conn.close()
+
+
+# ── Master DB init ─────────────────────────────────────────────────────────────
+
+def init_master_db():
+    os.makedirs(BRANCHES_DIR, exist_ok=True)
+    conn = get_master_db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS branches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            db_path TEXT UNIQUE NOT NULL,
+            active INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.commit()
+
+    for branch_name in ['Poranki', 'Gannavaram']:
+        db_path = os.path.join(BRANCHES_DIR, f"{branch_name.lower()}.db")
+        exists = conn.execute("SELECT id FROM branches WHERE name=?", (branch_name,)).fetchone()
+        if not exists:
+            conn.execute("INSERT INTO branches (name, db_path) VALUES (?, ?)", (branch_name, db_path))
+            conn.commit()
+        if not os.path.exists(db_path):
+            init_branch_db(db_path)
+
+    conn.close()
+
+
+def init_db():
+    init_master_db()
+    # Run migrations on all existing branch databases
+    master = get_master_db()
+    branches = master.execute("SELECT db_path FROM branches WHERE active=1").fetchall()
+    master.close()
+    for branch in branches:
+        if os.path.exists(branch['db_path']):
+            migrate_branch_db(branch['db_path'])

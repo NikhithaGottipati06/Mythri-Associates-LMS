@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Edit Branch' if branch else 'New Branch' }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-diagram-3" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>{{ 'Edit Branch' if branch else 'Add New Branch' }}</h5>
+</div>
+
+<div class="form-card" style="max-width:500px;">
+  <form method="POST">
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Branch Name</label>
+      <input type="text" name="name" class="form-control" required
+             value="{{ branch.name if branch else '' }}" placeholder="e.g. Poranki">
+    </div>
+    {% if branch %}
+    <div class="mb-3">
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="active" id="activeCheck"
+               {% if branch.active %}checked{% endif %}>
+        <label class="form-check-label fw-semibold" for="activeCheck">Active</label>
+      </div>
+    </div>
+    {% endif %}
+    <div class="d-flex gap-2">
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-check-circle me-1"></i>{{ 'Update' if branch else 'Create Branch' }}
+      </button>
+      <a href="{{ url_for('branches_list') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -19,12 +19,15 @@
     <i class="bi bi-list"></i>
   </button>
   <a class="brand me-auto" href="{{ url_for('dashboard') }}">
-    <span>MYTHRI</span> LMS &nbsp;<small style="font-size:11px;opacity:.7;">– Vijayawada</small>
+    <span>MYTHRI</span> LMS &nbsp;<small style="font-size:11px;opacity:.7;">– {{ session.branch_name or 'Vijayawada' }}</small>
   </a>
   <span class="user-info me-3">
     <i class="bi bi-person-circle me-1"></i>
     {{ session.full_name }} &nbsp;|&nbsp;
     <span class="badge bg-warning text-dark" style="font-size:10px;">{{ session.role }}</span>
+    {% if session.branch_name %}
+    &nbsp;|&nbsp;<span class="badge bg-info text-dark" style="font-size:10px;"><i class="bi bi-diagram-3 me-1"></i>{{ session.branch_name }}</span>
+    {% endif %}
     &nbsp;| {{ now }}
   </span>
   <a href="{{ url_for('logout') }}" class="btn-logout"><i class="bi bi-box-arrow-right"></i> Exit</a>
@@ -39,6 +42,8 @@
   {% if session.role == 'Admin' %}
   <a class="nav-link {% if 'users' in request.endpoint %}active{% endif %}"
      href="{{ url_for('users_list') }}"><i class="bi bi-people"></i> Users</a>
+  <a class="nav-link {% if 'branch' in request.endpoint %}active{% endif %}"
+     href="{{ url_for('branches_list') }}"><i class="bi bi-diagram-3"></i> Branches</a>
   {% endif %}
 
   <!-- Masters -->

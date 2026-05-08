@@ -1,10 +1,18 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from werkzeug.security import check_password_hash, generate_password_hash
-from database import get_db, init_db
+from database import get_master_db, get_branch_db, init_db, init_branch_db, BRANCHES_DIR
 from functools import wraps
 import os
 import json
+import sqlite3
 from datetime import datetime, timedelta
+
+def get_db():
+    """Return a connection to the current branch database."""
+    branch_db = session.get('branch_db')
+    if not branch_db:
+        return None
+    return get_branch_db(branch_db)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'mythri-lms-secret-2024')
@@ -30,7 +38,7 @@ KYC_TYPES = ['Aadhaar Card', 'PAN Card', 'Voter ID', 'Driving Licence',
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if 'user_id' not in session:
+        if 'user_id' not in session or 'branch_db' not in session:
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated
@@ -60,30 +68,111 @@ def inject_now():
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
-    if 'user_id' in session:
+    if 'user_id' in session and 'branch_db' in session:
         return redirect(url_for('dashboard'))
+    master = get_master_db()
+    branches = master.execute("SELECT id, name FROM branches WHERE active=1 ORDER BY name").fetchall()
+    master.close()
     error = None
     if request.method == 'POST':
-        login_name = request.form.get('login_name', '').strip()
-        password = request.form.get('password', '').strip()
-        db = get_db()
-        user = db.execute(
-            "SELECT * FROM users WHERE login_name=? AND active=1", (login_name,)
-        ).fetchone()
-        db.close()
-        if user and check_password_hash(user['password_hash'], password):
-            session['user_id'] = user['id']
-            session['role'] = user['role']
-            session['full_name'] = user['full_name']
-            session['login_name'] = user['login_name']
-            return redirect(url_for('dashboard'))
-        error = 'Invalid username or password.'
-    return render_template('login.html', error=error)
+        login_name  = request.form.get('login_name', '').strip()
+        password    = request.form.get('password', '').strip()
+        branch_id   = request.form.get('branch_id', '').strip()
+        if not branch_id:
+            error = 'Please select a branch.'
+        else:
+            master = get_master_db()
+            branch = master.execute(
+                "SELECT * FROM branches WHERE id=? AND active=1", (branch_id,)
+            ).fetchone()
+            master.close()
+            if not branch:
+                error = 'Invalid branch selected.'
+            else:
+                db   = get_branch_db(branch['db_path'])
+                user = db.execute(
+                    "SELECT * FROM users WHERE login_name=? AND active=1", (login_name,)
+                ).fetchone()
+                db.close()
+                if user and check_password_hash(user['password_hash'], password):
+                    session['user_id']    = user['id']
+                    session['role']       = user['role']
+                    session['full_name']  = user['full_name']
+                    session['login_name'] = user['login_name']
+                    session['branch_id']  = branch['id']
+                    session['branch_name']= branch['name']
+                    session['branch_db']  = branch['db_path']
+                    return redirect(url_for('dashboard'))
+                error = 'Invalid username or password.'
+    return render_template('login.html', error=error, branches=branches)
 
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('login'))
+
+# ── Branch management (Admin only) ────────────────────────────────────────────
+
+@app.route('/branches')
+@admin_required
+def branches_list():
+    master = get_master_db()
+    branches = master.execute("SELECT * FROM branches ORDER BY name").fetchall()
+    master.close()
+    return render_template('branches/list.html', branches=branches)
+
+@app.route('/branches/new', methods=['GET', 'POST'])
+@admin_required
+def branch_new():
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        if not name:
+            flash('Branch name is required.', 'danger')
+            return render_template('branches/form.html', branch=None)
+        db_path = os.path.join(BRANCHES_DIR, f"{name.lower().replace(' ', '_')}.db")
+        master  = get_master_db()
+        try:
+            master.execute("INSERT INTO branches (name, db_path) VALUES (?, ?)", (name, db_path))
+            master.commit()
+            if not os.path.exists(db_path):
+                init_branch_db(db_path)
+            flash(f'Branch "{name}" created successfully.', 'success')
+        except Exception as e:
+            flash(f'Error: {e}', 'danger')
+        finally:
+            master.close()
+        return redirect(url_for('branches_list'))
+    return render_template('branches/form.html', branch=None)
+
+@app.route('/branches/<int:bid>/edit', methods=['GET', 'POST'])
+@admin_required
+def branch_edit(bid):
+    master = get_master_db()
+    branch = master.execute("SELECT * FROM branches WHERE id=?", (bid,)).fetchone()
+    if not branch:
+        master.close()
+        flash('Branch not found.', 'danger')
+        return redirect(url_for('branches_list'))
+    if request.method == 'POST':
+        name   = request.form.get('name', '').strip()
+        active = 1 if request.form.get('active') else 0
+        master.execute("UPDATE branches SET name=?, active=? WHERE id=?", (name, active, bid))
+        master.commit()
+        master.close()
+        flash('Branch updated.', 'success')
+        return redirect(url_for('branches_list'))
+    master.close()
+    return render_template('branches/form.html', branch=branch)
+
+@app.route('/branches/<int:bid>/delete', methods=['POST'])
+@admin_required
+def branch_delete(bid):
+    master = get_master_db()
+    master.execute("DELETE FROM branches WHERE id=?", (bid,))
+    master.commit()
+    master.close()
+    flash('Branch deleted.', 'success')
+    return redirect(url_for('branches_list'))
 
 @app.route('/dashboard')
 @login_required
