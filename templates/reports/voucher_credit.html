@@ -24,12 +24,8 @@
       </select>
     </div>
     <div class="col-md-2">
-      <label class="form-label">From Date</label>
-      <input type="text" name="from_date" class="form-control form-control-sm" value="{{ from_date }}" placeholder="DD/MM/YYYY">
-    </div>
-    <div class="col-md-2">
-      <label class="form-label">To Date</label>
-      <input type="text" name="to_date" class="form-control form-control-sm" value="{{ to_date }}" placeholder="DD/MM/YYYY">
+      <label class="form-label">Date</label>
+      <input type="date" name="report_date" class="form-control form-control-sm" value="{{ report_date }}">
     </div>
     <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
   </div>
@@ -63,12 +59,7 @@
   <!-- V.No and Date row -->
   <div style="display:flex;justify-content:space-between;margin-bottom:10px;font-size:12px;">
     <span><strong>V.No:</strong> <span id="vno-display"></span></span>
-    <span><strong>Date:</strong>
-      {% if from_date and to_date %}{{ from_date }} to {{ to_date }}
-      {% elif from_date %}{{ from_date }}
-      {% elif to_date %}{{ to_date }}
-      {% else %}—{% endif %}
-    </span>
+    <span><strong>Date:</strong> {{ report_date_display }}</span>
   </div>
 
   <!-- Account / Value table -->

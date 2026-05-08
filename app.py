@@ -2431,8 +2431,12 @@ def report_arrears_collected():
 def report_voucher_debit():
     db = get_db()
     center_filter = request.args.get('center_id', '')
-    from_date = request.args.get('from_date', '')
-    to_date = request.args.get('to_date', '')
+    report_date = request.args.get('report_date', datetime.today().strftime('%Y-%m-%d'))
+    try:
+        p = report_date.split('-')
+        report_date_display = f"{p[2]}/{p[1]}/{p[0]}"
+    except Exception:
+        report_date_display = report_date
     query = """
         SELECT ld.loan_id, ld.disbursement_no, ld.disbursement_date, ld.disbursed_amount, ld.mode,
                la.processing_fee, la.insurance_fee, la.nominee_insurance_fee, la.other_charges,
@@ -2446,73 +2450,55 @@ def report_voucher_debit():
         LEFT JOIN centers c ON la.center_id=c.id
         LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
         LEFT JOIN users u ON ld.disbursed_by=u.id
-        WHERE 1=1
+        WHERE substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2) = ?
     """
-    params = []
+    params = [report_date]
     if center_filter:
         query += " AND la.center_id=?"
         params.append(center_filter)
-    if from_date:
-        query += " AND substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2) >= ?"
-        params.append(_to_iso(from_date))
-    if to_date:
-        query += " AND substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2) <= ?"
-        params.append(_to_iso(to_date))
-    query += " ORDER BY ld.disbursement_date, c.center_code, m.member_code"
+    query += " ORDER BY c.center_code, m.member_code"
     records = db.execute(query, params).fetchall()
     centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
     db.close()
     return render_template('reports/voucher_debit.html', records=records, centers=centers,
-                           center_filter=center_filter, from_date=from_date, to_date=to_date)
+                           center_filter=center_filter, report_date=report_date, report_date_display=report_date_display)
 
 @app.route('/reports/voucher/credit')
 @login_required
 def report_voucher_credit():
     db = get_db()
     center_filter = request.args.get('center_id', '')
-    from_date = request.args.get('from_date', '')
-    to_date = request.args.get('to_date', '')
+    report_date = request.args.get('report_date', datetime.today().strftime('%Y-%m-%d'))
+    try:
+        p = report_date.split('-')
+        report_date_display = f"{p[2]}/{p[1]}/{p[0]}"
+    except Exception:
+        report_date_display = report_date
 
     def _rp_sum(field):
-        q = f"SELECT COALESCE(SUM(rp.{field}),0) FROM recovery_postings rp LEFT JOIN loan_disbursements ld ON rp.disbursement_id=ld.id LEFT JOIN loan_applications la ON ld.application_id=la.id WHERE rp.installment_no > 0"
-        p = []
+        q = f"SELECT COALESCE(SUM(rp.{field}),0) FROM recovery_postings rp LEFT JOIN loan_disbursements ld ON rp.disbursement_id=ld.id LEFT JOIN loan_applications la ON ld.application_id=la.id WHERE rp.installment_no > 0 AND substr(rp.posting_date,7,4)||'-'||substr(rp.posting_date,4,2)||'-'||substr(rp.posting_date,1,2) = ?"
+        p = [report_date]
         if center_filter:
             q += " AND la.center_id=?"; p.append(center_filter)
-        if from_date:
-            q += " AND substr(rp.posting_date,7,4)||'-'||substr(rp.posting_date,4,2)||'-'||substr(rp.posting_date,1,2) >= ?"; p.append(_to_iso(from_date))
-        if to_date:
-            q += " AND substr(rp.posting_date,7,4)||'-'||substr(rp.posting_date,4,2)||'-'||substr(rp.posting_date,1,2) <= ?"; p.append(_to_iso(to_date))
         return db.execute(q, p).fetchone()[0] or 0
 
     def _disb_sum(field):
-        q = f"SELECT COALESCE(SUM(la.{field}),0) FROM loan_applications la LEFT JOIN loan_disbursements ld ON ld.application_id=la.id WHERE 1=1"
-        p = []
+        q = f"SELECT COALESCE(SUM(la.{field}),0) FROM loan_applications la LEFT JOIN loan_disbursements ld ON ld.application_id=la.id WHERE substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2) = ?"
+        p = [report_date]
         if center_filter:
             q += " AND la.center_id=?"; p.append(center_filter)
-        if from_date:
-            q += " AND substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2) >= ?"; p.append(_to_iso(from_date))
-        if to_date:
-            q += " AND substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2) <= ?"; p.append(_to_iso(to_date))
         return db.execute(q, p).fetchone()[0] or 0
 
-    prepaid_q = "SELECT COALESCE(SUM(pt.amount),0) FROM prepaid_transactions pt LEFT JOIN loan_disbursements ld ON pt.disbursement_id=ld.id LEFT JOIN loan_applications la ON ld.application_id=la.id WHERE pt.is_undo=0"
-    prepaid_p = []
+    prepaid_q = "SELECT COALESCE(SUM(pt.amount),0) FROM prepaid_transactions pt LEFT JOIN loan_disbursements ld ON pt.disbursement_id=ld.id LEFT JOIN loan_applications la ON ld.application_id=la.id WHERE pt.is_undo=0 AND substr(pt.transaction_date,7,4)||'-'||substr(pt.transaction_date,4,2)||'-'||substr(pt.transaction_date,1,2) = ?"
+    prepaid_p = [report_date]
     if center_filter:
         prepaid_q += " AND la.center_id=?"; prepaid_p.append(center_filter)
-    if from_date:
-        prepaid_q += " AND substr(pt.transaction_date,7,4)||'-'||substr(pt.transaction_date,4,2)||'-'||substr(pt.transaction_date,1,2) >= ?"; prepaid_p.append(_to_iso(from_date))
-    if to_date:
-        prepaid_q += " AND substr(pt.transaction_date,7,4)||'-'||substr(pt.transaction_date,4,2)||'-'||substr(pt.transaction_date,1,2) <= ?"; prepaid_p.append(_to_iso(to_date))
     prepaid_total = db.execute(prepaid_q, prepaid_p).fetchone()[0] or 0
 
-    member_fee_q = "SELECT COALESCE(SUM(m.total_fees),0) FROM members m WHERE 1=1"
-    member_fee_p = []
+    member_fee_q = "SELECT COALESCE(SUM(m.total_fees),0) FROM members m WHERE substr(m.date_of_join,7,4)||'-'||substr(m.date_of_join,4,2)||'-'||substr(m.date_of_join,1,2) = ?"
+    member_fee_p = [report_date]
     if center_filter:
         member_fee_q += " AND m.center_id=?"; member_fee_p.append(center_filter)
-    if from_date:
-        member_fee_q += " AND substr(m.date_of_join,7,4)||'-'||substr(m.date_of_join,4,2)||'-'||substr(m.date_of_join,1,2) >= ?"; member_fee_p.append(_to_iso(from_date))
-    if to_date:
-        member_fee_q += " AND substr(m.date_of_join,7,4)||'-'||substr(m.date_of_join,4,2)||'-'||substr(m.date_of_join,1,2) <= ?"; member_fee_p.append(_to_iso(to_date))
     member_fee_total = db.execute(member_fee_q, member_fee_p).fetchone()[0] or 0
 
     totals = {
@@ -2527,7 +2513,7 @@ def report_voucher_credit():
     centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
     db.close()
     return render_template('reports/voucher_credit.html', totals=totals, centers=centers,
-                           center_filter=center_filter, from_date=from_date, to_date=to_date)
+                           center_filter=center_filter, report_date=report_date, report_date_display=report_date_display)
 
 @app.route('/reports/glance')
 @login_required
