@@ -1,119 +1,212 @@
 {% extends 'base.html' %}
 {% block title %}RD – {{ account.rd_no }}{% endblock %}
 {% block content %}
+
 <div class="page-header no-print">
   <i class="bi bi-arrow-repeat" style="font-size:20px;color:#6f42c1;"></i>
   <h5>RD Account – {{ account.rd_no }}</h5>
 </div>
-<div class="action-bar no-print">
+<div class="action-bar no-print mb-3">
   <a href="{{ url_for('rd_list') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
-  <button onclick="window.print()" class="btn-print-pdf ms-2"><i class="bi bi-printer-fill"></i> Print</button>
+  <button onclick="window.print()" class="btn-print-pdf ms-2"><i class="bi bi-printer-fill"></i> Print / PDF</button>
 </div>
 
+<!-- ── Print Certificate ─────────────────────────────────────────── -->
 <div class="print-header">
   <h4>MYTHRI ASSOCIATES – Vijayawada</h4>
-  <p>RD Account: {{ account.rd_no }} &nbsp;|&nbsp; {{ account.member_code }} / {{ account.full_name }}</p>
+  <p>Recurring Deposit Account Certificate</p>
 </div>
 
-<!-- Account Info -->
-<div class="form-card mb-3">
-  <div class="row">
-    <div class="col-md-6">
+<div class="form-card mb-3" style="border:2px solid #6f42c1;">
+  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+    <div>
+      <span class="badge fs-6 px-3 py-2" style="background:#6f42c1;">{{ account.rd_no }}</span>
+    </div>
+    <div class="text-end" style="font-size:13px;color:#555;">
+      Opened: {{ account.start_date or '—' }}<br>
+      Status:
+      {% if account.status == 'Active' %}<span class="badge bg-success">Active</span>
+      {% else %}<span class="badge bg-secondary">Closed</span>{% endif %}
+    </div>
+  </div>
+
+  <div class="row g-0">
+    <!-- Member Details -->
+    <div class="col-md-6 pe-md-3" style="border-right:1px solid #dee2e6;">
+      <div class="fw-bold mb-2" style="font-size:13px;color:#1a3c6e;text-transform:uppercase;letter-spacing:.5px;">Member Details</div>
       <table class="table table-sm table-borderless mb-0" style="font-size:13px;">
-        <tr><th style="width:150px;">RD No</th><td class="fw-semibold text-primary">{{ account.rd_no }}</td></tr>
-        <tr><th>Member</th><td>{{ account.member_code }} – {{ account.full_name }}</td></tr>
-        <tr><th>Phone</th><td>{{ account.phone1 or '—' }}</td></tr>
-        <tr><th>Center</th><td>{{ account.center_code }} – {{ account.center_name }}</td></tr>
-        <tr><th>Start Date</th><td>{{ account.start_date }}</td></tr>
-        <tr><th>Status</th>
-          <td>{% if account.status == 'Active' %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-secondary">Closed</span>{% endif %}</td>
-        </tr>
+        <tr><th style="width:130px;color:#555;">Member Code</th><td class="fw-semibold text-primary">{{ account.member_code }}</td></tr>
+        <tr><th style="color:#555;">Name</th><td class="fw-semibold">{{ account.full_name }}</td></tr>
+        <tr><th style="color:#555;">Phone</th><td>{{ account.phone1 or '—' }}</td></tr>
+        <tr><th style="color:#555;">Center</th><td>{{ account.center_code }} – {{ account.center_name }}</td></tr>
       </table>
     </div>
-    <div class="col-md-6">
-      {% set paid_count = transactions|length %}
-      {% set total_collected = transactions|sum(attribute='amount') %}
-      {% set remaining = account.total_installments - paid_count %}
-      {% set total_amount = account.installment_amount * account.total_installments %}
+
+    <!-- RD Details -->
+    <div class="col-md-6 ps-md-3 mt-3 mt-md-0">
+      <div class="fw-bold mb-2" style="font-size:13px;color:#1a3c6e;text-transform:uppercase;letter-spacing:.5px;">RD Details</div>
       <table class="table table-sm table-borderless mb-0" style="font-size:13px;">
-        <tr><th style="width:160px;">Installment Amount</th><td class="fw-semibold">₹{{ '{:,.2f}'.format(account.installment_amount) }}</td></tr>
-        <tr><th>Frequency</th><td>{{ account.frequency }}</td></tr>
-        <tr><th>Total Installments</th><td>{{ account.total_installments }}</td></tr>
-        <tr><th>Paid Installments</th><td class="text-success fw-semibold">{{ paid_count }} / {{ account.total_installments }}</td></tr>
-        <tr><th>Collected</th><td class="text-success fw-semibold">₹{{ '{:,.2f}'.format(total_collected) }}</td></tr>
-        <tr><th>Pending</th><td class="text-danger fw-semibold">₹{{ '{:,.2f}'.format(account.installment_amount * remaining) }}</td></tr>
-        <tr><th>Total RD Amount</th><td class="fw-bold">₹{{ '{:,.2f}'.format(total_amount) }}</td></tr>
+        <tr><th style="width:160px;color:#555;">Monthly Deposit</th><td class="fw-semibold text-primary fs-6">₹{{ '{:,.2f}'.format(account.installment_amount or 0) }}</td></tr>
+        <tr>
+          <th style="color:#555;">Tenure</th>
+          <td class="fw-semibold">
+            {{ account.total_installments }} Months
+            {% if account.total_installments and account.total_installments % 12 == 0 %}
+              ({{ (account.total_installments // 12) }} Year{% if account.total_installments // 12 > 1 %}s{% endif %})
+            {% endif %}
+          </td>
+        </tr>
+        <tr><th style="color:#555;">ROI</th><td class="fw-semibold">{{ '{:.2f}'.format(account.interest_rate or 0) }}% p.a.</td></tr>
+        <tr><th style="color:#555;">Start Date</th><td>{{ account.start_date or '—' }}</td></tr>
+        <tr><th style="color:#555;">Maturity Date</th><td class="fw-semibold">{{ maturity_date or '—' }}</td></tr>
       </table>
     </div>
   </div>
-  {% if account.remarks %}<div class="mt-2 text-muted" style="font-size:12px;"><i class="bi bi-chat-left-text me-1"></i>{{ account.remarks }}</div>{% endif %}
 </div>
 
-<!-- Record Payment -->
-{% if account.status == 'Active' and session.role == 'Admin' %}
-{% set paid_count_val = transactions|length %}
-{% if paid_count_val < account.total_installments %}
-<div class="form-card mb-3 no-print">
-  <div class="section-title"><i class="bi bi-cash-coin me-1"></i>Record Installment {{ paid_count_val + 1 }} / {{ account.total_installments }}</div>
-  <form method="POST" action="{{ url_for('rd_pay', rdid=account.id) }}">
-    <div class="row g-3 align-items-end">
-      <div class="col-md-2">
-        <label class="form-label fw-semibold" style="font-size:13px;">Date</label>
-        <input type="text" name="transaction_date" class="form-control form-control-sm" placeholder="DD/MM/YYYY" required>
-      </div>
-      <div class="col-md-2">
-        <label class="form-label fw-semibold" style="font-size:13px;">Amount (₹)</label>
-        <input type="number" name="amount" class="form-control form-control-sm" value="{{ account.installment_amount }}" min="0.01" step="0.01" required>
-      </div>
-      <div class="col-md-3">
-        <label class="form-label fw-semibold" style="font-size:13px;">Remarks</label>
-        <input type="text" name="remarks" class="form-control form-control-sm" placeholder="Optional">
-      </div>
-      <div class="col-auto">
-        <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-check-circle me-1"></i>Record Payment</button>
-      </div>
+<!-- Maturity Summary Box -->
+<div class="form-card mb-3" style="background:linear-gradient(135deg,#1a3c6e 0%,#6f42c1 100%);color:#fff;">
+  <div class="row text-center g-0">
+    <div class="col-4" style="border-right:1px solid rgba(255,255,255,.3);">
+      <div style="font-size:11px;opacity:.8;text-transform:uppercase;letter-spacing:.5px;">Total Corpus</div>
+      <div class="fw-bold" style="font-size:1.2rem;">₹{{ '{:,.2f}'.format(corpus) }}</div>
+      <div style="font-size:11px;opacity:.7;">(₹{{ '{:,.0f}'.format(account.installment_amount or 0) }} × {{ account.total_installments }} months)</div>
     </div>
-  </form>
+    <div class="col-4" style="border-right:1px solid rgba(255,255,255,.3);">
+      <div style="font-size:11px;opacity:.8;text-transform:uppercase;letter-spacing:.5px;">Interest Earned</div>
+      <div class="fw-bold" style="font-size:1.2rem;">₹{{ '{:,.2f}'.format(interest_earned) }}</div>
+      <div style="font-size:11px;opacity:.7;">(Corpus × {{ '{:.2f}'.format(account.interest_rate or 0) }}%)</div>
+    </div>
+    <div class="col-4">
+      <div style="font-size:11px;opacity:.8;text-transform:uppercase;letter-spacing:.5px;">Maturity Amount</div>
+      <div class="fw-bold" style="font-size:1.5rem;">₹{{ '{:,.2f}'.format(calc_maturity) }}</div>
+      <div style="font-size:11px;opacity:.7;">Due: {{ maturity_date or '—' }}</div>
+    </div>
+  </div>
 </div>
-{% endif %}
-{% endif %}
 
-<!-- Payment History -->
-<div class="form-card">
-  <div class="section-title"><i class="bi bi-list-check me-1"></i>Payment Schedule</div>
+<!-- Signature section (print only) -->
+<div class="row mt-4" style="font-size:12px;">
+  <div class="col-4 text-center">
+    <div style="border-top:1px solid #333;padding-top:4px;margin-top:30px;">Member Signature</div>
+  </div>
+  <div class="col-4 text-center">
+    <div style="border-top:1px solid #333;padding-top:4px;margin-top:30px;">Authorized Signatory</div>
+  </div>
+  <div class="col-4 text-center">
+    <div style="border-top:1px solid #333;padding-top:4px;margin-top:30px;">Date &amp; Seal</div>
+  </div>
+</div>
+
+{% if session.role == 'Admin' %}
+<!-- Admin: Withdraw & Undo panel (no-print) -->
+<div class="form-card mt-3 no-print" style="border-color:#6f42c1;">
+  <div class="section-title d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-cash me-1"></i>Admin Actions</span>
+    <form method="POST" action="{{ url_for('rd_undo', rdid=account.id) }}" onsubmit="return confirm('Undo last RD transaction?')">
+      <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-counterclockwise me-1"></i>Undo Last</button>
+    </form>
+  </div>
+
+  {% set total_collected_val = transactions|sum(attribute='amount') %}
+  {% set total_withdrawn_val = withdrawals|sum(attribute='amount') %}
+  {% set rd_balance = total_collected_val - total_withdrawn_val %}
+
+  {% if account.status == 'Active' %}
+  {% set paid_count_val = transactions|length %}
+  {% if paid_count_val < account.total_installments %}
+  <div class="mb-3">
+    <div class="fw-semibold mb-2" style="font-size:13px;">Record Installment {{ paid_count_val + 1 }} / {{ account.total_installments }}</div>
+    <form method="POST" action="{{ url_for('rd_pay', rdid=account.id) }}">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-2"><input type="text" name="transaction_date" class="form-control form-control-sm" placeholder="DD/MM/YYYY" required></div>
+        <div class="col-md-2"><input type="number" name="amount" class="form-control form-control-sm" value="{{ account.installment_amount }}" min="0.01" step="0.01" required></div>
+        <div class="col-md-3"><input type="text" name="remarks" class="form-control form-control-sm" placeholder="Remarks (optional)"></div>
+        <div class="col-auto"><button type="submit" class="btn btn-success btn-sm"><i class="bi bi-check-circle me-1"></i>Record Payment</button></div>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if rd_balance > 0 %}
+  <div>
+    <div class="fw-semibold mb-2" style="font-size:13px;">Withdraw from RD &nbsp;<span class="badge bg-info text-dark">Balance: ₹{{ '{:,.0f}'.format(rd_balance) }}</span></div>
+    <form method="POST" action="{{ url_for('rd_withdraw', rdid=account.id) }}">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-2"><input type="text" name="transaction_date" class="form-control form-control-sm" placeholder="DD/MM/YYYY" required></div>
+        <div class="col-md-2"><input type="number" name="amount" class="form-control form-control-sm" min="0.01" max="{{ rd_balance }}" step="0.01" placeholder="Amount" required></div>
+        <div class="col-md-3"><input type="text" name="remarks" class="form-control form-control-sm" placeholder="Remarks (optional)"></div>
+        <div class="col-auto"><button type="submit" class="btn btn-warning btn-sm"><i class="bi bi-cash me-1"></i>Withdraw</button></div>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+  {% endif %}
+</div>
+
+<!-- Payment History (no-print) -->
+{% if transactions %}
+<div class="form-card mt-3 no-print">
+  <div class="section-title"><i class="bi bi-list-check me-1"></i>Payment History</div>
   <div class="lms-table" style="margin:0;overflow-x:auto;">
-    <table class="table table-bordered table-sm mb-0" style="font-size:12px;">
+    <table class="table table-sm table-hover mb-0" style="font-size:12px;">
       <thead>
         <tr style="background:#1a3c6e;color:#fff;">
-          <th>Inst. No</th><th>Date Paid</th><th>Amount</th><th>Remarks</th><th>Posted By</th><th>Status</th>
+          <th>Inst. No</th><th>Date</th><th>Amount</th><th>Remarks</th><th>Posted By</th><th>Action</th>
         </tr>
       </thead>
       <tbody>
-      {% set paid_nos = transactions | map(attribute='installment_no') | list %}
-      {% for i in range(1, account.total_installments + 1) %}
-        {% set txn = None %}
-        {% for t in transactions %}{% if t.installment_no == i %}{% set txn = t %}{% endif %}{% endfor %}
-        <tr {% if txn %}style="background:#f0fff4;"{% elif loop.index % 2 == 0 %}style="background:#f9f9f9;"{% endif %}>
-          <td class="text-center fw-semibold">{{ i }}</td>
-          <td>{% if txn %}{{ txn.transaction_date }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
-          <td>{% if txn %}₹{{ '{:,.2f}'.format(txn.amount) }}{% else %}<span class="text-muted">₹{{ '{:,.2f}'.format(account.installment_amount) }}</span>{% endif %}</td>
-          <td>{% if txn %}{{ txn.remarks or '—' }}{% else %}—{% endif %}</td>
-          <td>{% if txn %}{{ txn.posted_by_name }}{% else %}—{% endif %}</td>
+      {% for t in transactions %}
+        <tr style="background:#f0fff4;">
+          <td class="text-center fw-semibold">{{ t.installment_no }}</td>
+          <td>{{ t.transaction_date }}</td>
+          <td>₹{{ '{:,.2f}'.format(t.amount) }}</td>
+          <td>{{ t.remarks or '—' }}</td>
+          <td>{{ t.posted_by_name }}</td>
           <td>
-            {% if txn %}<span class="badge bg-success">Paid</span>
-            {% else %}<span class="badge bg-warning text-dark">Pending</span>{% endif %}
+            <form method="POST" action="{{ url_for('rd_transaction_delete', tid=t.id) }}" style="display:inline;" onsubmit="return confirm('Delete installment {{ t.installment_no }}?')">
+              <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Delete"><i class="bi bi-trash"></i></button>
+            </form>
           </td>
         </tr>
       {% endfor %}
       </tbody>
-      <tfoot>
-        <tr style="background:#dce8f8;font-weight:700;">
-          <td colspan="2" class="text-end">Total Collected:</td>
-          <td>₹{{ '{:,.2f}'.format(transactions|sum(attribute='amount')) }}</td>
-          <td colspan="3"></td>
-        </tr>
-      </tfoot>
     </table>
   </div>
 </div>
+{% endif %}
+
+<!-- Withdrawals History (no-print) -->
+{% if withdrawals %}
+<div class="form-card mt-3 no-print">
+  <div class="section-title"><i class="bi bi-cash me-1"></i>Withdrawal History</div>
+  <div class="lms-table" style="margin:0;overflow-x:auto;">
+    <table class="table table-sm table-hover mb-0" style="font-size:12px;">
+      <thead>
+        <tr style="background:#842029;color:#fff;">
+          <th>#</th><th>Date</th><th>Amount</th><th>Remarks</th><th>Posted By</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for w in withdrawals %}
+        <tr style="background:#fff5f5;">
+          <td>{{ loop.index }}</td>
+          <td>{{ w.transaction_date }}</td>
+          <td class="text-danger fw-semibold">₹{{ '{:,.2f}'.format(w.amount) }}</td>
+          <td>{{ w.remarks or '—' }}</td>
+          <td>{{ w.posted_by_name }}</td>
+          <td>
+            <form method="POST" action="{{ url_for('rd_transaction_delete', tid=w.id) }}" style="display:inline;" onsubmit="return confirm('Delete this withdrawal?')">
+              <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Delete"><i class="bi bi-trash"></i></button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+
 {% endblock %}

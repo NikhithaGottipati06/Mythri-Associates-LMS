@@ -40,13 +40,18 @@
         <label class="form-label fw-semibold" style="font-size:13px;">Date</label>
         <input type="text" id="entryDate" class="form-control form-control-sm" placeholder="DD/MM/YYYY">
       </div>
-      <div class="col-md-4 d-flex gap-2">
+      <div class="col-md-4 d-flex gap-2 flex-wrap">
         <button class="btn btn-success btn-sm fw-semibold" onclick="submitEntry('deposit')">
           <i class="bi bi-plus-circle me-1"></i>Deposit
         </button>
         <button class="btn btn-warning btn-sm fw-semibold" id="withdrawBtn" onclick="submitEntry('withdraw')">
           <i class="bi bi-cash me-1"></i>Withdraw
         </button>
+        <form id="undoForm" method="POST" style="display:inline;" onsubmit="return confirm('Undo last transaction for this member?')">
+          <button type="submit" class="btn btn-outline-secondary btn-sm fw-semibold">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>Undo Last
+          </button>
+        </form>
       </div>
     </div>
 
@@ -146,6 +151,7 @@
         <tr>
           <th>#</th><th>Date</th><th>Member</th><th>Center</th>
           <th>Deposit</th><th>Withdrawal</th><th>Balance</th><th>Posted By</th>
+          {% if session.role == 'Admin' %}<th>Action</th>{% endif %}
         </tr>
       </thead>
       <tbody>
@@ -159,9 +165,16 @@
           <td class="text-danger">{% if t.withdraw_amount %}₹{{ '{:,.0f}'.format(t.withdraw_amount) }}{% else %}—{% endif %}</td>
           <td class="fw-semibold">₹{{ '{:,.0f}'.format(t.balance) }}</td>
           <td>{{ t.posted_by_name }}</td>
+          {% if session.role == 'Admin' %}
+          <td>
+            <form method="POST" action="{{ url_for('savings_transaction_delete', tid=t.id) }}" style="display:inline;" onsubmit="return confirm('Delete this transaction?')">
+              <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Delete"><i class="bi bi-trash"></i></button>
+            </form>
+          </td>
+          {% endif %}
         </tr>
       {% else %}
-        <tr><td colspan="8" class="text-center text-muted py-3">No transactions yet.</td></tr>
+        <tr><td colspan="{% if session.role == 'Admin' %}9{% else %}8{% endif %}" class="text-center text-muted py-3">No transactions yet.</td></tr>
       {% endfor %}
       </tbody>
     </table>
@@ -188,6 +201,7 @@ function fetchMemberInfo(mid) {
       document.getElementById('memberBalance').value = '₹' + currentBalance.toLocaleString('en-IN');
       document.getElementById('entryForm').style.display = 'block';
       document.getElementById('withdrawBtn').disabled = currentBalance <= 0;
+      document.getElementById('undoForm').action = `/savings/undo/${mid}`;
     });
 }
 

@@ -9,87 +9,116 @@
 {% if session.role == 'Admin' %}
 <div class="form-card mb-3">
   <div class="section-title"><i class="bi bi-plus-circle me-1"></i>Open New RD Account</div>
-  <form method="POST" action="{{ url_for('rd_new') }}">
+  <form method="POST" action="{{ url_for('rd_new') }}" id="rdForm">
     <div class="row g-3 align-items-end">
-      <div class="col-md-3">
-        <label class="form-label fw-semibold" style="font-size:13px;">Member</label>
-        <select name="member_id" id="rdMemberSelect" class="form-select form-select-sm" required onchange="fetchRdMemberInfo(this.value)">
-          <option value="">— Select Member —</option>
-          {% for m in all_members %}
-          <option value="{{ m.id }}">{{ m.member_code }} – {{ m.full_name }} ({{ m.center_code }})</option>
+
+      <div class="col-md-2">
+        <label class="form-label fw-semibold" style="font-size:13px;">Center</label>
+        <select id="centerFilter" class="form-select form-select-sm" onchange="filterMembers(this.value)">
+          <option value="">— All Centers —</option>
+          {% for c in centers %}
+          <option value="{{ c.id }}">{{ c.center_code }} {{ c.center_name }}</option>
           {% endfor %}
         </select>
       </div>
-      <div class="col-md-2">
-        <label class="form-label fw-semibold" style="font-size:13px;">Center</label>
-        <input type="text" id="rdMemberCenter" class="form-control form-control-sm" readonly placeholder="—">
+
+      <div class="col-md-3">
+        <label class="form-label fw-semibold" style="font-size:13px;">Member</label>
+        <select name="member_id" id="memberSelect" class="form-select form-select-sm" required onchange="fetchRdMemberInfo(this.value)">
+          <option value="">— Select Member —</option>
+          {% for m in all_members %}
+          <option value="{{ m.id }}" data-center="{{ m.center_id }}">{{ m.member_code }} – {{ m.full_name }} ({{ m.center_code }})</option>
+          {% endfor %}
+        </select>
       </div>
+
       <div class="col-md-2">
-        <label class="form-label fw-semibold" style="font-size:13px;">Loan Amount</label>
-        <input type="text" id="rdLoanAmt" class="form-control form-control-sm fw-bold text-primary" readonly placeholder="₹0">
+        <label class="form-label fw-semibold" style="font-size:13px;">Monthly RD Amount (₹)</label>
+        <input type="number" name="monthly_amount" id="monthlyAmt" class="form-control form-control-sm" min="1" step="0.01" placeholder="e.g. 1000" required oninput="calcMaturity()">
       </div>
+
+      <div class="col-md-1">
+        <label class="form-label fw-semibold" style="font-size:13px;">Tenure</label>
+        <input type="number" name="tenure" id="tenureVal" class="form-control form-control-sm" min="1" placeholder="e.g. 24" required oninput="calcMaturity()">
+      </div>
+
+      <div class="col-md-1">
+        <label class="form-label fw-semibold" style="font-size:13px;">Unit</label>
+        <select name="tenure_unit" id="tenureUnit" class="form-select form-select-sm" onchange="calcMaturity()">
+          <option value="Months">Months</option>
+          <option value="Years">Years</option>
+        </select>
+      </div>
+
+      <div class="col-md-1">
+        <label class="form-label fw-semibold" style="font-size:13px;">ROI %</label>
+        <input type="number" name="roi" id="roiVal" class="form-control form-control-sm" min="0" step="0.01" placeholder="e.g. 8" oninput="calcMaturity()">
+      </div>
+
       <div class="col-md-2">
         <label class="form-label fw-semibold" style="font-size:13px;">Start Date</label>
         <input type="text" name="start_date" class="form-control form-control-sm" placeholder="DD/MM/YYYY" required>
       </div>
-      <div class="col-md-2">
-        <label class="form-label fw-semibold" style="font-size:13px;">Installment Amount (₹)</label>
-        <input type="number" name="installment_amount" class="form-control form-control-sm" min="1" step="0.01" placeholder="e.g. 500" required>
-      </div>
+
     </div>
-    <div class="row g-3 align-items-end mt-1">
-      <div class="col-md-1">
-        <label class="form-label fw-semibold" style="font-size:13px;">Total Inst.</label>
-        <input type="number" name="total_installments" class="form-control form-control-sm" min="1" placeholder="e.g. 50" required>
+
+    <!-- Live calculation strip -->
+    <div id="calcStrip" class="mt-3 p-2 rounded d-flex flex-wrap gap-3 align-items-center" style="background:#f0f4ff;border:1px solid #c7d7f5;display:none!important;">
+      <span style="font-size:13px;color:#555;">
+        <i class="bi bi-calculator me-1"></i>
+        Total Corpus: <strong id="corpusDisplay" class="text-primary">₹0</strong>
+        &nbsp;|&nbsp; Interest: <strong id="interestDisplay" class="text-warning">₹0</strong>
+        &nbsp;|&nbsp; Maturity Amount: <strong id="maturityDisplay" class="text-success fs-6">₹0</strong>
+      </span>
+    </div>
+    <div id="calcStripVisible" class="mt-3 p-2 rounded d-flex flex-wrap gap-3 align-items-center" style="background:#f0f4ff;border:1px solid #c7d7f5;">
+      <span style="font-size:13px;color:#555;">
+        <i class="bi bi-calculator me-1"></i>
+        Total Corpus: <strong id="corpusDisplay2" class="text-primary">₹0</strong>
+        &nbsp;|&nbsp; Interest: <strong id="interestDisplay2" class="text-warning">₹0</strong>
+        &nbsp;|&nbsp; Maturity Amount: <strong id="maturityDisplay2" class="text-success fs-6">₹0</strong>
+      </span>
+      <div class="ms-auto">
+        <input type="text" name="remarks" class="form-control form-control-sm" placeholder="Remarks (optional)" style="min-width:180px;">
       </div>
-      <div class="col-md-2">
-        <label class="form-label fw-semibold" style="font-size:13px;">Frequency</label>
-        <select name="frequency" class="form-select form-select-sm">
-          <option value="Weekly">Weekly</option>
-          <option value="Monthly">Monthly</option>
-        </select>
-      </div>
-      <div class="col-md-1">
-        <label class="form-label fw-semibold" style="font-size:13px;">% of Loan</label>
-        <input type="number" name="percentage" class="form-control form-control-sm" min="0" step="0.01" placeholder="e.g. 5">
-      </div>
-      <div class="col-md-1">
-        <label class="form-label fw-semibold" style="font-size:13px;">Int. Rate %</label>
-        <input type="number" name="interest_rate" class="form-control form-control-sm" min="0" step="0.01" placeholder="e.g. 6">
-      </div>
-      <div class="col-md-3">
-        <label class="form-label fw-semibold" style="font-size:13px;">Remarks (optional)</label>
-        <input type="text" name="remarks" class="form-control form-control-sm" placeholder="e.g. Linked to loan L-0001">
-      </div>
-      <div class="col-auto">
-        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-plus-circle me-1"></i>Open RD Account</button>
-      </div>
+      <button type="submit" class="btn btn-primary btn-sm fw-semibold">
+        <i class="bi bi-plus-circle me-1"></i>Open RD Account
+      </button>
     </div>
   </form>
 </div>
 {% endif %}
 
-<script>
-function fetchRdMemberInfo(mid) {
-  if (!mid) {
-    document.getElementById('rdMemberCenter').value = '';
-    document.getElementById('rdLoanAmt').value = '';
-    return;
-  }
-  fetch(`/rd/member-info?mid=${mid}`)
-    .then(r => r.json())
-    .then(data => {
-      document.getElementById('rdMemberCenter').value = data.center || '';
-      const loan = data.loan_amount || 0;
-      document.getElementById('rdLoanAmt').value = '₹' + loan.toLocaleString('en-IN');
-    });
-}
-</script>
+<!-- Summary Cards -->
+{% if accounts %}
+{% set total_corpus_all = accounts | sum(attribute='corpus') %}
+{% set total_maturity_all = accounts | sum(attribute='calc_maturity') %}
+<div class="row g-3 mb-3">
+  <div class="col-md-4">
+    <div class="stat-card" style="border-color:#6f42c1;">
+      <div class="stat-icon" style="background:#e8dff5;color:#6f42c1;"><i class="bi bi-arrow-repeat"></i></div>
+      <div><div class="stat-num" style="color:#6f42c1;">{{ accounts|length }}</div><div class="stat-label">Total RD Accounts</div></div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="stat-card" style="border-color:#0d6efd;">
+      <div class="stat-icon" style="background:#dbeafe;color:#0d6efd;"><i class="bi bi-stack"></i></div>
+      <div><div class="stat-num" style="color:#0d6efd;">₹{{ '{:,.0f}'.format(total_corpus_all) }}</div><div class="stat-label">Total Corpus</div></div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="stat-card" style="border-color:#198754;">
+      <div class="stat-icon" style="background:#d1e7dd;color:#198754;"><i class="bi bi-graph-up-arrow"></i></div>
+      <div><div class="stat-num" style="color:#198754;">₹{{ '{:,.0f}'.format(total_maturity_all) }}</div><div class="stat-label">Total Maturity Amount</div></div>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 <!-- Filter -->
 <div class="action-bar mb-2">
   <form method="GET" class="d-flex flex-wrap gap-2 align-items-center">
-    <label class="fw-semibold" style="font-size:13px;">Center:</label>
+    <label class="fw-semibold" style="font-size:13px;">Filter by Center:</label>
     <select name="center_id" class="form-select form-select-sm" style="min-width:160px;max-width:240px;" onchange="this.form.submit()">
       <option value="">All Centers</option>
       {% for c in centers %}
@@ -100,45 +129,50 @@ function fetchRdMemberInfo(mid) {
   <span class="ms-auto total-bar">Total RD Accounts: {{ accounts|length }}</span>
 </div>
 
+<!-- RD Accounts Table -->
 <div class="form-card">
   <div class="lms-table" style="margin:0;overflow-x:auto;">
     <table class="table table-hover mb-0" style="font-size:13px;">
       <thead>
         <tr>
           <th>RD No</th><th>Member</th><th>Center</th>
-          <th>Start Date</th><th>Frequency</th>
-          <th>Inst. Amount</th><th>Total Inst.</th>
-          <th>Paid</th><th>Collected</th><th>Pending</th><th>Status</th><th>Action</th>
+          <th>Monthly (₹)</th><th>Tenure</th><th>ROI %</th>
+          <th>Total Corpus</th><th>Maturity Amt</th><th>Start Date</th><th>Maturity Date</th>
+          <th>Status</th><th>Action</th>
         </tr>
       </thead>
       <tbody>
       {% for a in accounts %}
-        {% set remaining = a.total_installments - a.paid_count %}
-        {% set pending_amt = remaining * a.installment_amount %}
         <tr>
-          <td class="fw-semibold text-primary">
-            <a href="{{ url_for('rd_detail', rdid=a.id) }}">{{ a.rd_no }}</a>
-          </td>
+          <td class="fw-semibold text-primary">{{ a.rd_no }}</td>
           <td>{{ a.member_code }} – {{ a.full_name }}</td>
           <td>{{ a.center_code }}</td>
-          <td>{{ a.start_date }}</td>
-          <td>{{ a.frequency }}</td>
-          <td class="fw-semibold">₹{{ '{:,.0f}'.format(a.installment_amount) }}</td>
-          <td class="text-center">{{ a.total_installments }}</td>
-          <td class="text-center text-success fw-semibold">{{ a.paid_count }}</td>
-          <td class="text-success">₹{{ '{:,.0f}'.format(a.total_collected) }}</td>
-          <td class="text-danger">₹{{ '{:,.0f}'.format(pending_amt) }}</td>
-          <td>
-            {% if a.status == 'Active' %}
-              <span class="badge bg-success">Active</span>
+          <td class="fw-semibold">₹{{ '{:,.0f}'.format(a.installment_amount or 0) }}</td>
+          <td>{{ a.total_installments }}
+            {% if a.tenure_unit == 'Years' %}
+              Months ({{ (a.total_installments / 12)|int }}Y)
             {% else %}
-              <span class="badge bg-secondary">Closed</span>
+              Months
             {% endif %}
           </td>
+          <td class="text-center">{{ '{:.2f}'.format(a.interest_rate or 0) }}%</td>
+          <td class="text-primary fw-semibold">₹{{ '{:,.0f}'.format(a.corpus) }}</td>
+          <td class="text-success fw-bold">₹{{ '{:,.0f}'.format(a.calc_maturity) }}</td>
+          <td>{{ a.start_date or '—' }}</td>
+          <td>{{ a.maturity_date or '—' }}</td>
           <td>
-            <a href="{{ url_for('rd_detail', rdid=a.id) }}" class="btn btn-sm btn-outline-primary py-0 px-2">
-              <i class="bi bi-eye"></i> View
+            {% if a.status == 'Active' %}<span class="badge bg-success">Active</span>
+            {% else %}<span class="badge bg-secondary">Closed</span>{% endif %}
+          </td>
+          <td class="d-flex gap-1 flex-wrap">
+            <a href="{{ url_for('rd_detail', rdid=a.id) }}" class="btn btn-sm btn-outline-primary py-0 px-2" title="Print / View">
+              <i class="bi bi-printer"></i>
             </a>
+            {% if session.role == 'Admin' %}
+            <form method="POST" action="{{ url_for('rd_account_delete', rdid=a.id) }}" style="display:inline;" onsubmit="return confirm('Delete RD account {{ a.rd_no }}?')">
+              <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Delete"><i class="bi bi-trash"></i></button>
+            </form>
+            {% endif %}
           </td>
         </tr>
       {% else %}
@@ -148,4 +182,45 @@ function fetchRdMemberInfo(mid) {
     </table>
   </div>
 </div>
+
+<script>
+const allMembers = [
+  {% for m in all_members %}
+  {id: {{ m.id }}, centerId: {{ m.center_id }}, code: '{{ m.member_code }}', name: '{{ m.full_name }}', center: '{{ m.center_code }}'},
+  {% endfor %}
+];
+
+function filterMembers(centerId) {
+  const sel = document.getElementById('memberSelect');
+  const val = sel.value;
+  sel.innerHTML = '<option value="">— Select Member —</option>';
+  allMembers.forEach(m => {
+    if (!centerId || m.centerId == centerId) {
+      const opt = document.createElement('option');
+      opt.value = m.id;
+      opt.dataset.center = m.centerId;
+      opt.textContent = m.code + ' – ' + m.name + ' (' + m.center + ')';
+      if (m.id == val) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  });
+}
+
+function fetchRdMemberInfo(mid) {}
+
+function calcMaturity() {
+  const monthly = parseFloat(document.getElementById('monthlyAmt').value) || 0;
+  const tenure  = parseFloat(document.getElementById('tenureVal').value) || 0;
+  const unit    = document.getElementById('tenureUnit').value;
+  const roi     = parseFloat(document.getElementById('roiVal').value) || 0;
+  const months  = unit === 'Years' ? tenure * 12 : tenure;
+  const corpus  = monthly * months;
+  const interest = corpus * roi / 100;
+  const maturity = corpus + interest;
+  const fmt = v => '₹' + v.toLocaleString('en-IN', {maximumFractionDigits: 0});
+  document.getElementById('corpusDisplay2').textContent   = fmt(corpus);
+  document.getElementById('interestDisplay2').textContent = fmt(interest);
+  document.getElementById('maturityDisplay2').textContent = fmt(maturity);
+}
+</script>
 {% endblock %}

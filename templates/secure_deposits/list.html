@@ -3,84 +3,86 @@
 {% block content %}
 <div class="page-header">
   <i class="bi bi-shield-lock" style="font-size:20px;color:#0d6efd;"></i>
-  <h5>Secure Deposit Account</h5>
+  <h5>Secure Deposit Accounts</h5>
 </div>
 
 {% if session.role == 'Admin' %}
 <div class="form-card mb-3">
-  <div class="section-title"><i class="bi bi-plus-circle me-1"></i>New Entry</div>
-  <div class="row g-3 align-items-end">
-    <div class="col-md-4">
-      <label class="form-label fw-semibold" style="font-size:13px;">Select Member</label>
-      <select id="memberSelect" class="form-select form-select-sm" onchange="fetchMemberInfo(this.value)">
-        <option value="">— Choose Member —</option>
-        {% for m in all_members %}
-        <option value="{{ m.id }}">{{ m.member_code }} – {{ m.full_name }} ({{ m.center_code }})</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="col-md-2">
-      <label class="form-label fw-semibold" style="font-size:13px;">Center</label>
-      <input type="text" id="memberCenter" class="form-control form-control-sm" readonly placeholder="—">
-    </div>
-    <div class="col-md-2">
-      <label class="form-label fw-semibold" style="font-size:13px;">Loan Amount</label>
-      <input type="text" id="memberLoanAmt" class="form-control form-control-sm fw-bold text-primary" readonly placeholder="₹0">
-    </div>
-    <div class="col-md-2">
-      <label class="form-label fw-semibold" style="font-size:13px;">Balance</label>
-      <input type="text" id="memberBalance" class="form-control form-control-sm fw-bold text-success" readonly placeholder="₹0">
-    </div>
-  </div>
-
-  <div id="entryForm" style="display:none;" class="mt-3">
+  <div class="section-title"><i class="bi bi-plus-circle me-1"></i>Open New Secure Deposit Account</div>
+  <form method="POST" action="{{ url_for('secure_deposit_new') }}" id="sdForm">
     <div class="row g-3 align-items-end">
+
       <div class="col-md-2">
-        <label class="form-label fw-semibold" style="font-size:13px;">Amount (₹)</label>
-        <input type="number" id="entryAmount" class="form-control form-control-sm" value="" min="1" step="0.01" placeholder="Enter amount">
+        <label class="form-label fw-semibold" style="font-size:13px;">Center</label>
+        <select id="centerFilter" class="form-select form-select-sm" onchange="filterMembers(this.value)">
+          <option value="">— All Centers —</option>
+          {% for c in centers %}
+          <option value="{{ c.id }}">{{ c.center_code }} {{ c.center_name }}</option>
+          {% endfor %}
+        </select>
       </div>
+
+      <div class="col-md-3">
+        <label class="form-label fw-semibold" style="font-size:13px;">Member</label>
+        <select name="member_id" id="memberSelect" class="form-select form-select-sm" required onchange="fetchMemberInfo(this.value)">
+          <option value="">— Select Member —</option>
+          {% for m in all_members %}
+          <option value="{{ m.id }}" data-center="{{ m.center_id }}">{{ m.member_code }} – {{ m.full_name }} ({{ m.center_code }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
       <div class="col-md-2">
-        <label class="form-label fw-semibold" style="font-size:13px;">Date</label>
-        <input type="text" id="entryDate" class="form-control form-control-sm" placeholder="DD/MM/YYYY">
+        <label class="form-label fw-semibold" style="font-size:13px;">Loan Amount (₹)</label>
+        <input type="number" name="loan_amount" id="loanAmt" class="form-control form-control-sm fw-bold text-primary" readonly placeholder="Auto-filled" step="0.01">
       </div>
+
       <div class="col-md-1">
-        <label class="form-label fw-semibold" style="font-size:13px;">% of Loan</label>
-        <input type="number" id="entryPercentage" class="form-control form-control-sm" min="0" step="0.01" placeholder="e.g. 5">
+        <label class="form-label fw-semibold" style="font-size:13px;">Percentage %</label>
+        <input type="number" name="percentage" id="pctVal" class="form-control form-control-sm" min="0" step="0.01" placeholder="e.g. 5" oninput="calcSd()">
       </div>
+
       <div class="col-md-1">
-        <label class="form-label fw-semibold" style="font-size:13px;">Int. Rate %</label>
-        <input type="number" id="entryInterestRate" class="form-control form-control-sm" min="0" step="0.01" placeholder="e.g. 6">
+        <label class="form-label fw-semibold" style="font-size:13px;">ROI %</label>
+        <input type="number" name="roi" id="roiVal" class="form-control form-control-sm" min="0" step="0.01" placeholder="e.g. 8" oninput="calcSd()">
       </div>
-      <div class="col-md-2">
-        <label class="form-label fw-semibold" style="font-size:13px;">Remarks</label>
-        <input type="text" id="entryRemarks" class="form-control form-control-sm" placeholder="Optional">
+
+      <div class="col-md-1">
+        <label class="form-label fw-semibold" style="font-size:13px;">Tenure</label>
+        <input type="number" name="tenure" id="tenureVal" class="form-control form-control-sm" min="1" placeholder="e.g. 24" oninput="calcSd()">
       </div>
-      <div class="col-md-3 d-flex gap-2">
-        <button class="btn btn-success btn-sm fw-semibold" onclick="submitEntry('deposit')">
-          <i class="bi bi-plus-circle me-1"></i>Deposit
-        </button>
-        <button class="btn btn-warning btn-sm fw-semibold" id="withdrawBtn" onclick="submitEntry('withdraw')">
-          <i class="bi bi-cash me-1"></i>Withdraw
-        </button>
+
+      <div class="col-md-1">
+        <label class="form-label fw-semibold" style="font-size:13px;">Unit</label>
+        <select name="tenure_unit" id="tenureUnit" class="form-select form-select-sm" onchange="calcSd()">
+          <option value="Months">Months</option>
+          <option value="Years">Years</option>
+        </select>
       </div>
-    </div>
-    <div class="mt-2" style="font-size:12px;color:#888;">
-      <i class="bi bi-info-circle me-1"></i>Secure Deposit is voluntary — typically 5–10% of loan amount.
+
+      <div class="col-md-1">
+        <label class="form-label fw-semibold" style="font-size:13px;">Start Date</label>
+        <input type="text" name="start_date" class="form-control form-control-sm" placeholder="DD/MM/YYYY" required>
+      </div>
+
     </div>
 
-    <form id="depositForm" method="POST" style="display:none;">
-      <input type="hidden" name="deposit_amount" id="hDepositAmt">
-      <input type="hidden" name="transaction_date" id="hDepositDate">
-      <input type="hidden" name="remarks" id="hDepositRemarks">
-      <input type="hidden" name="percentage" id="hDepositPercentage">
-      <input type="hidden" name="interest_rate" id="hDepositInterestRate">
-    </form>
-    <form id="withdrawForm" method="POST" style="display:none;">
-      <input type="hidden" name="withdraw_amount" id="hWithdrawAmt">
-      <input type="hidden" name="transaction_date" id="hWithdrawDate">
-      <input type="hidden" name="remarks" id="hWithdrawRemarks">
-    </form>
-  </div>
+    <!-- Live Calculation Strip -->
+    <div class="mt-3 p-2 rounded d-flex flex-wrap gap-3 align-items-center" style="background:#f0f8ff;border:1px solid #b6d4fe;">
+      <span style="font-size:13px;color:#555;">
+        <i class="bi bi-calculator me-1"></i>
+        SD Amount: <strong id="sdAmtDisplay" class="text-primary">₹0</strong>
+        &nbsp;|&nbsp; Interest: <strong id="sdInterestDisplay" class="text-warning">₹0</strong>
+        &nbsp;|&nbsp; Maturity Amount: <strong id="sdMaturityDisplay" class="text-success fs-6">₹0</strong>
+      </span>
+      <div class="ms-auto d-flex gap-2 align-items-center">
+        <input type="text" name="remarks" class="form-control form-control-sm" placeholder="Remarks (optional)" style="min-width:160px;">
+        <button type="submit" class="btn btn-primary btn-sm fw-semibold">
+          <i class="bi bi-plus-circle me-1"></i>Open SD Account
+        </button>
+      </div>
+    </div>
+  </form>
 </div>
 {% endif %}
 
@@ -89,28 +91,19 @@
   <div class="col-md-4">
     <div class="stat-card" style="border-color:#0d6efd;">
       <div class="stat-icon" style="background:#dbeafe;color:#0d6efd;"><i class="bi bi-shield-lock"></i></div>
-      <div>
-        <div class="stat-num" style="color:#0d6efd;">₹{{ '{:,.0f}'.format(totals.deposits) }}</div>
-        <div class="stat-label">Total Deposits</div>
-      </div>
+      <div><div class="stat-num" style="color:#0d6efd;">{{ totals.count }}</div><div class="stat-label">Total SD Accounts</div></div>
     </div>
   </div>
   <div class="col-md-4">
     <div class="stat-card" style="border-color:#fd7e14;">
-      <div class="stat-icon" style="background:#ffe5d0;color:#fd7e14;"><i class="bi bi-cash"></i></div>
-      <div>
-        <div class="stat-num" style="color:#fd7e14;">₹{{ '{:,.0f}'.format(totals.withdrawals) }}</div>
-        <div class="stat-label">Total Withdrawals</div>
-      </div>
+      <div class="stat-icon" style="background:#ffe5d0;color:#fd7e14;"><i class="bi bi-cash-stack"></i></div>
+      <div><div class="stat-num" style="color:#fd7e14;">₹{{ '{:,.0f}'.format(totals.total_sd) }}</div><div class="stat-label">Total SD Amount</div></div>
     </div>
   </div>
   <div class="col-md-4">
     <div class="stat-card" style="border-color:#198754;">
-      <div class="stat-icon" style="background:#d1e7dd;color:#198754;"><i class="bi bi-wallet2"></i></div>
-      <div>
-        <div class="stat-num" style="color:#198754;">₹{{ '{:,.0f}'.format(totals.balance) }}</div>
-        <div class="stat-label">Outstanding Balance</div>
-      </div>
+      <div class="stat-icon" style="background:#d1e7dd;color:#198754;"><i class="bi bi-graph-up-arrow"></i></div>
+      <div><div class="stat-num" style="color:#198754;">₹{{ '{:,.0f}'.format(totals.total_maturity) }}</div><div class="stat-label">Total Maturity Amount</div></div>
     </div>
   </div>
 </div>
@@ -118,7 +111,7 @@
 <!-- Filter -->
 <div class="action-bar mb-2">
   <form method="GET" class="d-flex flex-wrap gap-2 align-items-center">
-    <label class="fw-semibold" style="font-size:13px;">Center:</label>
+    <label class="fw-semibold" style="font-size:13px;">Filter by Center:</label>
     <select name="center_id" class="form-select form-select-sm" style="min-width:160px;max-width:240px;" onchange="this.form.submit()">
       <option value="">All Centers</option>
       {% for c in centers %}
@@ -126,67 +119,56 @@
       {% endfor %}
     </select>
   </form>
-  <span class="total-bar">Members with deposits: {{ summary|length }}</span>
+  <span class="ms-auto total-bar">Total SD Accounts: {{ accounts|length }}</span>
 </div>
 
-<!-- Member-wise Summary -->
-<div class="form-card mb-3">
-  <div class="section-title"><i class="bi bi-people me-1"></i>Member-wise Summary</div>
-  <div class="lms-table" style="margin:0;overflow-x:auto;">
-    <table class="table table-hover mb-0">
-      <thead>
-        <tr>
-          <th>Member Code</th><th>Member Name</th><th>Center</th>
-          <th>Total Deposits</th><th>Total Withdrawals</th><th>Balance</th>
-          <th>Int. Rate %</th><th>Interest Earned</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for s in summary %}
-        <tr>
-          <td class="fw-semibold text-primary">{{ s.member_code }}</td>
-          <td class="fw-semibold">{{ s.full_name }}</td>
-          <td>{{ s.center_code }} {{ s.center_name }}</td>
-          <td class="text-success">₹{{ '{:,.0f}'.format(s.total_deposits or 0) }}</td>
-          <td class="text-danger">₹{{ '{:,.0f}'.format(s.total_withdrawals or 0) }}</td>
-          <td class="fw-semibold text-primary">₹{{ '{:,.0f}'.format(s.balance or 0) }}</td>
-          <td class="text-center">{{ '{:.2f}'.format(s.interest_rate or 0) }}%</td>
-          <td class="fw-semibold text-success">₹{{ '{:,.2f}'.format(s.interest or 0) }}</td>
-        </tr>
-      {% else %}
-        <tr><td colspan="8" class="text-center text-muted py-4">No secure deposit transactions found.</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<!-- Transaction History -->
+<!-- Accounts Table -->
 <div class="form-card">
-  <div class="section-title"><i class="bi bi-clock-history me-1"></i>Transaction History</div>
   <div class="lms-table" style="margin:0;overflow-x:auto;">
-    <table class="table table-hover mb-0">
+    <table class="table table-hover mb-0" style="font-size:13px;">
       <thead>
         <tr>
-          <th>#</th><th>Date</th><th>Member</th><th>Center</th>
-          <th>Deposit</th><th>Withdrawal</th><th>Balance</th><th>Remarks</th><th>Posted By</th>
+          <th>SD No</th><th>Member</th><th>Center</th>
+          <th>Loan Amt</th><th>%</th><th>SD Amount</th>
+          <th>Tenure</th><th>ROI %</th><th>Maturity Amt</th>
+          <th>Start Date</th><th>Status</th><th>Action</th>
         </tr>
       </thead>
       <tbody>
-      {% for t in transactions %}
+      {% for a in accounts %}
         <tr>
-          <td>{{ t.id }}</td>
-          <td>{{ t.transaction_date }}</td>
-          <td>{{ t.member_code }} – {{ t.full_name }}</td>
-          <td>{{ t.center_code }} {{ t.center_name }}</td>
-          <td class="text-success">{% if t.deposit_amount %}₹{{ '{:,.0f}'.format(t.deposit_amount) }}{% else %}—{% endif %}</td>
-          <td class="text-danger">{% if t.withdraw_amount %}₹{{ '{:,.0f}'.format(t.withdraw_amount) }}{% else %}—{% endif %}</td>
-          <td class="fw-semibold">₹{{ '{:,.0f}'.format(t.balance) }}</td>
-          <td>{{ t.remarks or '—' }}</td>
-          <td>{{ t.posted_by_name }}</td>
+          <td class="fw-semibold text-primary">{{ a.sd_no }}</td>
+          <td>{{ a.member_code }} – {{ a.full_name }}</td>
+          <td>{{ a.center_code }}</td>
+          <td>₹{{ '{:,.0f}'.format(a.loan_amount or 0) }}</td>
+          <td class="text-center">{{ '{:.1f}'.format(a.percentage or 0) }}%</td>
+          <td class="fw-semibold text-primary">₹{{ '{:,.0f}'.format(a.sd_amount or 0) }}</td>
+          <td>
+            {{ a.tenure_months }} Months
+            {% if a.tenure_months and a.tenure_months % 12 == 0 %}
+              ({{ a.tenure_months // 12 }}Y)
+            {% endif %}
+          </td>
+          <td class="text-center">{{ '{:.2f}'.format(a.roi or 0) }}%</td>
+          <td class="text-success fw-bold">₹{{ '{:,.0f}'.format(a.maturity_amount or 0) }}</td>
+          <td>{{ a.start_date or '—' }}</td>
+          <td>
+            {% if a.status == 'Active' %}<span class="badge bg-success">Active</span>
+            {% else %}<span class="badge bg-secondary">Closed</span>{% endif %}
+          </td>
+          <td class="d-flex gap-1">
+            <a href="{{ url_for('secure_deposit_detail', sdid=a.id) }}" class="btn btn-sm btn-outline-primary py-0 px-2" title="Print / View">
+              <i class="bi bi-printer"></i>
+            </a>
+            {% if session.role == 'Admin' %}
+            <form method="POST" action="{{ url_for('secure_deposit_account_delete', sdid=a.id) }}" style="display:inline;" onsubmit="return confirm('Delete SD account {{ a.sd_no }}?')">
+              <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Delete"><i class="bi bi-trash"></i></button>
+            </form>
+            {% endif %}
+          </td>
         </tr>
       {% else %}
-        <tr><td colspan="9" class="text-center text-muted py-3">No transactions yet.</td></tr>
+        <tr><td colspan="12" class="text-center text-muted py-4">No secure deposit accounts found.</td></tr>
       {% endfor %}
       </tbody>
     </table>
@@ -194,59 +176,61 @@
 </div>
 
 <script>
-let currentMemberId = null;
-let currentBalance = 0;
+const allMembers = [
+  {% for m in all_members %}
+  {id: {{ m.id }}, centerId: {{ m.center_id }}, code: '{{ m.member_code }}', name: '{{ m.full_name }}', center: '{{ m.center_code }}'},
+  {% endfor %}
+];
+let currentLoanAmt = 0;
+
+function filterMembers(centerId) {
+  const sel = document.getElementById('memberSelect');
+  const val = sel.value;
+  sel.innerHTML = '<option value="">— Select Member —</option>';
+  allMembers.forEach(m => {
+    if (!centerId || m.centerId == centerId) {
+      const opt = document.createElement('option');
+      opt.value = m.id;
+      opt.dataset.center = m.centerId;
+      opt.textContent = m.code + ' – ' + m.name + ' (' + m.center + ')';
+      if (m.id == val) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  });
+  document.getElementById('loanAmt').value = '';
+  currentLoanAmt = 0;
+  calcSd();
+}
 
 function fetchMemberInfo(mid) {
-  currentMemberId = mid;
   if (!mid) {
-    document.getElementById('memberCenter').value = '';
-    document.getElementById('memberLoanAmt').value = '';
-    document.getElementById('memberBalance').value = '';
-    document.getElementById('entryForm').style.display = 'none';
+    document.getElementById('loanAmt').value = '';
+    currentLoanAmt = 0;
+    calcSd();
     return;
   }
   fetch(`/secure-deposits/member-info?mid=${mid}`)
     .then(r => r.json())
     .then(data => {
-      document.getElementById('memberCenter').value = data.center || '';
-      const loan = data.loan_amount || 0;
-      document.getElementById('memberLoanAmt').value = '₹' + loan.toLocaleString('en-IN');
-      currentBalance = data.balance || 0;
-      document.getElementById('memberBalance').value = '₹' + currentBalance.toLocaleString('en-IN');
-      document.getElementById('entryForm').style.display = 'block';
-      document.getElementById('withdrawBtn').disabled = currentBalance <= 0;
+      currentLoanAmt = data.loan_amount || 0;
+      document.getElementById('loanAmt').value = currentLoanAmt.toFixed(2);
+      calcSd();
     });
 }
 
-function submitEntry(type) {
-  const amount       = parseFloat(document.getElementById('entryAmount').value);
-  const date         = document.getElementById('entryDate').value.trim();
-  const remarks      = document.getElementById('entryRemarks').value.trim();
-  const percentage   = parseFloat(document.getElementById('entryPercentage').value) || 0;
-  const interestRate = parseFloat(document.getElementById('entryInterestRate').value) || 0;
-  if (!currentMemberId) { alert('Please select a member.'); return; }
-  if (!amount || amount <= 0) { alert('Enter a valid amount.'); return; }
-  if (!date) { alert('Enter a date (DD/MM/YYYY).'); return; }
-  if (type === 'withdraw' && amount > currentBalance) {
-    alert(`Cannot withdraw ₹${amount.toLocaleString('en-IN')}. Balance: ₹${currentBalance.toLocaleString('en-IN')}`);
-    return;
-  }
-  if (type === 'deposit') {
-    document.getElementById('depositForm').action = `/secure-deposits/deposit/${currentMemberId}`;
-    document.getElementById('hDepositAmt').value          = amount;
-    document.getElementById('hDepositDate').value         = date;
-    document.getElementById('hDepositRemarks').value      = remarks;
-    document.getElementById('hDepositPercentage').value   = percentage;
-    document.getElementById('hDepositInterestRate').value = interestRate;
-    document.getElementById('depositForm').submit();
-  } else {
-    document.getElementById('withdrawForm').action = `/secure-deposits/withdraw/${currentMemberId}`;
-    document.getElementById('hWithdrawAmt').value     = amount;
-    document.getElementById('hWithdrawDate').value    = date;
-    document.getElementById('hWithdrawRemarks').value = remarks;
-    document.getElementById('withdrawForm').submit();
-  }
+function calcSd() {
+  const pct     = parseFloat(document.getElementById('pctVal').value) || 0;
+  const roi     = parseFloat(document.getElementById('roiVal').value) || 0;
+  const tenure  = parseFloat(document.getElementById('tenureVal').value) || 0;
+  const unit    = document.getElementById('tenureUnit').value;
+  const months  = unit === 'Years' ? tenure * 12 : tenure;
+  const sdAmt   = currentLoanAmt * pct / 100;
+  const interest = sdAmt * months * roi / 100;
+  const maturity = sdAmt + interest;
+  const fmt = v => '₹' + v.toLocaleString('en-IN', {maximumFractionDigits: 0});
+  document.getElementById('sdAmtDisplay').textContent      = fmt(sdAmt);
+  document.getElementById('sdInterestDisplay').textContent = fmt(interest);
+  document.getElementById('sdMaturityDisplay').textContent = fmt(maturity);
 }
 </script>
 {% endblock %}

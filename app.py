@@ -1178,6 +1178,19 @@ def _days_between(d1_str, d2_str):
     except Exception:
         return 0
 
+def _add_months(date_str, months):
+    """Add whole months to a DD/MM/YYYY string, return DD/MM/YYYY."""
+    import calendar as _cal
+    try:
+        dt = datetime.strptime(date_str, '%d/%m/%Y')
+        m = dt.month - 1 + months
+        year = dt.year + m // 12
+        month = m % 12 + 1
+        day = min(dt.day, _cal.monthrange(year, month)[1])
+        return datetime(year, month, day).strftime('%d/%m/%Y')
+    except Exception:
+        return ''
+
 def _calc_interest(principal, roi, days):
     """Simple interest = principal × roi/100 × days/365."""
     if principal <= 0 or not roi or days <= 0:
@@ -1522,6 +1535,32 @@ def savings_withdraw(mid):
     flash(f'Withdrawal of ₹{withdraw_amount:,.0f} posted successfully.', 'success')
     return redirect(url_for('savings_list'))
 
+@app.route('/savings/transaction/<int:tid>/delete', methods=['POST'])
+@admin_required
+def savings_transaction_delete(tid):
+    db = get_db()
+    db.execute("DELETE FROM savings_transactions WHERE id=?", (tid,))
+    db.commit()
+    db.close()
+    flash('Savings transaction deleted.', 'success')
+    return redirect(url_for('savings_list'))
+
+@app.route('/savings/undo/<int:mid>', methods=['POST'])
+@admin_required
+def savings_undo(mid):
+    db = get_db()
+    last = db.execute(
+        "SELECT id FROM savings_transactions WHERE member_id=? ORDER BY id DESC LIMIT 1", (mid,)
+    ).fetchone()
+    if last:
+        db.execute("DELETE FROM savings_transactions WHERE id=?", (last['id'],))
+        db.commit()
+        flash('Last savings transaction undone.', 'success')
+    else:
+        flash('No savings transactions to undo.', 'warning')
+    db.close()
+    return redirect(url_for('savings_list'))
+
 # ── Secure Deposits ───────────────────────────────────────────────────────────
 
 @app.route('/secure-deposits')
@@ -1530,60 +1569,32 @@ def secure_deposits_list():
     db = get_db()
     center_filter = request.args.get('center_id', '')
     all_members = db.execute("""
-        SELECT m.id, m.member_code, m.full_name, c.center_code
+        SELECT m.id, m.member_code, m.full_name, c.center_code, c.center_name, m.center_id
         FROM members m LEFT JOIN centers c ON m.center_id=c.id
         WHERE m.status='ACTIVE' ORDER BY m.member_code
     """).fetchall()
     centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
-
     where = "WHERE 1=1"
     params = []
     if center_filter:
-        where += " AND sd.center_id=?"
-        params.append(center_filter)
-
-    summary_rows = db.execute(f"""
-        SELECT m.id, m.member_code, m.full_name, c.center_code, c.center_name,
-               COALESCE(SUM(sd.deposit_amount),0) as total_deposits,
-               COALESCE(SUM(sd.withdraw_amount),0) as total_withdrawals,
-               MIN(CASE WHEN sd.deposit_amount>0 THEN sd.transaction_date END) as first_date,
-               MAX(sd.interest_rate) as interest_rate
-        FROM members m
-        LEFT JOIN centers c ON m.center_id=c.id
-        LEFT JOIN secure_deposits sd ON sd.member_id=m.id
-        {where.replace('sd.center_id','m.center_id')}
-        GROUP BY m.id HAVING total_deposits > 0 OR total_withdrawals > 0
-        ORDER BY m.member_code
+        where += " AND sa.center_id=?"; params.append(center_filter)
+    accounts = db.execute(f"""
+        SELECT sa.*, m.member_code, m.full_name, m.phone1, c.center_code, c.center_name,
+               u.full_name as created_by_name
+        FROM sd_accounts sa
+        LEFT JOIN members m ON sa.member_id=m.id
+        LEFT JOIN centers c ON sa.center_id=c.id
+        LEFT JOIN users u ON sa.created_by=u.id
+        {where} ORDER BY sa.sd_no DESC
     """, params).fetchall()
-    summary = []
-    for s in summary_rows:
-        bal = (s['total_deposits'] or 0) - (s['total_withdrawals'] or 0)
-        days = _days_since(s['first_date']) if s['first_date'] else 0
-        interest = _calc_interest(bal, s['interest_rate'] or 0, days)
-        summary.append({**dict(s), 'balance': bal, 'days': days, 'interest': interest})
-
-    transactions = db.execute(f"""
-        SELECT sd.*, m.member_code, m.full_name, c.center_code, c.center_name,
-               u.full_name as posted_by_name
-        FROM secure_deposits sd
-        LEFT JOIN members m ON sd.member_id=m.id
-        LEFT JOIN centers c ON sd.center_id=c.id
-        LEFT JOIN users u ON sd.posted_by=u.id
-        {where}
-        ORDER BY sd.transaction_date DESC, sd.id DESC
-    """, params).fetchall()
-
-    totals_row = db.execute(f"""
-        SELECT COALESCE(SUM(sd.deposit_amount),0) as deposits,
-               COALESCE(SUM(sd.withdraw_amount),0) as withdrawals
-        FROM secure_deposits sd {where}
-    """, params).fetchone()
-    totals = {'deposits': totals_row['deposits'], 'withdrawals': totals_row['withdrawals'],
-              'balance': totals_row['deposits'] - totals_row['withdrawals']}
+    totals = {
+        'count': len(accounts),
+        'total_sd': sum(a['sd_amount'] or 0 for a in accounts),
+        'total_maturity': sum(a['maturity_amount'] or 0 for a in accounts),
+    }
     db.close()
-    return render_template('secure_deposits/list.html', all_members=all_members, centers=centers,
-                           summary=summary, transactions=transactions, totals=totals,
-                           center_filter=center_filter)
+    return render_template('secure_deposits/list.html', accounts=accounts, all_members=all_members,
+                           centers=centers, center_filter=center_filter, totals=totals)
 
 @app.route('/secure-deposits/member-info')
 @login_required
@@ -1591,14 +1602,11 @@ def secure_deposits_member_info():
     db = get_db()
     mid = request.args.get('mid', '')
     if not mid:
-        return {'center': '', 'balance': 0, 'loan_amount': 0}
+        return jsonify({'center': '', 'loan_amount': 0})
     member = db.execute("""
         SELECT m.*, c.center_code, c.center_name FROM members m
         LEFT JOIN centers c ON m.center_id=c.id WHERE m.id=?
     """, (mid,)).fetchone()
-    bal = db.execute(
-        "SELECT COALESCE(SUM(deposit_amount),0)-COALESCE(SUM(withdraw_amount),0) as b FROM secure_deposits WHERE member_id=?",
-        (mid,)).fetchone()['b']
     loan_amt = db.execute("""
         SELECT COALESCE(SUM(ld.disbursed_amount),0) as la
         FROM loan_disbursements ld
@@ -1607,9 +1615,84 @@ def secure_deposits_member_info():
     """, (mid,)).fetchone()['la']
     db.close()
     if not member:
-        return {'center': '', 'balance': 0, 'loan_amount': 0}
-    return {'center': f"{member['center_code']} {member['center_name']}",
-            'balance': bal or 0, 'loan_amount': loan_amt or 0}
+        return jsonify({'center': '', 'loan_amount': 0})
+    return jsonify({'center': f"{member['center_code']} {member['center_name']}",
+                    'loan_amount': loan_amt or 0})
+
+@app.route('/secure-deposits/new', methods=['POST'])
+@admin_required
+def secure_deposit_new():
+    db = get_db()
+    mid = int(request.form.get('member_id', 0) or 0)
+    loan_amount = float(request.form.get('loan_amount', 0) or 0)
+    percentage = float(request.form.get('percentage', 0) or 0)
+    roi = float(request.form.get('roi', 0) or 0)
+    tenure = int(request.form.get('tenure', 0) or 0)
+    tenure_unit = request.form.get('tenure_unit', 'Months')
+    start_date = request.form.get('start_date', '').strip()
+    remarks = request.form.get('remarks', '').strip()
+    if not mid or tenure <= 0 or not start_date:
+        flash('All required fields must be filled.', 'danger')
+        db.close()
+        return redirect(url_for('secure_deposits_list'))
+    tenure_months = tenure if tenure_unit == 'Months' else tenure * 12
+    sd_amount = loan_amount * percentage / 100
+    maturity_amount = sd_amount + sd_amount * tenure_months * roi / 100
+    member = db.execute("SELECT center_id FROM members WHERE id=?", (mid,)).fetchone()
+    last = db.execute("SELECT sd_no FROM sd_accounts ORDER BY id DESC LIMIT 1").fetchone()
+    if last:
+        try:
+            num = int(last['sd_no'].split('-')[1]) + 1
+        except Exception:
+            num = 1
+    else:
+        num = 1
+    sd_no = f"SD-{num:04d}"
+    db.execute("""
+        INSERT INTO sd_accounts (sd_no, member_id, center_id, loan_amount, percentage, sd_amount,
+                                 roi, tenure_months, tenure_unit, maturity_amount, start_date,
+                                 status, remarks, created_by)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    """, (sd_no, mid, member['center_id'], loan_amount, percentage, sd_amount,
+          roi, tenure_months, tenure_unit, maturity_amount, start_date,
+          'Active', remarks, session['user_id']))
+    db.commit()
+    db.close()
+    flash(f'Secure Deposit Account {sd_no} opened successfully.', 'success')
+    return redirect(url_for('secure_deposits_list'))
+
+@app.route('/secure-deposits/<int:sdid>')
+@login_required
+def secure_deposit_detail(sdid):
+    db = get_db()
+    account = db.execute("""
+        SELECT sa.*, m.member_code, m.full_name, m.phone1, c.center_code, c.center_name,
+               u.full_name as created_by_name
+        FROM sd_accounts sa
+        LEFT JOIN members m ON sa.member_id=m.id
+        LEFT JOIN centers c ON sa.center_id=c.id
+        LEFT JOIN users u ON sa.created_by=u.id
+        WHERE sa.id=?
+    """, (sdid,)).fetchone()
+    if not account:
+        flash('SD account not found.', 'danger')
+        db.close()
+        return redirect(url_for('secure_deposits_list'))
+    interest_earned = (account['sd_amount'] or 0) * (account['tenure_months'] or 0) * (account['roi'] or 0) / 100
+    maturity_date = _add_months(account['start_date'] or '', account['tenure_months'] or 0)
+    db.close()
+    return render_template('secure_deposits/detail.html', account=account,
+                           interest_earned=interest_earned, maturity_date=maturity_date)
+
+@app.route('/secure-deposits/<int:sdid>/delete', methods=['POST'])
+@admin_required
+def secure_deposit_account_delete(sdid):
+    db = get_db()
+    db.execute("DELETE FROM sd_accounts WHERE id=?", (sdid,))
+    db.commit()
+    db.close()
+    flash('SD Account deleted.', 'success')
+    return redirect(url_for('secure_deposits_list'))
 
 @app.route('/secure-deposits/deposit/<int:mid>', methods=['POST'])
 @login_required
@@ -1662,6 +1745,32 @@ def secure_deposit_withdraw(mid):
     flash(f'Withdrawal of ₹{amount:,.0f} recorded.', 'success')
     return redirect(url_for('secure_deposits_list'))
 
+@app.route('/secure-deposits/transaction/<int:tid>/delete', methods=['POST'])
+@admin_required
+def secure_deposit_transaction_delete(tid):
+    db = get_db()
+    db.execute("DELETE FROM secure_deposits WHERE id=?", (tid,))
+    db.commit()
+    db.close()
+    flash('Secure deposit transaction deleted.', 'success')
+    return redirect(url_for('secure_deposits_list'))
+
+@app.route('/secure-deposits/undo/<int:mid>', methods=['POST'])
+@admin_required
+def secure_deposit_undo(mid):
+    db = get_db()
+    last = db.execute(
+        "SELECT id FROM secure_deposits WHERE member_id=? ORDER BY id DESC LIMIT 1", (mid,)
+    ).fetchone()
+    if last:
+        db.execute("DELETE FROM secure_deposits WHERE id=?", (last['id'],))
+        db.commit()
+        flash('Last secure deposit transaction undone.', 'success')
+    else:
+        flash('No transactions to undo.', 'warning')
+    db.close()
+    return redirect(url_for('secure_deposits_list'))
+
 @app.route('/reports/secure-deposits')
 @login_required
 def report_secure_deposits():
@@ -1705,7 +1814,7 @@ def rd_list():
     db = get_db()
     center_filter = request.args.get('center_id', '')
     all_members = db.execute("""
-        SELECT m.id, m.member_code, m.full_name, c.center_code
+        SELECT m.id, m.member_code, m.full_name, c.center_code, c.center_name, m.center_id
         FROM members m LEFT JOIN centers c ON m.center_id=c.id
         WHERE m.status='ACTIVE' ORDER BY m.member_code
     """).fetchall()
@@ -1714,16 +1823,28 @@ def rd_list():
     params = []
     if center_filter:
         where += " AND rd.center_id=?"; params.append(center_filter)
-    accounts = db.execute(f"""
-        SELECT rd.*, m.member_code, m.full_name, c.center_code, c.center_name,
-               COALESCE(SUM(rdt.amount),0) as total_collected,
-               COUNT(rdt.id) as paid_count
+    rows = db.execute(f"""
+        SELECT rd.*, m.member_code, m.full_name, m.phone1, c.center_code, c.center_name,
+               u.full_name as created_by_name
         FROM rd_accounts rd
         LEFT JOIN members m ON rd.member_id=m.id
         LEFT JOIN centers c ON rd.center_id=c.id
-        LEFT JOIN rd_transactions rdt ON rdt.rd_id=rd.id
-        {where} GROUP BY rd.id ORDER BY rd.rd_no DESC
+        LEFT JOIN users u ON rd.created_by=u.id
+        {where} ORDER BY rd.rd_no DESC
     """, params).fetchall()
+    accounts = []
+    for a in rows:
+        tenure_months = a['total_installments'] or 0
+        monthly = a['installment_amount'] or 0
+        roi = a['interest_rate'] or 0
+        corpus = monthly * tenure_months
+        interest_earned = corpus * roi / 100
+        keys = a.keys()
+        mat = (a['maturity_amount'] if 'maturity_amount' in keys and a['maturity_amount'] else (corpus + interest_earned))
+        tu = (a['tenure_unit'] if 'tenure_unit' in keys and a['tenure_unit'] else 'Months')
+        maturity_date = _add_months(a['start_date'] or '', tenure_months)
+        accounts.append({**dict(a), 'corpus': corpus, 'interest_earned': interest_earned,
+                         'calc_maturity': mat, 'tenure_unit': tu, 'maturity_date': maturity_date})
     db.close()
     return render_template('rd/list.html', accounts=accounts, all_members=all_members,
                            centers=centers, center_filter=center_filter)
@@ -1754,17 +1875,20 @@ def rd_member_info():
 @login_required
 def rd_new():
     db = get_db()
-    mid = int(request.form.get('member_id', 0))
+    mid = int(request.form.get('member_id', 0) or 0)
     start_date = request.form.get('start_date', '').strip()
-    installment_amount = float(request.form.get('installment_amount', 0))
-    total_installments = int(request.form.get('total_installments', 0))
-    frequency = request.form.get('frequency', 'Weekly')
-    percentage = float(request.form.get('percentage', 0) or 0)
-    interest_rate = float(request.form.get('interest_rate', 0) or 0)
+    monthly_amount = float(request.form.get('monthly_amount', 0) or 0)
+    tenure = int(request.form.get('tenure', 0) or 0)
+    tenure_unit = request.form.get('tenure_unit', 'Months')
+    roi = float(request.form.get('roi', 0) or 0)
     remarks = request.form.get('remarks', '').strip()
-    if not mid or not start_date or installment_amount <= 0 or total_installments <= 0:
-        flash('All fields are required.', 'danger')
+    if not mid or not start_date or monthly_amount <= 0 or tenure <= 0:
+        flash('All required fields must be filled.', 'danger')
+        db.close()
         return redirect(url_for('rd_list'))
+    tenure_months = tenure if tenure_unit == 'Months' else tenure * 12
+    corpus = monthly_amount * tenure_months
+    maturity_amount = corpus + corpus * roi / 100
     member = db.execute("SELECT center_id FROM members WHERE id=?", (mid,)).fetchone()
     last = db.execute("SELECT rd_no FROM rd_accounts ORDER BY id DESC LIMIT 1").fetchone()
     if last:
@@ -1776,10 +1900,12 @@ def rd_new():
         num = 1
     rd_no = f"RD-{num:04d}"
     db.execute("""
-        INSERT INTO rd_accounts (rd_no,member_id,center_id,start_date,installment_amount,total_installments,frequency,percentage,interest_rate,status,remarks,created_by)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-    """, (rd_no, mid, member['center_id'], start_date, installment_amount, total_installments,
-          frequency, percentage, interest_rate, 'Active', remarks, session['user_id']))
+        INSERT INTO rd_accounts (rd_no, member_id, center_id, start_date, installment_amount,
+                                 total_installments, frequency, interest_rate, maturity_amount,
+                                 tenure_unit, status, remarks, created_by)
+        VALUES (?,?,?,?,?,?,'Monthly',?,?,?,?,?,?)
+    """, (rd_no, mid, member['center_id'], start_date, monthly_amount, tenure_months,
+          roi, maturity_amount, tenure_unit, 'Active', remarks, session['user_id']))
     db.commit()
     db.close()
     flash(f'RD Account {rd_no} opened successfully.', 'success')
@@ -1801,13 +1927,33 @@ def rd_detail(rdid):
     if not account:
         flash('RD account not found.', 'danger')
         return redirect(url_for('rd_list'))
-    transactions = db.execute("""
+    payments = db.execute("""
         SELECT rdt.*, u.full_name as posted_by_name
         FROM rd_transactions rdt LEFT JOIN users u ON rdt.posted_by=u.id
-        WHERE rdt.rd_id=? ORDER BY rdt.installment_no
+        WHERE rdt.rd_id=? AND (rdt.transaction_type='Payment' OR rdt.transaction_type IS NULL)
+        ORDER BY rdt.installment_no
     """, (rdid,)).fetchall()
+    withdrawals = db.execute("""
+        SELECT rdt.*, u.full_name as posted_by_name
+        FROM rd_transactions rdt LEFT JOIN users u ON rdt.posted_by=u.id
+        WHERE rdt.rd_id=? AND rdt.transaction_type='Withdrawal'
+        ORDER BY rdt.id
+    """, (rdid,)).fetchall()
+    tenure_months = account['total_installments'] or 0
+    monthly = account['installment_amount'] or 0
+    roi = account['interest_rate'] or 0
+    corpus = monthly * tenure_months
+    interest_earned = corpus * roi / 100
+    keys = account.keys()
+    calc_maturity = (account['maturity_amount'] if 'maturity_amount' in keys and account['maturity_amount']
+                     else corpus + interest_earned)
+    tenure_unit = (account['tenure_unit'] if 'tenure_unit' in keys and account['tenure_unit'] else 'Months')
+    maturity_date = _add_months(account['start_date'] or '', tenure_months)
     db.close()
-    return render_template('rd/detail.html', account=account, transactions=transactions)
+    return render_template('rd/detail.html', account=account, transactions=payments,
+                           withdrawals=withdrawals, corpus=corpus, interest_earned=interest_earned,
+                           calc_maturity=calc_maturity, tenure_unit=tenure_unit,
+                           maturity_date=maturity_date)
 
 @app.route('/rd/<int:rdid>/pay', methods=['POST'])
 @login_required
@@ -1817,7 +1963,7 @@ def rd_pay(rdid):
     if not account or account['status'] == 'Closed':
         flash('RD account not found or already closed.', 'danger')
         return redirect(url_for('rd_list'))
-    paid_count = db.execute("SELECT COUNT(*) FROM rd_transactions WHERE rd_id=?", (rdid,)).fetchone()[0]
+    paid_count = db.execute("SELECT COUNT(*) FROM rd_transactions WHERE rd_id=? AND (transaction_type='Payment' OR transaction_type IS NULL)", (rdid,)).fetchone()[0]
     if paid_count >= account['total_installments']:
         db.execute("UPDATE rd_accounts SET status='Closed' WHERE id=?", (rdid,))
         db.commit()
@@ -1832,8 +1978,8 @@ def rd_pay(rdid):
         return redirect(url_for('rd_detail', rdid=rdid))
     next_inst = paid_count + 1
     db.execute("""
-        INSERT INTO rd_transactions (rd_id, transaction_date, installment_no, amount, remarks, posted_by)
-        VALUES (?,?,?,?,?,?)
+        INSERT INTO rd_transactions (rd_id, transaction_date, installment_no, amount, remarks, transaction_type, posted_by)
+        VALUES (?,?,?,?,?,'Payment',?)
     """, (rdid, transaction_date, next_inst, amount, remarks, session['user_id']))
     if next_inst >= account['total_installments']:
         db.execute("UPDATE rd_accounts SET status='Closed' WHERE id=?", (rdid,))
@@ -1841,6 +1987,97 @@ def rd_pay(rdid):
     db.close()
     flash(f'Installment {next_inst}/{account["total_installments"]} recorded.', 'success')
     return redirect(url_for('rd_detail', rdid=rdid))
+
+@app.route('/rd/<int:rdid>/withdraw', methods=['POST'])
+@admin_required
+def rd_withdraw(rdid):
+    db = get_db()
+    account = db.execute("SELECT * FROM rd_accounts WHERE id=?", (rdid,)).fetchone()
+    if not account or account['status'] == 'Closed':
+        flash('RD account not found or already closed.', 'danger')
+        db.close()
+        return redirect(url_for('rd_list'))
+    amount = float(request.form.get('amount', 0))
+    transaction_date = request.form.get('transaction_date', '').strip()
+    remarks = request.form.get('remarks', '').strip()
+    if amount <= 0 or not transaction_date:
+        flash('Invalid amount or date.', 'danger')
+        db.close()
+        return redirect(url_for('rd_detail', rdid=rdid))
+    total_paid = db.execute(
+        "SELECT COALESCE(SUM(amount),0) FROM rd_transactions WHERE rd_id=? AND (transaction_type='Payment' OR transaction_type IS NULL)",
+        (rdid,)).fetchone()[0]
+    total_withdrawn = db.execute(
+        "SELECT COALESCE(SUM(amount),0) FROM rd_transactions WHERE rd_id=? AND transaction_type='Withdrawal'",
+        (rdid,)).fetchone()[0]
+    available = total_paid - total_withdrawn
+    if amount > available:
+        flash(f'Insufficient balance. Available: ₹{available:,.0f}', 'danger')
+        db.close()
+        return redirect(url_for('rd_detail', rdid=rdid))
+    db.execute("""
+        INSERT INTO rd_transactions (rd_id, transaction_date, installment_no, amount, remarks, transaction_type, posted_by)
+        VALUES (?,?,0,?,?,'Withdrawal',?)
+    """, (rdid, transaction_date, amount, remarks, session['user_id']))
+    db.commit()
+    db.close()
+    flash(f'Withdrawal of ₹{amount:,.0f} recorded for {account["rd_no"]}.', 'success')
+    return redirect(url_for('rd_detail', rdid=rdid))
+
+@app.route('/rd/transaction/<int:tid>/delete', methods=['POST'])
+@admin_required
+def rd_transaction_delete(tid):
+    db = get_db()
+    txn = db.execute("SELECT rd_id, transaction_type FROM rd_transactions WHERE id=?", (tid,)).fetchone()
+    if not txn:
+        flash('Transaction not found.', 'danger')
+        db.close()
+        return redirect(url_for('rd_list'))
+    rdid = txn['rd_id']
+    db.execute("DELETE FROM rd_transactions WHERE id=?", (tid,))
+    paid = db.execute(
+        "SELECT COUNT(*) FROM rd_transactions WHERE rd_id=? AND (transaction_type='Payment' OR transaction_type IS NULL)",
+        (rdid,)).fetchone()[0]
+    total = db.execute("SELECT total_installments FROM rd_accounts WHERE id=?", (rdid,)).fetchone()[0]
+    if paid < total:
+        db.execute("UPDATE rd_accounts SET status='Active' WHERE id=?", (rdid,))
+    db.commit()
+    db.close()
+    flash('RD transaction deleted.', 'success')
+    return redirect(url_for('rd_detail', rdid=rdid))
+
+@app.route('/rd/<int:rdid>/undo', methods=['POST'])
+@admin_required
+def rd_undo(rdid):
+    db = get_db()
+    last = db.execute(
+        "SELECT id, transaction_type FROM rd_transactions WHERE rd_id=? ORDER BY id DESC LIMIT 1", (rdid,)
+    ).fetchone()
+    if last:
+        db.execute("DELETE FROM rd_transactions WHERE id=?", (last['id'],))
+        paid = db.execute(
+            "SELECT COUNT(*) FROM rd_transactions WHERE rd_id=? AND (transaction_type='Payment' OR transaction_type IS NULL)",
+            (rdid,)).fetchone()[0]
+        total = db.execute("SELECT total_installments FROM rd_accounts WHERE id=?", (rdid,)).fetchone()[0]
+        if paid < total:
+            db.execute("UPDATE rd_accounts SET status='Active' WHERE id=?", (rdid,))
+        db.commit()
+        flash('Last RD transaction undone.', 'success')
+    else:
+        flash('No transactions to undo.', 'warning')
+    db.close()
+    return redirect(url_for('rd_detail', rdid=rdid))
+
+@app.route('/rd/<int:rdid>/delete', methods=['POST'])
+@admin_required
+def rd_account_delete(rdid):
+    db = get_db()
+    db.execute("DELETE FROM rd_transactions WHERE rd_id=?", (rdid,))
+    db.execute("DELETE FROM rd_accounts WHERE id=?", (rdid,))
+    db.commit()
+    db.close()
+    flash('RD account deleted.', 'success')
+    return redirect(url_for('rd_list'))
 
 @app.route('/reports/rd')
 @login_required
