@@ -372,28 +372,26 @@ def members_list():
 @app.route('/members/extract-from-docs', methods=['POST'])
 @login_required
 def members_extract_from_docs():
-    import anthropic, base64, re
+    import re
+    import google.generativeai as genai
     files = request.files.getlist('docs')
     if not files or all(f.filename == '' for f in files):
         return jsonify({'error': 'No files uploaded'}), 400
-    api_key = os.environ.get('ANTHROPIC_API_KEY')
+    api_key = os.environ.get('GEMINI_API_KEY')
     if not api_key:
-        return jsonify({'error': 'AI extraction not configured. Set ANTHROPIC_API_KEY in environment.'}), 500
-    client = anthropic.Anthropic(api_key=api_key)
-    content = []
+        return jsonify({'error': 'AI extraction not configured. Set GEMINI_API_KEY in environment.'}), 500
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel('gemini-1.5-flash')
+    parts = []
     for f in files:
         if f.filename == '':
             continue
         data = f.read()
-        b64 = base64.standard_b64encode(data).decode('utf-8')
         mime = (f.content_type or '').lower()
-        if 'pdf' in mime:
-            content.append({"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": b64}})
-        else:
-            if mime not in ('image/jpeg', 'image/png', 'image/gif', 'image/webp'):
-                mime = 'image/jpeg'
-            content.append({"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}})
-    content.append({"type": "text", "text": """Analyze these documents (membership application forms, Aadhaar cards, PAN cards, Voter IDs, or other ID/KYC documents) and extract member details.
+        if mime not in ('image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'):
+            mime = 'image/jpeg'
+        parts.append({'mime_type': mime, 'data': data})
+    parts.append("""Analyze these documents (membership application forms, Aadhaar cards, PAN cards, Voter IDs, or other ID/KYC documents) and extract member details.
 
 Return ONLY a valid JSON object with these exact keys (use null if not found, dates must be DD/MM/YYYY):
 {
@@ -420,14 +418,10 @@ Return ONLY a valid JSON object with these exact keys (use null if not found, da
   "occupation": "occupation or business"
 }
 
-Return only the JSON object, no explanation or markdown."""})
+Return only the JSON object, no explanation or markdown.""")
     try:
-        response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=1024,
-            messages=[{"role": "user", "content": content}]
-        )
-        text = response.content[0].text.strip()
+        response = model.generate_content(parts)
+        text = response.text.strip()
         match = re.search(r'\{.*\}', text, re.DOTALL)
         extracted = json.loads(match.group()) if match else {}
         return jsonify(extracted)
