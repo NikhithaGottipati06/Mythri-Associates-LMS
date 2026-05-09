@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+{% block title %}Savings Passbook – {{ member.full_name }}{% endblock %}
+{% block content %}
+<style>
+@media print {
+  .topbar, .sidebar, .no-print, .alert { display:none !important; }
+  .main-content { margin:0 !important; padding:8px !important; }
+  body { background:#fff !important; font-size:11px; }
+  .passbook-table th, .passbook-table td { padding:4px 6px !important; font-size:11px; }
+}
+</style>
+
+<div class="action-bar no-print">
+  <a href="{{ url_for('savings_list') }}" class="btn btn-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+  <button onclick="window.print()" class="btn-print-pdf ms-2">
+    <i class="bi bi-printer-fill"></i> Print / PDF
+  </button>
+</div>
+
+<!-- Passbook Header -->
+<div style="border:2px solid #1a3c6e;border-radius:8px;padding:16px 20px;margin-bottom:16px;background:#fff;">
+  <div class="text-center mb-2">
+    <div style="font-size:18px;font-weight:700;color:#1a3c6e;letter-spacing:1px;">MAITRI ASSOCIATES</div>
+    <div style="font-size:12px;color:#555;">Savings Account Passbook</div>
+  </div>
+  <hr style="border-color:#1a3c6e44;margin:8px 0;">
+  <div class="row g-1" style="font-size:13px;">
+    <div class="col-md-3"><span class="text-muted">Member Code:</span> <strong class="text-primary">{{ member.member_code }}</strong></div>
+    <div class="col-md-5"><span class="text-muted">Name:</span> <strong>{{ member.full_name }}</strong></div>
+    <div class="col-md-4"><span class="text-muted">Center:</span> {{ member.center_name or '—' }}</div>
+    <div class="col-md-3"><span class="text-muted">Phone:</span> {{ member.phone1 or '—' }}</div>
+    <div class="col-md-5"><span class="text-muted">Address:</span> {{ member.address1 or '' }}{% if member.city %}, {{ member.city }}{% endif %}</div>
+    <div class="col-md-4"><span class="text-muted">Status:</span>
+      <span class="badge {% if member.status=='ACTIVE' %}bg-success{% else %}bg-danger{% endif %}">{{ member.status }}</span>
+    </div>
+  </div>
+</div>
+
+<!-- Passbook Table -->
+{% set ns = namespace(balance=0, total_dep=0, total_with=0) %}
+<div style="border:1px solid #1a3c6e44;border-radius:6px;overflow:hidden;">
+  <table class="table table-bordered table-sm mb-0 passbook-table" style="font-size:12px;">
+    <thead>
+      <tr style="background:#1a3c6e;color:#fff;">
+        <th style="width:40px;">S.No</th>
+        <th>Date</th>
+        <th>Particulars</th>
+        <th class="text-end">Deposit (₹)</th>
+        <th class="text-end">Withdrawal (₹)</th>
+        <th class="text-end">Balance (₹)</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% if transactions %}
+      {% for t in transactions %}
+        {% set ns.total_dep = ns.total_dep + (t.deposit_amount or 0) %}
+        {% set ns.total_with = ns.total_with + (t.withdraw_amount or 0) %}
+        <tr {% if loop.index % 2 == 0 %}style="background:#f5f8ff;"{% endif %}>
+          <td class="text-center">{{ loop.index }}</td>
+          <td>{{ t.transaction_date }}</td>
+          <td style="color:#555;">
+            {% if t.deposit_amount and t.deposit_amount > 0 %}
+              <span class="text-success">Deposit</span>
+            {% else %}
+              <span class="text-danger">Withdrawal</span>
+            {% endif %}
+          </td>
+          <td class="text-end text-success fw-semibold">
+            {% if t.deposit_amount and t.deposit_amount > 0 %}{{ '{:,.2f}'.format(t.deposit_amount) }}{% else %}—{% endif %}
+          </td>
+          <td class="text-end text-danger fw-semibold">
+            {% if t.withdraw_amount and t.withdraw_amount > 0 %}{{ '{:,.2f}'.format(t.withdraw_amount) }}{% else %}—{% endif %}
+          </td>
+          <td class="text-end fw-bold">{{ '{:,.2f}'.format(t.balance) }}</td>
+        </tr>
+      {% endfor %}
+    {% else %}
+      <tr><td colspan="6" class="text-center text-muted py-4">No transactions found.</td></tr>
+    {% endif %}
+    </tbody>
+    {% if transactions %}
+    <tfoot>
+      <tr style="background:#dce8f8;font-weight:700;">
+        <td colspan="3" class="text-end">Totals:</td>
+        <td class="text-end text-success">{{ '{:,.2f}'.format(ns.total_dep) }}</td>
+        <td class="text-end text-danger">{{ '{:,.2f}'.format(ns.total_with) }}</td>
+        <td class="text-end">{{ '{:,.2f}'.format(ns.total_dep - ns.total_with) }}</td>
+      </tr>
+    </tfoot>
+    {% endif %}
+  </table>
+</div>
+
+<div style="margin-top:24px;font-size:11px;color:#888;text-align:center;" class="no-print">
+  Printed on {{ now if now else '' }} &nbsp;|&nbsp; Maitri Associates LMS
+</div>
+{% endblock %}

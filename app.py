@@ -1669,6 +1669,23 @@ def savings_list():
                            centers=centers, center_filter=center_filter, totals=totals,
                            all_members=all_members)
 
+@app.route('/savings/passbook/<int:mid>')
+@login_required
+def savings_passbook(mid):
+    db = get_db()
+    member = db.execute("""
+        SELECT m.*, c.center_code, c.center_name FROM members m
+        LEFT JOIN centers c ON m.center_id=c.id WHERE m.id=?
+    """, (mid,)).fetchone()
+    transactions = db.execute("""
+        SELECT st.*, u.full_name as posted_by_name
+        FROM savings_transactions st
+        LEFT JOIN users u ON st.posted_by=u.id
+        WHERE st.member_id=? ORDER BY st.id
+    """, (mid,)).fetchall()
+    db.close()
+    return render_template('savings/passbook.html', member=member, transactions=transactions)
+
 @app.route('/savings/member-info')
 @login_required
 def savings_member_info():

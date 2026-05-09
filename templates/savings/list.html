@@ -46,6 +46,9 @@
         <button class="btn btn-warning btn-sm fw-semibold" id="withdrawBtn" onclick="submitEntry('withdraw')">
           <i class="bi bi-cash me-1"></i>Withdraw
         </button>
+        <a id="passbookBtn" href="#" target="_blank" class="btn btn-outline-primary btn-sm fw-semibold">
+          <i class="bi bi-book me-1"></i>Print Passbook
+        </a>
         {% if session.role == 'Admin' %}
         <form id="undoForm" method="POST" style="display:inline;" onsubmit="return confirm('Undo last transaction for this member?')">
           <button type="submit" class="btn btn-outline-secondary btn-sm fw-semibold">
@@ -201,6 +204,7 @@ function fetchMemberInfo(mid) {
       document.getElementById('memberBalance').value = '₹' + currentBalance.toLocaleString('en-IN');
       document.getElementById('entryForm').style.display = 'block';
       document.getElementById('withdrawBtn').disabled = currentBalance <= 0;
+      document.getElementById('passbookBtn').href = '/savings/passbook/' + mid;
       const undoForm = document.getElementById('undoForm');
       if (undoForm) undoForm.action = `/savings/undo/${mid}`;
     });
