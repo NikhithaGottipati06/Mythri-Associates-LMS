@@ -454,50 +454,54 @@ def members_edit(mid):
     db = get_db()
     member = db.execute("SELECT * FROM members WHERE id=?", (mid,)).fetchone()
     if request.method == 'POST':
-        db.execute("""
-            UPDATE members SET center_id=?,grp=?,full_name=?,date_of_join=?,date_of_birth=?,
-            gender=?,marital_status=?,guardian_name=?,spouse_name=?,caste=?,religion=?,
-            address1=?,address2=?,city=?,mandal=?,pin_code=?,district=?,state=?,landmark=?,
-            phone1=?,phone2=?,email=?,notes=?,income=?,expenditure=?,total_fees=?,
-            fee_mode=?,fee_narration=?,kyc_type=?,kyc_number=? WHERE id=?
-        """, (request.form.get('center_id') or None, request.form.get('grp',1),
-              request.form['full_name'], request.form.get('date_of_join',''),
-              request.form.get('date_of_birth',''), request.form.get('gender',''),
-              request.form.get('marital_status',''), request.form.get('guardian_name',''),
-              request.form.get('spouse_name',''), request.form.get('caste',''),
-              request.form.get('religion',''), request.form.get('address1',''),
-              request.form.get('address2',''), request.form.get('city',''),
-              request.form.get('mandal',''), request.form.get('pin_code',''),
-              request.form.get('district',''), request.form.get('state','ANDHRA PRADESH'),
-              request.form.get('landmark',''), request.form.get('phone1',''),
-              request.form.get('phone2',''), request.form.get('email',''),
-              request.form.get('notes',''), request.form.get('income',0),
-              request.form.get('expenditure',0), request.form.get('total_fees',0),
-              request.form.get('fee_mode','Cash'), request.form.get('fee_narration','Cash'),
-              request.form.get('kyc_type',''), request.form.get('kyc_number',''), mid))
-        db.commit()
-        code = db.execute("SELECT member_code FROM members WHERE id=?", (mid,)).fetchone()['member_code']
-        photo = request.files.get('member_photo')
-        if photo and photo.filename:
-            path = _save_member_file(photo, code, 'photo')
-            db.execute("UPDATE members SET photo_path=? WHERE id=?", (path, mid))
+        try:
+            db.execute("""
+                UPDATE members SET center_id=?,grp=?,full_name=?,date_of_join=?,date_of_birth=?,
+                gender=?,marital_status=?,guardian_name=?,spouse_name=?,caste=?,religion=?,
+                address1=?,address2=?,city=?,mandal=?,pin_code=?,district=?,state=?,landmark=?,
+                phone1=?,phone2=?,email=?,notes=?,income=?,expenditure=?,total_fees=?,
+                fee_mode=?,fee_narration=?,kyc_type=?,kyc_number=? WHERE id=?
+            """, (request.form.get('center_id') or None, request.form.get('grp',1),
+                  request.form['full_name'], request.form.get('date_of_join',''),
+                  request.form.get('date_of_birth',''), request.form.get('gender',''),
+                  request.form.get('marital_status',''), request.form.get('guardian_name',''),
+                  request.form.get('spouse_name',''), request.form.get('caste',''),
+                  request.form.get('religion',''), request.form.get('address1',''),
+                  request.form.get('address2',''), request.form.get('city',''),
+                  request.form.get('mandal',''), request.form.get('pin_code',''),
+                  request.form.get('district',''), request.form.get('state','ANDHRA PRADESH'),
+                  request.form.get('landmark',''), request.form.get('phone1',''),
+                  request.form.get('phone2',''), request.form.get('email',''),
+                  request.form.get('notes',''), request.form.get('income',0),
+                  request.form.get('expenditure',0), request.form.get('total_fees',0),
+                  request.form.get('fee_mode','Cash'), request.form.get('fee_narration','Cash'),
+                  request.form.get('kyc_type',''), request.form.get('kyc_number',''), mid))
             db.commit()
-        kyc_doc = request.files.get('kyc_doc')
-        if kyc_doc and kyc_doc.filename:
-            path = _save_member_file(kyc_doc, code, 'kyc')
-            label = request.form.get('kyc_type', 'KYC Document')
-            db.execute("INSERT INTO member_documents (member_id,doc_type,doc_label,filename,original_name) VALUES (?,?,?,?,?)",
-                       (mid, 'kyc', label, path, kyc_doc.filename))
-            db.commit()
-        for other in request.files.getlist('other_docs'):
-            if other and other.filename:
-                path = _save_member_file(other, code, 'doc')
-                db.execute("INSERT INTO member_documents (member_id,doc_type,doc_label,filename,original_name) VALUES (?,?,?,?,?)",
-                           (mid, 'other', 'Document', path, other.filename))
+            code = db.execute("SELECT member_code FROM members WHERE id=?", (mid,)).fetchone()['member_code']
+            photo = request.files.get('member_photo')
+            if photo and photo.filename:
+                path = _save_member_file(photo, code, 'photo')
+                db.execute("UPDATE members SET photo_path=? WHERE id=?", (path, mid))
                 db.commit()
-        db.close()
-        flash('Member updated.', 'success')
-        return redirect(url_for('members_list'))
+            kyc_doc = request.files.get('kyc_doc')
+            if kyc_doc and kyc_doc.filename:
+                path = _save_member_file(kyc_doc, code, 'kyc')
+                label = request.form.get('kyc_type', 'KYC Document')
+                db.execute("INSERT INTO member_documents (member_id,doc_type,doc_label,filename,original_name) VALUES (?,?,?,?,?)",
+                           (mid, 'kyc', label, path, kyc_doc.filename))
+                db.commit()
+            for other in request.files.getlist('other_docs'):
+                if other and other.filename:
+                    path = _save_member_file(other, code, 'doc')
+                    db.execute("INSERT INTO member_documents (member_id,doc_type,doc_label,filename,original_name) VALUES (?,?,?,?,?)",
+                               (mid, 'other', 'Document', path, other.filename))
+                    db.commit()
+            flash('Member updated.', 'success')
+        except Exception as e:
+            flash(f'Error updating member: {e}', 'danger')
+        finally:
+            db.close()
+        return redirect(url_for('members_edit', mid=mid))
     docs = db.execute("SELECT * FROM member_documents WHERE member_id=? ORDER BY uploaded_at DESC", (mid,)).fetchall()
     centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
     db.close()
