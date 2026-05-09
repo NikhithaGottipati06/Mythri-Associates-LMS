@@ -50,8 +50,12 @@
   <div class="nav-section">Masters</div>
   <a class="nav-link {% if 'centers' in request.endpoint %}active{% endif %}"
      href="{{ url_for('centers_list') }}"><i class="bi bi-building"></i> Centers</a>
-  <a class="nav-link {% if 'members' in request.endpoint %}active{% endif %}"
+  <a class="nav-link {% if 'members' in request.endpoint and 'application' not in request.endpoint %}active{% endif %}"
      href="{{ url_for('members_list') }}"><i class="bi bi-person-badge"></i> Members</a>
+  <a class="nav-link {% if request.endpoint == 'member_applications' %}active{% endif %}"
+     href="{{ url_for('member_applications') }}"><i class="bi bi-person-check"></i> Member Applications</a>
+  <a class="nav-link {% if 'documents' in request.endpoint %}active{% endif %}"
+     href="{{ url_for('documents_list') }}"><i class="bi bi-folder2-open"></i> KYC Documents</a>
 
   <!-- Savings -->
   <div class="nav-section">Savings & Deposits</div>

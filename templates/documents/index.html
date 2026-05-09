@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block title %}KYC Documents{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-folder2-open" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>KYC Documents</h5>
+</div>
+<div class="action-bar">
+  <form method="GET" class="d-flex gap-2">
+    <input type="text" name="q" class="form-control form-control-sm" style="width:260px;"
+           placeholder="Search by name or member code..." value="{{ q }}">
+    <button class="btn btn-primary btn-sm"><i class="bi bi-search"></i> Search</button>
+    {% if q %}<a href="{{ url_for('documents_list') }}" class="btn btn-secondary btn-sm">Clear</a>{% endif %}
+  </form>
+  <span class="ms-auto total-bar">{{ members|length }} members</span>
+</div>
+
+<div class="lms-table">
+  <table class="table table-hover mb-0">
+    <thead>
+      <tr>
+        <th>Photo</th>
+        <th>Member Code</th>
+        <th>Name</th>
+        <th>Center</th>
+        <th>KYC Type</th>
+        <th>KYC Number</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for m in members %}
+    <tr>
+      <td>
+        {% if m.photo_path %}
+        <img src="{{ url_for('static', filename='uploads/' + m.photo_path) }}"
+             style="width:36px;height:36px;object-fit:cover;border-radius:50%;" alt="">
+        {% else %}
+        <div style="width:36px;height:36px;border-radius:50%;background:#e9ecef;display:flex;align-items:center;justify-content:center;">
+          <i class="bi bi-person" style="color:#aaa;"></i>
+        </div>
+        {% endif %}
+      </td>
+      <td class="fw-semibold text-primary">{{ m.member_code }}</td>
+      <td class="fw-semibold">{{ m.full_name }}</td>
+      <td>{{ m.center_name or '—' }}</td>
+      <td>{{ m.kyc_type or '—' }}</td>
+      <td>{{ m.kyc_number or '—' }}</td>
+      <td><span class="badge {% if m.status=='ACTIVE' %}bg-success{% else %}bg-danger{% endif %}">{{ m.status }}</span></td>
+      <td>
+        <a href="{{ url_for('documents_view', mid=m.id) }}" class="btn btn-outline-primary btn-icon" title="View & Print">
+          <i class="bi bi-eye"></i>
+        </a>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8" class="text-center text-muted py-4">No members found.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

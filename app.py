@@ -369,64 +369,15 @@ def members_list():
     db.close()
     return render_template('members/list.html', members=members)
 
-@app.route('/members/extract-from-docs', methods=['POST'])
-@login_required
-def members_extract_from_docs():
-    import re
-    import google.generativeai as genai
-    files = request.files.getlist('docs')
-    if not files or all(f.filename == '' for f in files):
-        return jsonify({'error': 'No files uploaded'}), 400
-    api_key = os.environ.get('GEMINI_API_KEY')
-    if not api_key:
-        return jsonify({'error': 'AI extraction not configured. Set GEMINI_API_KEY in environment.'}), 500
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    parts = []
-    for f in files:
-        if f.filename == '':
-            continue
-        data = f.read()
-        mime = (f.content_type or '').lower()
-        if mime not in ('image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'):
-            mime = 'image/jpeg'
-        parts.append({'mime_type': mime, 'data': data})
-    parts.append("""Analyze these documents (membership application forms, Aadhaar cards, PAN cards, Voter IDs, or other ID/KYC documents) and extract member details.
-
-Return ONLY a valid JSON object with these exact keys (use null if not found, dates must be DD/MM/YYYY):
-{
-  "full_name": "full name in UPPERCASE",
-  "date_of_birth": "DD/MM/YYYY",
-  "gender": "Female or Male or Other",
-  "marital_status": "Married or Unmarried or Widow or Divorced",
-  "guardian_name": "father name or husband name",
-  "spouse_name": "spouse/husband name if mentioned separately",
-  "phone1": "primary 10-digit mobile number",
-  "address1": "house number and street",
-  "address2": "area or locality",
-  "city": "city or village name",
-  "mandal": "mandal name",
-  "district": "district name",
-  "state": "state name",
-  "pin_code": "6-digit pin code",
-  "kyc_type": "Aadhaar Card or PAN Card or Voter ID or Driving Licence",
-  "kyc_number": "the document ID number",
-  "income": "monthly income as number only or null",
-  "expenditure": "monthly expenditure as number only or null",
-  "caste": "caste if mentioned",
-  "religion": "religion if mentioned",
-  "occupation": "occupation or business"
-}
-
-Return only the JSON object, no explanation or markdown.""")
-    try:
-        response = model.generate_content(parts)
-        text = response.text.strip()
-        match = re.search(r'\{.*\}', text, re.DOTALL)
-        extracted = json.loads(match.group()) if match else {}
-        return jsonify(extracted)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+def _save_member_file(file, member_code, prefix):
+    import uuid
+    branch_name = os.path.basename(session.get('branch_db', 'default')).replace('.db', '')
+    upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], branch_name, member_code)
+    os.makedirs(upload_dir, exist_ok=True)
+    ext = os.path.splitext(file.filename)[1].lower() or '.jpg'
+    fname = f"{prefix}_{uuid.uuid4().hex[:8]}{ext}"
+    file.save(os.path.join(upload_dir, fname))
+    return f"{branch_name}/{member_code}/{fname}"
 
 @app.route('/members/new', methods=['GET', 'POST'])
 @login_required
@@ -464,6 +415,26 @@ def members_new():
                   request.form.get('fee_narration','Cash'),
                   request.form.get('kyc_type',''), request.form.get('kyc_number',''), 'ACTIVE'))
             db.commit()
+            member_id = db.execute("SELECT id FROM members WHERE member_code=?", (code,)).fetchone()['id']
+            # Handle file uploads
+            photo = request.files.get('member_photo')
+            if photo and photo.filename:
+                path = _save_member_file(photo, code, 'photo')
+                db.execute("UPDATE members SET photo_path=? WHERE id=?", (path, member_id))
+                db.commit()
+            kyc_doc = request.files.get('kyc_doc')
+            if kyc_doc and kyc_doc.filename:
+                path = _save_member_file(kyc_doc, code, 'kyc')
+                label = request.form.get('kyc_type', 'KYC Document')
+                db.execute("INSERT INTO member_documents (member_id,doc_type,doc_label,filename,original_name) VALUES (?,?,?,?,?)",
+                           (member_id, 'kyc', label, path, kyc_doc.filename))
+                db.commit()
+            for other in request.files.getlist('other_docs'):
+                if other and other.filename:
+                    path = _save_member_file(other, code, 'doc')
+                    db.execute("INSERT INTO member_documents (member_id,doc_type,doc_label,filename,original_name) VALUES (?,?,?,?,?)",
+                               (member_id, 'other', 'Document', path, other.filename))
+                    db.commit()
             flash('Member added successfully.', 'success')
         except Exception as e:
             flash(f'Error: {e}', 'danger')
@@ -505,12 +476,32 @@ def members_edit(mid):
               request.form.get('fee_mode','Cash'), request.form.get('fee_narration','Cash'),
               request.form.get('kyc_type',''), request.form.get('kyc_number',''), mid))
         db.commit()
+        code = db.execute("SELECT member_code FROM members WHERE id=?", (mid,)).fetchone()['member_code']
+        photo = request.files.get('member_photo')
+        if photo and photo.filename:
+            path = _save_member_file(photo, code, 'photo')
+            db.execute("UPDATE members SET photo_path=? WHERE id=?", (path, mid))
+            db.commit()
+        kyc_doc = request.files.get('kyc_doc')
+        if kyc_doc and kyc_doc.filename:
+            path = _save_member_file(kyc_doc, code, 'kyc')
+            label = request.form.get('kyc_type', 'KYC Document')
+            db.execute("INSERT INTO member_documents (member_id,doc_type,doc_label,filename,original_name) VALUES (?,?,?,?,?)",
+                       (mid, 'kyc', label, path, kyc_doc.filename))
+            db.commit()
+        for other in request.files.getlist('other_docs'):
+            if other and other.filename:
+                path = _save_member_file(other, code, 'doc')
+                db.execute("INSERT INTO member_documents (member_id,doc_type,doc_label,filename,original_name) VALUES (?,?,?,?,?)",
+                           (mid, 'other', 'Document', path, other.filename))
+                db.commit()
         db.close()
         flash('Member updated.', 'success')
         return redirect(url_for('members_list'))
+    docs = db.execute("SELECT * FROM member_documents WHERE member_id=? ORDER BY uploaded_at DESC", (mid,)).fetchall()
     centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
     db.close()
-    return render_template('members/form.html', member=member, centers=centers)
+    return render_template('members/form.html', member=member, centers=centers, docs=docs)
 
 @app.route('/members/<int:mid>/delete', methods=['POST'])
 @admin_required
@@ -521,6 +512,80 @@ def members_delete(mid):
     db.close()
     flash('Member deleted.', 'success')
     return redirect(url_for('members_list'))
+
+@app.route('/members/<int:mid>/documents/<int:doc_id>/delete', methods=['POST'])
+@login_required
+def member_doc_delete(mid, doc_id):
+    db = get_db()
+    row = db.execute("SELECT filename FROM member_documents WHERE id=? AND member_id=?", (doc_id, mid)).fetchone()
+    if row:
+        full_path = os.path.join(app.config['UPLOAD_FOLDER'], row['filename'])
+        if os.path.exists(full_path):
+            os.remove(full_path)
+        db.execute("DELETE FROM member_documents WHERE id=?", (doc_id,))
+        db.commit()
+    db.close()
+    return redirect(url_for('members_edit', mid=mid))
+
+# ── Member Applications ───────────────────────────────────────────────────────
+
+@app.route('/member-applications')
+@login_required
+def member_applications():
+    db = get_db()
+    members = db.execute("""
+        SELECT m.*, c.center_name FROM members m
+        LEFT JOIN centers c ON m.center_id = c.id
+        WHERE m.photo_path IS NOT NULL AND m.photo_path != ''
+        ORDER BY m.id DESC
+    """).fetchall()
+    db.close()
+    return render_template('members/applications.html', members=members)
+
+# ── KYC Documents ─────────────────────────────────────────────────────────────
+
+@app.route('/documents')
+@login_required
+def documents_list():
+    db = get_db()
+    q = request.args.get('q', '').strip()
+    if q:
+        members = db.execute("""
+            SELECT m.*, c.center_name FROM members m
+            LEFT JOIN centers c ON m.center_id = c.id
+            WHERE m.full_name LIKE ? OR m.member_code LIKE ?
+            ORDER BY m.full_name
+        """, (f'%{q}%', f'%{q}%')).fetchall()
+    else:
+        members = db.execute("""
+            SELECT m.*, c.center_name FROM members m
+            LEFT JOIN centers c ON m.center_id = c.id
+            ORDER BY m.full_name
+        """).fetchall()
+    db.close()
+    return render_template('documents/index.html', members=members, q=q)
+
+@app.route('/documents/<int:mid>')
+@login_required
+def documents_view(mid):
+    db = get_db()
+    member = db.execute("""
+        SELECT m.*, c.center_name, c.center_code FROM members m
+        LEFT JOIN centers c ON m.center_id = c.id
+        WHERE m.id=?
+    """, (mid,)).fetchone()
+    docs = db.execute("SELECT * FROM member_documents WHERE member_id=? ORDER BY doc_type, uploaded_at", (mid,)).fetchall()
+    loans = db.execute("""
+        SELECT la.application_no, la.applied_amount, la.applied_date, la.purpose, la.status,
+               ld.disbursement_no, ld.disbursed_amount, ld.disbursement_date,
+               COALESCE((SELECT SUM(rp.principal) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id),0) as paid_principal
+        FROM loan_applications la
+        LEFT JOIN loan_disbursements ld ON ld.application_id = la.id
+        WHERE la.member_id=?
+        ORDER BY la.id DESC
+    """, (mid,)).fetchall()
+    db.close()
+    return render_template('documents/view.html', member=member, docs=docs, loans=loans)
 
 @app.route('/members/<int:mid>/withdraw', methods=['POST'])
 @admin_required

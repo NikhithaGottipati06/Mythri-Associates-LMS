@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+{% block title %}Documents – {{ member.full_name }}{% endblock %}
+{% block content %}
+<style>
+@media print {
+  .topbar, .sidebar, .action-bar, .no-print, .alert { display:none !important; }
+  .main-content { margin:0 !important; padding:0 !important; }
+  .print-section { page-break-inside: avoid; }
+  body { background:#fff !important; }
+  .doc-img { max-width:100%; max-height:300px; }
+}
+</style>
+
+<div class="action-bar no-print">
+  <a href="{{ url_for('documents_list') }}" class="btn btn-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+  <button onclick="window.print()" class="btn btn-primary btn-sm ms-2">
+    <i class="bi bi-printer me-1"></i>Print
+  </button>
+</div>
+
+<!-- Print Header -->
+<div class="form-card print-section">
+  <div class="d-flex justify-content-between align-items-start">
+    <div>
+      <div style="font-size:18px;font-weight:700;color:#1a3c6e;">MAITRI ASSOCIATES</div>
+      <div style="font-size:12px;color:#666;">Member KYC & Document File</div>
+      <hr style="margin:8px 0;">
+      <div class="row g-2" style="font-size:13px;">
+        <div class="col-md-4"><span class="text-muted">Member Code:</span> <strong class="text-primary">{{ member.member_code }}</strong></div>
+        <div class="col-md-4"><span class="text-muted">Name:</span> <strong>{{ member.full_name }}</strong></div>
+        <div class="col-md-4"><span class="text-muted">Status:</span>
+          <span class="badge {% if member.status=='ACTIVE' %}bg-success{% else %}bg-danger{% endif %}">{{ member.status }}</span>
+        </div>
+        <div class="col-md-4"><span class="text-muted">Center:</span> {{ member.center_name or '—' }}</div>
+        <div class="col-md-4"><span class="text-muted">Date of Join:</span> {{ member.date_of_join or '—' }}</div>
+        <div class="col-md-4"><span class="text-muted">Date of Birth:</span> {{ member.date_of_birth or '—' }}</div>
+        <div class="col-md-4"><span class="text-muted">Gender:</span> {{ member.gender or '—' }}</div>
+        <div class="col-md-4"><span class="text-muted">Phone:</span> {{ member.phone1 or '—' }}</div>
+        <div class="col-md-4"><span class="text-muted">KYC:</span> {{ member.kyc_type }} – {{ member.kyc_number }}</div>
+        <div class="col-12"><span class="text-muted">Address:</span> {{ member.address1 or '' }} {{ member.address2 or '' }}, {{ member.city or '' }}, {{ member.district or '' }} – {{ member.pin_code or '' }}</div>
+      </div>
+    </div>
+    <div class="text-center ms-4">
+      {% if member.photo_path %}
+      <img src="{{ url_for('static', filename='uploads/' + member.photo_path) }}"
+           style="width:110px;height:130px;object-fit:cover;border:2px solid #1a3c6e;border-radius:6px;" alt="Photo">
+      <div style="font-size:10px;color:#888;margin-top:4px;">Member Photo</div>
+      {% else %}
+      <div style="width:110px;height:130px;border:2px dashed #ccc;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#aaa;">
+        <div class="text-center"><i class="bi bi-person" style="font-size:36px;"></i><div style="font-size:10px;">No Photo</div></div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Loan Summary -->
+{% if loans %}
+<div class="form-card mt-3 print-section">
+  <div class="section-title">Loan Summary</div>
+  <table class="table table-sm table-bordered mb-0" style="font-size:12px;">
+    <thead class="table-dark">
+      <tr>
+        <th>Application No</th>
+        <th>Disbursement No</th>
+        <th>Applied Amount</th>
+        <th>Disbursed Amount</th>
+        <th>Date</th>
+        <th>Purpose</th>
+        <th>Paid Principal</th>
+        <th>Outstanding</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for l in loans %}
+    <tr>
+      <td>{{ l.application_no }}</td>
+      <td>{{ l.disbursement_no or '—' }}</td>
+      <td>{{ '{:,.0f}'.format(l.applied_amount) }}</td>
+      <td>{{ '{:,.0f}'.format(l.disbursed_amount) if l.disbursed_amount else '—' }}</td>
+      <td>{{ l.disbursement_date or l.applied_date }}</td>
+      <td>{{ l.purpose or '—' }}</td>
+      <td>{{ '{:,.0f}'.format(l.paid_principal) if l.paid_principal else '0' }}</td>
+      <td>{{ '{:,.0f}'.format((l.disbursed_amount or 0) - (l.paid_principal or 0)) }}</td>
+      <td><span class="badge {% if l.status=='Disbursed' %}bg-primary{% elif l.status=='Closed' %}bg-success{% else %}bg-secondary{% endif %}">{{ l.status }}</span></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<!-- KYC Documents -->
+{% set kyc_docs = docs | selectattr('doc_type', 'equalto', 'kyc') | list %}
+{% if kyc_docs %}
+<div class="form-card mt-3 print-section">
+  <div class="section-title">KYC Documents</div>
+  <div class="row g-3">
+    {% for d in kyc_docs %}
+    <div class="col-md-4">
+      <div class="border rounded p-2 text-center">
+        <div class="fw-semibold mb-1" style="font-size:12px;">{{ d.doc_label }}</div>
+        {% if d.filename.lower().endswith('.pdf') %}
+        <a href="{{ url_for('static', filename='uploads/' + d.filename) }}" target="_blank"
+           class="btn btn-outline-danger btn-sm no-print">
+          <i class="bi bi-file-earmark-pdf me-1"></i>Open PDF
+        </a>
+        <div class="text-muted" style="font-size:11px;">{{ d.original_name }}</div>
+        {% else %}
+        <img src="{{ url_for('static', filename='uploads/' + d.filename) }}"
+             class="doc-img" style="max-height:200px;width:100%;object-fit:contain;border-radius:4px;" alt="{{ d.doc_label }}">
+        {% endif %}
+        <div class="text-muted mt-1" style="font-size:10px;">{{ d.uploaded_at[:10] if d.uploaded_at else '' }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Other Documents -->
+{% set other_docs = docs | selectattr('doc_type', 'equalto', 'other') | list %}
+{% if other_docs %}
+<div class="form-card mt-3 print-section">
+  <div class="section-title">Other Documents</div>
+  <div class="row g-3">
+    {% for d in other_docs %}
+    <div class="col-md-4">
+      <div class="border rounded p-2 text-center">
+        <div class="fw-semibold mb-1" style="font-size:12px;">{{ d.original_name }}</div>
+        {% if d.filename.lower().endswith('.pdf') %}
+        <a href="{{ url_for('static', filename='uploads/' + d.filename) }}" target="_blank"
+           class="btn btn-outline-danger btn-sm no-print">
+          <i class="bi bi-file-earmark-pdf me-1"></i>Open PDF
+        </a>
+        {% else %}
+        <img src="{{ url_for('static', filename='uploads/' + d.filename) }}"
+             class="doc-img" style="max-height:200px;width:100%;object-fit:contain;border-radius:4px;" alt="">
+        {% endif %}
+        <div class="text-muted mt-1" style="font-size:10px;">{{ d.uploaded_at[:10] if d.uploaded_at else '' }}</div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if not docs %}
+<div class="text-center text-muted py-4 no-print">
+  <i class="bi bi-folder2" style="font-size:36px;"></i>
+  <div class="mt-2">No documents uploaded yet. Edit the member to upload KYC documents.</div>
+  <a href="{{ url_for('members_edit', mid=member.id) }}" class="btn btn-outline-primary btn-sm mt-2">
+    <i class="bi bi-upload me-1"></i>Upload Documents
+  </a>
+</div>
+{% endif %}
+
+<!-- Print footer -->
+<div style="margin-top:30px;font-size:11px;color:#888;text-align:center;">
+  Printed on {{ now if now else '' }} &nbsp;|&nbsp; Maitri Associates LMS
+</div>
+{% endblock %}

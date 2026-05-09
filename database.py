@@ -318,6 +318,16 @@ def init_branch_db(db_path):
             cleared_by INTEGER REFERENCES users(id),
             created_at TEXT DEFAULT (datetime('now'))
         );
+
+        CREATE TABLE IF NOT EXISTS member_documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            member_id INTEGER REFERENCES members(id),
+            doc_type TEXT NOT NULL,
+            doc_label TEXT,
+            filename TEXT NOT NULL,
+            original_name TEXT,
+            uploaded_at TEXT DEFAULT (datetime('now'))
+        );
     """)
 
     existing = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
@@ -372,6 +382,15 @@ def migrate_branch_db(db_path):
         "ALTER TABLE rd_accounts ADD COLUMN tenure_unit TEXT DEFAULT 'Months'",
         # Fix maturity_amount for existing SD accounts
         "UPDATE sd_accounts SET maturity_amount = sd_amount + sd_amount * roi / 100.0 * (tenure_months / 12.0) WHERE sd_amount > 0",
+        """CREATE TABLE IF NOT EXISTS member_documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            member_id INTEGER REFERENCES members(id),
+            doc_type TEXT NOT NULL,
+            doc_label TEXT,
+            filename TEXT NOT NULL,
+            original_name TEXT,
+            uploaded_at TEXT DEFAULT (datetime('now'))
+        )""",
     ]
     for sql in migrations:
         try:

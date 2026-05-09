@@ -27,33 +27,7 @@
   {% endif %}
 </div>
 
-{% if not member %}
-<div class="form-card mb-3" style="border:2px dashed #1a3c6e22;background:#f0f5ff;">
-  <div class="section-title" style="color:#1a3c6e;">
-    <i class="bi bi-magic me-1"></i> Smart Fill from Documents
-    <small class="text-muted fw-normal ms-2" style="font-size:11px;">Upload membership form, Aadhaar, PAN or any ID — AI will auto-fill the fields below</small>
-  </div>
-  <div class="row g-3 align-items-end mt-1">
-    <div class="col-md-8">
-      <div id="drop-zone" style="border:2px dashed #1a3c6e55;border-radius:8px;padding:18px;text-align:center;cursor:pointer;background:#fff;transition:background 0.2s;">
-        <i class="bi bi-cloud-upload" style="font-size:28px;color:#1a3c6e;"></i>
-        <div class="mt-1" style="font-size:13px;color:#555;">Click to select or drag &amp; drop files here</div>
-        <div style="font-size:11px;color:#999;">Supports JPG, PNG, PDF — multiple files allowed</div>
-        <input type="file" id="doc-files" multiple accept=".jpg,.jpeg,.png,.pdf,image/*" style="display:none;">
-      </div>
-      <div id="file-list" class="mt-2" style="font-size:12px;color:#555;"></div>
-    </div>
-    <div class="col-md-4 d-flex flex-column gap-2">
-      <button type="button" id="extract-btn" class="btn btn-primary" onclick="extractDocs()" disabled>
-        <i class="bi bi-stars me-1"></i> Extract &amp; Fill Form
-      </button>
-      <div id="extract-status" style="font-size:12px;min-height:20px;"></div>
-    </div>
-  </div>
-</div>
-{% endif %}
-
-<form method="POST">
+<form method="POST" enctype="multipart/form-data">
   <div class="row g-3">
     <!-- Left: Personal details -->
     <div class="col-md-8">
@@ -272,6 +246,61 @@
     </div>
   </div>
 
+  <!-- Document Uploads -->
+  <div class="form-card mt-3">
+    <div class="section-title"><i class="bi bi-paperclip me-1"></i>Documents & Photo</div>
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label">Member Photo</label>
+        {% if member and member.photo_path %}
+        <div class="mb-2">
+          <img src="{{ url_for('static', filename='uploads/' + member.photo_path) }}"
+               style="height:80px;border-radius:6px;border:1px solid #ddd;" alt="Photo">
+        </div>
+        {% endif %}
+        <input type="file" name="member_photo" class="form-control" accept="image/*">
+        <small class="text-muted">JPG or PNG</small>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">KYC Document</label>
+        <input type="file" name="kyc_doc" class="form-control" accept="image/*,.pdf">
+        <small class="text-muted">Aadhaar / PAN / Voter ID — JPG, PNG or PDF</small>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Other Documents <span class="text-muted">(optional)</span></label>
+        <input type="file" name="other_docs" class="form-control" multiple accept="image/*,.pdf">
+        <small class="text-muted">Any additional docs — multiple allowed</small>
+      </div>
+      {% if member and docs %}
+      <div class="col-12">
+        <label class="form-label">Uploaded Documents</label>
+        <div class="d-flex flex-wrap gap-2">
+          {% for d in docs %}
+          <div class="border rounded p-2 d-flex align-items-center gap-2" style="font-size:12px;background:#f8f9fa;">
+            {% if d.filename.lower().endswith('.pdf') %}
+            <i class="bi bi-file-earmark-pdf text-danger" style="font-size:20px;"></i>
+            {% else %}
+            <img src="{{ url_for('static', filename='uploads/' + d.filename) }}"
+                 style="height:40px;border-radius:4px;" alt="{{ d.doc_label }}">
+            {% endif %}
+            <div>
+              <div class="fw-semibold">{{ d.doc_label }}</div>
+              <div class="text-muted" style="font-size:11px;">{{ d.original_name }}</div>
+            </div>
+            <form method="POST" action="{{ url_for('member_doc_delete', mid=member.id, doc_id=d.id) }}"
+                  onsubmit="return confirm('Delete this document?')" class="ms-1">
+              <button class="btn btn-outline-danger btn-icon" style="padding:2px 6px;" title="Delete">
+                <i class="bi bi-trash" style="font-size:11px;"></i>
+              </button>
+            </form>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
   <div class="d-flex gap-2 mt-2">
     <button type="submit" class="btn btn-primary">
       <i class="bi bi-check2 me-1"></i>{{ 'Update' if member else 'Save' }}
@@ -288,97 +317,6 @@ function calcNet(){
   document.getElementById('net_display').value = (inc - exp).toFixed(2);
 }
 
-// ── Smart Fill ──────────────────────────────────────────────────────────────
-const dropZone = document.getElementById('drop-zone');
-const fileInput = document.getElementById('doc-files');
-if (dropZone) {
-  dropZone.addEventListener('click', () => fileInput.click());
-  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.style.background='#e8f0ff'; });
-  dropZone.addEventListener('dragleave', () => dropZone.style.background='#fff');
-  dropZone.addEventListener('drop', e => {
-    e.preventDefault(); dropZone.style.background='#fff';
-    fileInput.files = e.dataTransfer.files;
-    updateFileList();
-  });
-  fileInput.addEventListener('change', updateFileList);
-}
-function updateFileList() {
-  const files = fileInput.files;
-  const list = document.getElementById('file-list');
-  const btn = document.getElementById('extract-btn');
-  if (!files || files.length === 0) { list.innerHTML=''; btn.disabled=true; return; }
-  list.innerHTML = Array.from(files).map(f =>
-    `<span class="badge bg-secondary me-1 mb-1"><i class="bi bi-file-earmark me-1"></i>${f.name}</span>`
-  ).join('');
-  btn.disabled = false;
-}
-async function extractDocs() {
-  const files = fileInput.files;
-  if (!files || files.length === 0) return;
-  const btn = document.getElementById('extract-btn');
-  const status = document.getElementById('extract-status');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Analysing…';
-  status.innerHTML = '<span class="text-muted">Sending documents to AI…</span>';
-  const fd = new FormData();
-  Array.from(files).forEach(f => fd.append('docs', f));
-  try {
-    const res = await fetch('/members/extract-from-docs', { method:'POST', body: fd });
-    const data = await res.json();
-    if (data.error) {
-      status.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${data.error}</span>`;
-    } else {
-      fillForm(data);
-      const filled = Object.values(data).filter(v => v !== null && v !== '').length;
-      status.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>${filled} fields filled — please review &amp; complete the rest</span>`;
-    }
-  } catch(e) {
-    status.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Network error: ${e.message}</span>`;
-  }
-  btn.disabled = false;
-  btn.innerHTML = '<i class="bi bi-stars me-1"></i> Extract &amp; Fill Form';
-}
-function setField(name, val) {
-  if (val === null || val === undefined || val === '') return;
-  const el = document.querySelector(`[name="${name}"]`);
-  if (!el) return;
-  el.value = val;
-  el.style.background = '#fffbe6';
-  el.style.transition = 'background 1.5s';
-  setTimeout(() => el.style.background = '', 2500);
-}
-function setSelect(name, val) {
-  if (!val) return;
-  const el = document.querySelector(`select[name="${name}"]`);
-  if (!el) return;
-  const opt = Array.from(el.options).find(o => o.value.toLowerCase() === val.toLowerCase());
-  if (opt) { el.value = opt.value; el.style.background='#fffbe6'; setTimeout(()=>el.style.background='',2500); }
-}
-function fillForm(d) {
-  setField('full_name', d.full_name);
-  setField('date_of_birth', d.date_of_birth);
-  if (d.date_of_birth) calcAge(d.date_of_birth);
-  setSelect('gender', d.gender);
-  setSelect('marital_status', d.marital_status);
-  setField('guardian_name', d.guardian_name);
-  setField('spouse_name', d.spouse_name);
-  setField('phone1', d.phone1);
-  setField('address1', d.address1);
-  setField('address2', d.address2);
-  setField('city', d.city);
-  setField('mandal', d.mandal);
-  setField('district', d.district);
-  setField('state', d.state);
-  setField('pin_code', d.pin_code);
-  setField('caste', d.caste);
-  setField('religion', d.religion);
-  if (d.kyc_type) setSelect('kyc_type', d.kyc_type);
-  setField('kyc_number', d.kyc_number);
-  if (d.income) { setField('income', d.income); }
-  if (d.expenditure) { setField('expenditure', d.expenditure); }
-  if (d.income || d.expenditure) calcNet();
-}
-// ── End Smart Fill ───────────────────────────────────────────────────────────
 
 function calcAge(dobStr) {
   if (!dobStr) { document.getElementById('age_display').value = ''; return; }
