@@ -13,23 +13,21 @@
   <span class="ms-auto total-bar">Total Records: {{ centers|length }}</span>
 </div>
 
-<div class="lms-table">
-  <table class="table table-hover mb-0">
+<div class="lms-table" style="overflow-x:auto;">
+  <table class="table table-hover mb-0" style="min-width:900px;">
     <thead>
       <tr>
         <th>Center Code</th>
         <th>Center</th>
         <th>Active</th>
-        <th>Address1</th>
         <th>City</th>
-        <th>State</th>
         <th>Pin Code</th>
         <th>Meeting Type</th>
         <th>Meeting Place</th>
         <th>Meeting Time</th>
         <th>Max Members</th>
         <th>Staff</th>
-        <th>Actions</th>
+        <th style="white-space:nowrap;">Actions</th>
       </tr>
     </thead>
     <tbody>
@@ -38,16 +36,14 @@
         <td class="fw-semibold text-primary">{{ c.center_code }}</td>
         <td class="fw-semibold">{{ c.center_name }}</td>
         <td>{% if c.active %}<span class="badge-active">✓</span>{% else %}<span class="badge-inactive">✗</span>{% endif %}</td>
-        <td>{{ c.address1 or '—' }}</td>
         <td>{{ c.city or '—' }}</td>
-        <td>{{ c.state or '—' }}</td>
         <td>{{ c.pin_code or '—' }}</td>
         <td>{{ c.meeting_type }}({{ c.meeting_week }})</td>
         <td>{{ c.meeting_place or '—' }}</td>
         <td>{{ c.meeting_time or '—' }}</td>
         <td>{{ c.max_members }}</td>
         <td>{{ c.staff_name or '—' }}</td>
-        <td>
+        <td style="white-space:nowrap;">
           {% if session.role == 'Admin' %}
           <a href="{{ url_for('centers_edit', cid=c.id) }}" class="btn btn-outline-primary btn-icon" title="Edit">
             <i class="bi bi-pencil"></i>
@@ -60,7 +56,7 @@
         </td>
       </tr>
     {% else %}
-      <tr><td colspan="13" class="text-center text-muted py-4">No centers found. Click Add New to create one.</td></tr>
+      <tr><td colspan="11" class="text-center text-muted py-4">No centers found. Click Add New to create one.</td></tr>
     {% endfor %}
     </tbody>
   </table>
