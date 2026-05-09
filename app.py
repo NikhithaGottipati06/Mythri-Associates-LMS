@@ -369,6 +369,71 @@ def members_list():
     db.close()
     return render_template('members/list.html', members=members)
 
+@app.route('/members/extract-from-docs', methods=['POST'])
+@login_required
+def members_extract_from_docs():
+    import anthropic, base64, re
+    files = request.files.getlist('docs')
+    if not files or all(f.filename == '' for f in files):
+        return jsonify({'error': 'No files uploaded'}), 400
+    api_key = os.environ.get('ANTHROPIC_API_KEY')
+    if not api_key:
+        return jsonify({'error': 'AI extraction not configured. Set ANTHROPIC_API_KEY in environment.'}), 500
+    client = anthropic.Anthropic(api_key=api_key)
+    content = []
+    for f in files:
+        if f.filename == '':
+            continue
+        data = f.read()
+        b64 = base64.standard_b64encode(data).decode('utf-8')
+        mime = (f.content_type or '').lower()
+        if 'pdf' in mime:
+            content.append({"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": b64}})
+        else:
+            if mime not in ('image/jpeg', 'image/png', 'image/gif', 'image/webp'):
+                mime = 'image/jpeg'
+            content.append({"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}})
+    content.append({"type": "text", "text": """Analyze these documents (membership application forms, Aadhaar cards, PAN cards, Voter IDs, or other ID/KYC documents) and extract member details.
+
+Return ONLY a valid JSON object with these exact keys (use null if not found, dates must be DD/MM/YYYY):
+{
+  "full_name": "full name in UPPERCASE",
+  "date_of_birth": "DD/MM/YYYY",
+  "gender": "Female or Male or Other",
+  "marital_status": "Married or Unmarried or Widow or Divorced",
+  "guardian_name": "father name or husband name",
+  "spouse_name": "spouse/husband name if mentioned separately",
+  "phone1": "primary 10-digit mobile number",
+  "address1": "house number and street",
+  "address2": "area or locality",
+  "city": "city or village name",
+  "mandal": "mandal name",
+  "district": "district name",
+  "state": "state name",
+  "pin_code": "6-digit pin code",
+  "kyc_type": "Aadhaar Card or PAN Card or Voter ID or Driving Licence",
+  "kyc_number": "the document ID number",
+  "income": "monthly income as number only or null",
+  "expenditure": "monthly expenditure as number only or null",
+  "caste": "caste if mentioned",
+  "religion": "religion if mentioned",
+  "occupation": "occupation or business"
+}
+
+Return only the JSON object, no explanation or markdown."""})
+    try:
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": content}]
+        )
+        text = response.content[0].text.strip()
+        match = re.search(r'\{.*\}', text, re.DOTALL)
+        extracted = json.loads(match.group()) if match else {}
+        return jsonify(extracted)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/members/new', methods=['GET', 'POST'])
 @login_required
 def members_new():
