@@ -62,7 +62,7 @@
           </div>
           <div class="col-md-4">
             <label class="form-label required">Date of Birth</label>
-            <input type="text" name="date_of_birth" class="form-control field-required"
+            <input type="text" id="dob_input" name="date_of_birth" class="form-control field-required"
                    placeholder="DD/MM/YYYY" value="{{ member.date_of_birth if member else '' }}" required>
           </div>
           <div class="col-md-4">
@@ -261,5 +261,27 @@ function calcNet(){
   const exp = parseFloat(document.querySelector('[name=expenditure]').value) || 0;
   document.getElementById('net_display').value = (inc - exp).toFixed(2);
 }
+
+function calcAge(dobStr) {
+  if (!dobStr) { document.getElementById('age_display').value = ''; return; }
+  const parts = dobStr.trim().split('/');
+  if (parts.length !== 3) { document.getElementById('age_display').value = ''; return; }
+  const [d, m, y] = parts.map(Number);
+  if (!d || !m || !y || y < 1900) { document.getElementById('age_display').value = ''; return; }
+  const dob = new Date(y, m - 1, d);
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const monthDiff = today.getMonth() - dob.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) age--;
+  document.getElementById('age_display').value = age >= 0 ? age : '';
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const dobInput = document.getElementById('dob_input');
+  dobInput.addEventListener('change', function() { calcAge(this.value); });
+  dobInput.addEventListener('blur', function() { calcAge(this.value); });
+  // Calculate on load for edit mode
+  if (dobInput.value) calcAge(dobInput.value);
+});
 </script>
 {% endblock %}
