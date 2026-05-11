@@ -36,6 +36,7 @@ _SUBSCRIPTION_EXEMPT = frozenset([
     'device_pending', 'device_check_status',
     'developer_panel', 'developer_logout', 'developer_device_action',
     'developer_subscription_settings', 'developer_subscription_approve',
+    'developer_subscription_undo', 'developer_subscription_delete',
     'developer_scanner_upload',
     'subscription_blocked', 'subscription_submit_payment',
 ])
@@ -4175,6 +4176,17 @@ def developer_subscription_undo(pid):
     master.commit()
     master.close()
     flash('Payment approval undone. Branch will be blocked again.', 'warning')
+    return redirect(url_for('developer_panel'))
+
+
+@app.route('/developer/subscriptions/<int:pid>/delete', methods=['POST'])
+@developer_required
+def developer_subscription_delete(pid):
+    master = get_master_db()
+    master.execute("DELETE FROM subscription_payments WHERE id=?", (pid,))
+    master.commit()
+    master.close()
+    flash('Payment record deleted.', 'success')
     return redirect(url_for('developer_panel'))
 
 
