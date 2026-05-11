@@ -281,7 +281,7 @@ document.addEventListener('input', function(e) {
     }
   });
 
-  // iOS Safari install hint (no automatic prompt on iOS)
+  // iOS Safari install hint
   (function() {
     const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
     const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
@@ -289,6 +289,18 @@ document.addEventListener('input', function(e) {
       const banner = document.createElement('div');
       banner.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#fff;border:1px solid #dee2e6;border-radius:12px;padding:12px 16px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:9999;display:flex;align-items:center;gap:10px;max-width:320px;font-size:13px;';
       banner.innerHTML = '<img src="{{ url_for("static", filename="images/logo.jpeg") }}" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;"><span>To install, tap <i class="bi bi-box-arrow-up"></i> <strong>Share</strong> then <strong>Add to Home Screen</strong></span><button onclick="sessionStorage.setItem(\'iosHintDismissed\',\'1\');this.parentElement.remove();" style="background:none;border:none;font-size:18px;line-height:1;cursor:pointer;color:#6c757d;flex-shrink:0;">&times;</button>';
+      document.body.appendChild(banner);
+    }
+  })();
+
+  // Samsung Internet Browser install hint
+  (function() {
+    const isSamsung = /SamsungBrowser/i.test(navigator.userAgent);
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+    if (isSamsung && !isStandalone && !sessionStorage.getItem('samsungHintDismissed')) {
+      const banner = document.createElement('div');
+      banner.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#fff;border:1px solid #dee2e6;border-radius:12px;padding:12px 16px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:9999;display:flex;align-items:center;gap:10px;max-width:340px;font-size:13px;';
+      banner.innerHTML = '<img src="{{ url_for("static", filename="images/logo.jpeg") }}" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;"><span>To install, tap <strong>&#8942;</strong> menu then <strong>Add page to</strong> &rarr; <strong>Home screen</strong></span><button onclick="sessionStorage.setItem(\'samsungHintDismissed\',\'1\');this.parentElement.remove();" style="background:none;border:none;font-size:18px;line-height:1;cursor:pointer;color:#6c757d;flex-shrink:0;">&times;</button>';
       document.body.appendChild(banner);
     }
   })();
