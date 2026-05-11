@@ -145,8 +145,30 @@
                 </select>
               </td>
               <td>
-                <input type="time" name="due_time_{{ b.id }}" class="form-control form-control-sm"
-                       value="{{ sub.due_time if sub and sub.due_time else '23:59' }}" style="width:105px;">
+                {% set _t = sub.due_time if sub and sub.due_time else '23:59' %}
+                {% set _h24 = _t.split(':')[0]|int %}
+                {% set _min = _t.split(':')[1]|int %}
+                {% set _per = 'AM' if _h24 < 12 else 'PM' %}
+                {% set _h12 = _h24 % 12 %}
+                {% set _h12 = 12 if _h12 == 0 else _h12 %}
+                {% set _m5  = (_min / 5)|round(0,'floor')|int * 5 %}
+                <div class="d-flex gap-1 align-items-center">
+                  <select class="form-select form-select-sm time-h" data-bid="{{ b.id }}" style="width:52px;">
+                    {% for h in range(1, 13) %}
+                    <option value="{{ h }}" {% if h == _h12 %}selected{% endif %}>{{ h }}</option>
+                    {% endfor %}
+                  </select>
+                  <select class="form-select form-select-sm time-m" data-bid="{{ b.id }}" style="width:62px;">
+                    {% for m in range(0, 60, 5) %}
+                    <option value="{{ '%02d' % m }}" {% if m == _m5 %}selected{% endif %}>{{ '%02d' % m }}</option>
+                    {% endfor %}
+                  </select>
+                  <select class="form-select form-select-sm time-p" data-bid="{{ b.id }}" style="width:65px;">
+                    <option value="AM" {% if _per == 'AM' %}selected{% endif %}>AM</option>
+                    <option value="PM" {% if _per == 'PM' %}selected{% endif %}>PM</option>
+                  </select>
+                  <input type="hidden" name="due_time_{{ b.id }}" class="due-time-h" data-bid="{{ b.id }}" value="{{ _t }}">
+                </div>
               </td>
               <td>
                 <input type="number" name="amount_{{ b.id }}" class="form-control form-control-sm"
@@ -421,5 +443,18 @@
 
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+function syncDueTime(bid) {
+  var h = parseInt(document.querySelector('.time-h[data-bid="' + bid + '"]').value);
+  var m = document.querySelector('.time-m[data-bid="' + bid + '"]').value;
+  var p = document.querySelector('.time-p[data-bid="' + bid + '"]').value;
+  if (p === 'PM' && h !== 12) h += 12;
+  if (p === 'AM' && h === 12) h = 0;
+  document.querySelector('.due-time-h[data-bid="' + bid + '"]').value = ('0' + h).slice(-2) + ':' + m;
+}
+document.querySelectorAll('.time-h, .time-m, .time-p').forEach(function(el) {
+  el.addEventListener('change', function() { syncDueTime(this.dataset.bid); });
+});
+</script>
 </body>
 </html>
