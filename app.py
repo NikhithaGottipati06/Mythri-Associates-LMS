@@ -60,7 +60,9 @@ def check_subscription():
     if not sub:
         master.close()
         return None
-    now = datetime.now()
+    from datetime import timezone, timedelta
+    _IST = timezone(timedelta(hours=5, minutes=30))
+    now = datetime.now(_IST).replace(tzinfo=None)
     today = now.date()
     last_day = _cal.monthrange(today.year, today.month)[1]
     due_day = min(int(sub['due_day']), last_day)
@@ -4122,8 +4124,9 @@ def help_page():
 @login_required
 def subscription_blocked():
     import calendar as _cal
+    from datetime import timezone, timedelta
     branch_db = session['branch_db']
-    today = datetime.now()
+    today = datetime.now(timezone(timedelta(hours=5, minutes=30))).replace(tzinfo=None)
     month_key = today.strftime('%Y-%m')
     master = get_master_db()
     payment = master.execute(
