@@ -6,9 +6,14 @@
   <h5>Receipts &amp; Payments Entry</h5>
 </div>
 <div class="action-bar">
-  <a href="{{ url_for('tally_dashboard') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Dashboard</a>
-  <a href="{{ url_for('tally_rp_statement') }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-printer me-1"></i>R&amp;P Statement</a>
-  <button type="button" class="btn btn-outline-dark btn-sm" data-bs-toggle="modal" data-bs-target="#addLedgerModal">
+  <a href="{{ url_for('tally_dashboard') }}" class="btn btn-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Dashboard
+  </a>
+  <a href="{{ url_for('tally_rp_statement') }}" class="btn btn-outline-primary btn-sm">
+    <i class="bi bi-printer me-1"></i>R&amp;P Statement
+  </a>
+  <button type="button" class="btn btn-outline-dark btn-sm"
+          data-bs-toggle="modal" data-bs-target="#addLedgerModal">
     <i class="bi bi-plus-circle me-1"></i>Add New Ledger
   </button>
 </div>
@@ -19,19 +24,19 @@
   <form method="POST" action="{{ url_for('tally_vouchers') }}">
 
     <!-- Receipt / Payment toggle -->
-    <div class="mb-3 d-flex gap-3">
-      <div class="form-check form-check-inline">
-        <input class="form-check-input" type="radio" name="entry_type" id="typePayment"
-               value="Payment" checked onchange="toggleType()">
+    <div class="mb-3 d-flex gap-4">
+      <div class="form-check">
+        <input class="form-check-input" type="radio" name="entry_type"
+               id="typePayment" value="Payment" checked onchange="updateEntryStyle()">
         <label class="form-check-label fw-semibold text-danger" for="typePayment">
-          <i class="bi bi-arrow-up-circle me-1"></i>Payment (goes out)
+          <i class="bi bi-arrow-up-circle me-1"></i>Payment &nbsp;<small class="fw-normal text-muted">(money going out)</small>
         </label>
       </div>
-      <div class="form-check form-check-inline">
-        <input class="form-check-input" type="radio" name="entry_type" id="typeReceipt"
-               value="Receipt" onchange="toggleType()">
+      <div class="form-check">
+        <input class="form-check-input" type="radio" name="entry_type"
+               id="typeReceipt" value="Receipt" onchange="updateEntryStyle()">
         <label class="form-check-label fw-semibold text-success" for="typeReceipt">
-          <i class="bi bi-arrow-down-circle me-1"></i>Receipt (comes in)
+          <i class="bi bi-arrow-down-circle me-1"></i>Receipt &nbsp;<small class="fw-normal text-muted">(money coming in)</small>
         </label>
       </div>
     </div>
@@ -39,16 +44,17 @@
     <div class="row g-3">
       <div class="col-md-2">
         <label class="form-label required">Date</label>
-        <input type="text" name="voucher_date" class="form-control" placeholder="DD/MM/YYYY" required>
+        <input type="text" name="voucher_date" class="form-control"
+               placeholder="DD/MM/YYYY" required>
       </div>
 
-      <!-- Payment ledger select -->
-      <div class="col-md-4" id="paymentLedgerWrap">
-        <label class="form-label required">Payment Ledger / Group</label>
-        <select name="ledger_id" id="paymentLedger" class="form-select" required>
+      <!-- Single ledger dropdown — works for both Receipt and Payment -->
+      <div class="col-md-4">
+        <label class="form-label required">Account Ledger</label>
+        <select name="ledger_id" class="form-select" required>
           <option value="">— Select Ledger —</option>
           {% set cur = namespace(g='') %}
-          {% for l in expense_ledgers %}
+          {% for l in entry_ledgers %}
             {% if l.group_name != cur.g %}
               {% if cur.g %}</optgroup>{% endif %}
               <optgroup label="{{ l.group_name }}">
@@ -56,35 +62,22 @@
             {% endif %}
             <option value="{{ l.id }}">{{ l.name }}</option>
           {% endfor %}
-          {% if expense_ledgers %}</optgroup>{% endif %}
+          {% if entry_ledgers %}</optgroup>{% endif %}
         </select>
-      </div>
-
-      <!-- Receipt ledger select (hidden by default) -->
-      <div class="col-md-4 d-none" id="receiptLedgerWrap">
-        <label class="form-label required">Receipt Ledger / Group</label>
-        <select name="ledger_id_receipt" id="receiptLedger" class="form-select">
-          <option value="">— Select Ledger —</option>
-          {% set cur2 = namespace(g='') %}
-          {% for l in receipt_ledgers %}
-            {% if l.group_name != cur2.g %}
-              {% if cur2.g %}</optgroup>{% endif %}
-              <optgroup label="{{ l.group_name }}">
-              {% set cur2.g = l.group_name %}
-            {% endif %}
-            <option value="{{ l.id }}">{{ l.name }}</option>
-          {% endfor %}
-          {% if receipt_ledgers %}</optgroup>{% endif %}
-        </select>
+        <div class="form-text text-muted" id="ledgerHint">
+          Select the account this payment belongs to.
+        </div>
       </div>
 
       <div class="col-md-2">
         <label class="form-label required">Amount (₹)</label>
-        <input type="number" name="amount" class="form-control" step="0.01" min="0.01" placeholder="0.00" required>
+        <input type="number" name="amount" class="form-control"
+               step="0.01" min="0.01" placeholder="0.00" required>
       </div>
       <div class="col-md-3">
         <label class="form-label">Narration</label>
-        <input type="text" name="narration" class="form-control" placeholder="Optional note">
+        <input type="text" name="narration" class="form-control"
+               placeholder="Optional note">
       </div>
       <div class="col-md-1 d-flex align-items-end">
         <button type="submit" class="btn btn-danger w-100" id="saveBtn">
@@ -96,21 +89,24 @@
 </div>
 
 <!-- ── Tabs: Payments | Receipts | Ledgers ────────────────────────────────── -->
-<ul class="nav nav-tabs mb-0" id="rpTabs">
+<ul class="nav nav-tabs mb-0">
   <li class="nav-item">
-    <button class="nav-link active text-danger fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-payments">
+    <button class="nav-link active fw-semibold text-danger"
+            data-bs-toggle="tab" data-bs-target="#tab-payments">
       <i class="bi bi-arrow-up-circle me-1"></i>Payments
       {% if payments %}<span class="badge bg-danger ms-1">{{ payments|length }}</span>{% endif %}
     </button>
   </li>
   <li class="nav-item">
-    <button class="nav-link text-success fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-receipts">
+    <button class="nav-link fw-semibold text-success"
+            data-bs-toggle="tab" data-bs-target="#tab-receipts">
       <i class="bi bi-arrow-down-circle me-1"></i>Receipts
       {% if receipts %}<span class="badge bg-success ms-1">{{ receipts|length }}</span>{% endif %}
     </button>
   </li>
   <li class="nav-item">
-    <button class="nav-link text-dark fw-semibold" id="tab-ledgers-btn" data-bs-toggle="tab" data-bs-target="#tab-ledgers">
+    <button class="nav-link fw-semibold text-dark" id="ledgersTabBtn"
+            data-bs-toggle="tab" data-bs-target="#tab-ledgers">
       <i class="bi bi-list-ul me-1"></i>Ledgers
       <span class="badge bg-secondary ms-1">{{ all_ledgers|length }}</span>
     </button>
@@ -219,9 +215,9 @@
 
   <!-- ── LEDGERS tab ── -->
   <div class="tab-pane fade" id="tab-ledgers">
-    <div class="section-title mt-2 mb-2">
-      <i class="bi bi-list-ul me-1"></i>All Ledgers
-      <button type="button" class="btn btn-outline-primary btn-sm ms-3"
+    <div class="section-title mt-2 mb-2 d-flex align-items-center gap-3">
+      <span><i class="bi bi-list-ul me-1"></i>All Ledgers</span>
+      <button type="button" class="btn btn-outline-primary btn-sm"
               data-bs-toggle="modal" data-bs-target="#addLedgerModal">
         <i class="bi bi-plus-circle me-1"></i>Add New Ledger
       </button>
@@ -234,9 +230,8 @@
             <th>#</th>
             <th>Ledger Name</th>
             <th>Group</th>
-            <th>Type</th>
             <th class="text-center">Entries</th>
-            <th class="text-center">Action</th>
+            <th class="text-center">Delete</th>
           </tr>
         </thead>
         <tbody>
@@ -250,15 +245,6 @@
               {% endif %}
             </td>
             <td><span class="badge bg-secondary">{{ l.group_name }}</span></td>
-            <td>
-              {% if l.nature == 'Income' %}
-                <span class="badge bg-success">Receipt</span>
-              {% elif l.nature == 'Expense' %}
-                <span class="badge bg-danger">Payment</span>
-              {% else %}
-                <span class="badge bg-light text-dark">{{ l.nature }}</span>
-              {% endif %}
-            </td>
             <td class="text-center">
               {% if l.usage_count > 0 %}
                 <span class="badge bg-primary">{{ l.usage_count }}</span>
@@ -270,9 +256,10 @@
               {% if not l.is_auto %}
               <form method="POST"
                     action="{{ url_for('tally_ledger_delete', lid=l.id) }}"
-                    onsubmit="return confirm('Delete ledger \'{{ l.name }}\'? {% if l.usage_count %}It has {{ l.usage_count }} entries and cannot be deleted.{% else %}This cannot be undone.{% endif %}')">
-                <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-2"
-                        {% if l.usage_count %}disabled title="Has entries — cannot delete"{% endif %}>
+                    onsubmit="return confirm('Delete ledger \'{{ l.name }}\'?')">
+                <button type="submit"
+                        class="btn btn-outline-danger btn-sm py-0 px-2"
+                        {% if l.usage_count %}disabled title="Has {{ l.usage_count }} entries — cannot delete"{% endif %}>
                   <i class="bi bi-trash"></i>
                 </button>
               </form>
@@ -302,51 +289,36 @@
       </div>
       <form method="POST" action="{{ url_for('tally_ledger_add') }}">
         <div class="modal-body">
-
-          <!-- Receipt / Payment choice in modal -->
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Ledger Type</label>
-            <div class="d-flex gap-4">
-              <div class="form-check">
-                <input class="form-check-input" type="radio" name="ledger_type_choice"
-                       id="modalTypePayment" value="Expense" checked
-                       onchange="filterModalGroups()">
-                <label class="form-check-label text-danger fw-semibold" for="modalTypePayment">
-                  <i class="bi bi-arrow-up-circle me-1"></i>Payment (Expense)
-                </label>
-              </div>
-              <div class="form-check">
-                <input class="form-check-input" type="radio" name="ledger_type_choice"
-                       id="modalTypeReceipt" value="Income"
-                       onchange="filterModalGroups()">
-                <label class="form-check-label text-success fw-semibold" for="modalTypeReceipt">
-                  <i class="bi bi-arrow-down-circle me-1"></i>Receipt (Income)
-                </label>
-              </div>
-            </div>
+          <div class="alert alert-info small py-2 mb-3">
+            <i class="bi bi-info-circle me-1"></i>
+            A ledger (e.g. <em>HO Remittance</em>, <em>Salaries</em>) can be used for
+            both Receipt and Payment entries — the type is chosen when you add an entry, not here.
           </div>
-
           <div class="mb-3">
             <label class="form-label">Ledger Name</label>
             <input type="text" name="name" class="form-control" required
-                   placeholder="e.g. HO Remittance Received">
+                   placeholder="e.g. HO Remittance">
           </div>
-
-          <div class="mb-3">
+          <div class="mb-0">
             <label class="form-label">Under Group</label>
-            <select name="group_id" id="modalGroupSelect" class="form-select" required>
+            <select name="group_id" class="form-select" required>
               <option value="">— Select Group —</option>
+              {% set cur_n = namespace(v='') %}
               {% for g in all_groups %}
-              <option value="{{ g.id }}" data-nature="{{ g.nature }}">
-                [{{ g.nature }}] {{ g.name }}
-              </option>
+                {% if g.nature != cur_n.v %}
+                  {% if cur_n.v %}</optgroup>{% endif %}
+                  <optgroup label="{{ g.nature }}">
+                  {% set cur_n.v = g.nature %}
+                {% endif %}
+                <option value="{{ g.id }}">{{ g.name }}</option>
               {% endfor %}
+              {% if all_groups %}</optgroup>{% endif %}
             </select>
           </div>
-
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-secondary btn-sm"
+                  data-bs-dismiss="modal">Cancel</button>
           <button type="submit" class="btn btn-primary btn-sm">
             <i class="bi bi-check-lg me-1"></i>Save Ledger
           </button>
@@ -356,51 +328,20 @@
   </div>
 </div>
 
-<!-- Auto-open Ledgers tab if redirected with #tab-ledgers -->
 <script>
-/* ── Entry form toggle ─────────────────────────────────────────────────── */
-function toggleType() {
+function updateEntryStyle() {
   const isReceipt = document.getElementById('typeReceipt').checked;
-  const payWrap = document.getElementById('paymentLedgerWrap');
-  const recWrap = document.getElementById('receiptLedgerWrap');
-  const payLed  = document.getElementById('paymentLedger');
-  const recLed  = document.getElementById('receiptLedger');
-  const btn     = document.getElementById('saveBtn');
-
-  if (isReceipt) {
-    payWrap.classList.add('d-none');
-    recWrap.classList.remove('d-none');
-    payLed.removeAttribute('required'); payLed.disabled = true;
-    recLed.setAttribute('required',''); recLed.disabled = false;
-    recLed.name = 'ledger_id'; payLed.name = 'ledger_id_payment';
-    btn.className = 'btn btn-success w-100';
-  } else {
-    recWrap.classList.add('d-none');
-    payWrap.classList.remove('d-none');
-    recLed.removeAttribute('required'); recLed.disabled = true;
-    payLed.setAttribute('required',''); payLed.disabled = false;
-    payLed.name = 'ledger_id'; recLed.name = 'ledger_id_receipt';
-    btn.className = 'btn btn-danger w-100';
-  }
+  document.getElementById('saveBtn').className = isReceipt
+    ? 'btn btn-success w-100' : 'btn btn-danger w-100';
+  document.getElementById('ledgerHint').textContent = isReceipt
+    ? 'Select the account this receipt belongs to.'
+    : 'Select the account this payment belongs to.';
 }
-toggleType();
+updateEntryStyle();
 
-/* ── Modal group filter ────────────────────────────────────────────────── */
-function filterModalGroups() {
-  const nature = document.querySelector('input[name="ledger_type_choice"]:checked').value;
-  const sel    = document.getElementById('modalGroupSelect');
-  sel.value    = '';
-  Array.from(sel.options).forEach(opt => {
-    if (!opt.value) { opt.style.display = ''; return; }
-    opt.style.display = (opt.dataset.nature === nature) ? '' : 'none';
-  });
-}
-filterModalGroups(); // run on load
-
-/* ── Auto-open Ledgers tab if URL hash says so ─────────────────────────── */
+// Auto-open Ledgers tab if redirected with #tab-ledgers
 if (window.location.hash === '#tab-ledgers') {
-  const btn = document.querySelector('[data-bs-target="#tab-ledgers"]');
-  if (btn) btn.click();
+  document.getElementById('ledgersTabBtn').click();
 }
 </script>
 {% endblock %}

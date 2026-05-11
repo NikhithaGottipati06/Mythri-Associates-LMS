@@ -4550,13 +4550,10 @@ def tally_vouchers():
         db.close()
         return redirect(url_for('tally_vouchers'))
 
-    expense_ledgers = db.execute(
+    # All ledgers shown for both Receipt and Payment entries
+    entry_ledgers = db.execute(
         "SELECT tl.id, tl.name, tg.name as group_name FROM tally_ledgers tl "
-        "JOIN tally_groups tg ON tl.group_id=tg.id WHERE tg.nature='Expense' AND tl.active=1 ORDER BY tg.sort_order, tl.name"
-    ).fetchall()
-    receipt_ledgers = db.execute(
-        "SELECT tl.id, tl.name, tg.name as group_name FROM tally_ledgers tl "
-        "JOIN tally_groups tg ON tl.group_id=tg.id WHERE tg.nature='Income' AND tl.active=1 ORDER BY tg.sort_order, tl.name"
+        "JOIN tally_groups tg ON tl.group_id=tg.id WHERE tl.active=1 ORDER BY tg.nature, tg.sort_order, tl.name"
     ).fetchall()
     all_groups = db.execute(
         "SELECT id, name, nature FROM tally_groups ORDER BY nature, sort_order, name"
@@ -4587,7 +4584,7 @@ def tally_vouchers():
     """).fetchall()
     db.close()
     return render_template('tally/vouchers.html',
-        expense_ledgers=expense_ledgers, receipt_ledgers=receipt_ledgers,
+        entry_ledgers=entry_ledgers,
         all_groups=all_groups, receipts=receipts, payments=payments,
         all_ledgers=all_ledgers)
 
