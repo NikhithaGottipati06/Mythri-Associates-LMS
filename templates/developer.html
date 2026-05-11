@@ -124,7 +124,7 @@
           <thead style="background:#f1f5f9;">
             <tr>
               <th>Branch</th>
-              <th style="width:110px;">Due Day <small class="text-muted">(1–28)</small></th>
+              <th style="width:140px;">Due Day</th>
               <th style="width:140px;">Monthly Amount (₹)</th>
               <th style="width:100px;" class="text-center">Enabled</th>
             </tr>
@@ -135,8 +135,13 @@
             <tr>
               <td><strong>{{ b.name }}</strong></td>
               <td>
-                <input type="number" name="due_day_{{ b.id }}" class="form-control form-control-sm"
-                       min="1" max="28" value="{{ sub.due_day if sub else 5 }}" style="width:80px;">
+                <select name="due_day_{{ b.id }}" class="form-select form-select-sm" style="width:110px;">
+                  {% for d in range(1, 29) %}
+                  <option value="{{ d }}" {% if (sub and sub.due_day == d) or (not sub and d == 5) %}selected{% endif %}>
+                    {{ d }}{% if d == 1 %}st{% elif d == 2 %}nd{% elif d == 3 %}rd{% else %}th{% endif %} of month
+                  </option>
+                  {% endfor %}
+                </select>
               </td>
               <td>
                 <input type="number" name="amount_{{ b.id }}" class="form-control form-control-sm"
