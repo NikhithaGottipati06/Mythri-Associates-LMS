@@ -127,6 +127,17 @@
      href="{{ url_for('tally_vouchers') }}"><i class="bi bi-journal-plus"></i> Expenses</a>
   {% endif %}
 
+  <!-- Financial Statements – Admin only -->
+  {% if session.role == 'Admin' %}
+  <div class="nav-section">Financial Statements</div>
+  <a class="nav-link {% if request.endpoint=='fin_stmt.receipts_payments' %}active{% endif %}"
+     href="{{ url_for('fin_stmt.receipts_payments') }}"><i class="bi bi-arrow-left-right"></i> Receipts &amp; Payments</a>
+  <a class="nav-link {% if request.endpoint=='fin_stmt.income_expenditure' %}active{% endif %}"
+     href="{{ url_for('fin_stmt.income_expenditure') }}"><i class="bi bi-bar-chart-line"></i> Income &amp; Expenditure</a>
+  <a class="nav-link {% if request.endpoint=='fin_stmt.trial_balance' %}active{% endif %}"
+     href="{{ url_for('fin_stmt.trial_balance') }}"><i class="bi bi-table"></i> Trial Balance</a>
+  {% endif %}
+
   <!-- Settings & Reports -->
   <div class="nav-section">More</div>
   <a class="nav-link {% if 'day_end' in request.endpoint %}active{% endif %}"
