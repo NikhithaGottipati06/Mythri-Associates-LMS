@@ -124,7 +124,9 @@
   <a class="nav-link {% if request.endpoint=='tally_report' %}active{% endif %}"
      href="{{ url_for('tally_report') }}"><i class="bi bi-file-earmark-bar-graph"></i> P&amp;L Report</a>
   <a class="nav-link {% if request.endpoint=='tally_vouchers' %}active{% endif %}"
-     href="{{ url_for('tally_vouchers') }}"><i class="bi bi-journal-plus"></i> Expenses</a>
+     href="{{ url_for('tally_vouchers') }}"><i class="bi bi-journal-plus"></i> R&amp;P Entry</a>
+  <a class="nav-link {% if request.endpoint=='tally_rp_statement' %}active{% endif %}"
+     href="{{ url_for('tally_rp_statement') }}"><i class="bi bi-arrow-left-right"></i> R&amp;P Statement</a>
   <a class="nav-link {% if request.endpoint=='tally_trial_balance' %}active{% endif %}"
      href="{{ url_for('tally_trial_balance') }}"><i class="bi bi-table"></i> Trial Balance</a>
   {% endif %}

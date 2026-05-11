@@ -4533,17 +4533,18 @@ def tally_report():
 def tally_vouchers():
     db = get_db()
     if request.method == 'POST':
+        entry_type  = request.form.get('entry_type', 'Payment')
         ledger_id   = request.form.get('ledger_id')
         vdate       = request.form.get('voucher_date', '')
         amount      = request.form.get('amount', 0)
         narration   = request.form.get('narration', '')
         if ledger_id and vdate and float(amount or 0) > 0:
             db.execute(
-                "INSERT INTO tally_vouchers (ledger_id,voucher_date,amount,narration,created_by) VALUES (?,?,?,?,?)",
-                (ledger_id, vdate, amount, narration, session['user_id'])
+                "INSERT INTO tally_vouchers (ledger_id,voucher_date,amount,narration,created_by,type) VALUES (?,?,?,?,?,?)",
+                (ledger_id, vdate, amount, narration, session['user_id'], entry_type)
             )
             db.commit()
-            flash('Expense saved.', 'success')
+            flash(f'{"Receipt" if entry_type=="Receipt" else "Payment"} entry saved.', 'success')
         else:
             flash('Please fill all required fields.', 'danger')
         db.close()
@@ -4553,20 +4554,33 @@ def tally_vouchers():
         "SELECT tl.id, tl.name, tg.name as group_name FROM tally_ledgers tl "
         "JOIN tally_groups tg ON tl.group_id=tg.id WHERE tg.nature='Expense' AND tl.active=1 ORDER BY tg.sort_order, tl.name"
     ).fetchall()
-    # All groups (all natures) for Add Ledger modal
+    receipt_ledgers = db.execute(
+        "SELECT tl.id, tl.name, tg.name as group_name FROM tally_ledgers tl "
+        "JOIN tally_groups tg ON tl.group_id=tg.id WHERE tg.nature='Income' AND tl.active=1 ORDER BY tg.sort_order, tl.name"
+    ).fetchall()
     all_groups = db.execute(
         "SELECT id, name, nature FROM tally_groups ORDER BY nature, sort_order, name"
     ).fetchall()
-    vouchers = db.execute("""
+    receipts = db.execute("""
         SELECT tv.*, tl.name as ledger_name, tg.name as group_name
         FROM tally_vouchers tv
         JOIN tally_ledgers tl ON tv.ledger_id=tl.id
         JOIN tally_groups tg ON tl.group_id=tg.id
+        WHERE COALESCE(tv.type,'Payment')='Receipt'
+        ORDER BY tv.id DESC LIMIT 100
+    """).fetchall()
+    payments = db.execute("""
+        SELECT tv.*, tl.name as ledger_name, tg.name as group_name
+        FROM tally_vouchers tv
+        JOIN tally_ledgers tl ON tv.ledger_id=tl.id
+        JOIN tally_groups tg ON tl.group_id=tg.id
+        WHERE COALESCE(tv.type,'Payment')='Payment'
         ORDER BY tv.id DESC LIMIT 100
     """).fetchall()
     db.close()
     return render_template('tally/vouchers.html',
-        expense_ledgers=expense_ledgers, all_groups=all_groups, vouchers=vouchers)
+        expense_ledgers=expense_ledgers, receipt_ledgers=receipt_ledgers,
+        all_groups=all_groups, receipts=receipts, payments=payments)
 
 
 @app.route('/tally/vouchers/<int:vid>/delete', methods=['POST'])
@@ -4576,8 +4590,88 @@ def tally_voucher_delete(vid):
     db.execute("DELETE FROM tally_vouchers WHERE id=?", (vid,))
     db.commit()
     db.close()
-    flash('Expense deleted.', 'success')
+    flash('Entry deleted.', 'success')
     return redirect(url_for('tally_vouchers'))
+
+
+@app.route('/tally/receipts-payments')
+@admin_required
+def tally_rp_statement():
+    db  = get_db()
+    raw_from = request.args.get('from_date', '').strip()
+    raw_to   = request.args.get('to_date', '').strip()
+
+    def to_iso(s):
+        try:    return datetime.strptime(s, '%d/%m/%Y').strftime('%Y-%m-%d')
+        except: return None
+
+    from_iso = to_iso(raw_from)
+    to_iso_  = to_iso(raw_to)
+    if not from_iso:
+        from_iso = datetime.now().replace(day=1).strftime('%Y-%m-%d')
+    if not to_iso_:
+        to_iso_  = datetime.now().strftime('%Y-%m-%d')
+
+    def ic(col):
+        return f"substr({col},7,4)||'-'||substr({col},4,2)||'-'||substr({col},1,2)"
+
+    conds = [f"{ic('tv.voucher_date')} BETWEEN ? AND ?"]
+    params = [from_iso, to_iso_]
+
+    receipt_rows = db.execute(f"""
+        SELECT tg.name as group_name, tl.name as ledger_name, tv.voucher_date, tv.amount, tv.narration
+        FROM tally_vouchers tv
+        JOIN tally_ledgers tl ON tv.ledger_id=tl.id
+        JOIN tally_groups  tg ON tl.group_id=tg.id
+        WHERE COALESCE(tv.type,'Payment')='Receipt' AND {conds[0]}
+        ORDER BY tg.sort_order, {ic('tv.voucher_date')}
+    """, params).fetchall()
+
+    payment_rows = db.execute(f"""
+        SELECT tg.name as group_name, tl.name as ledger_name, tv.voucher_date, tv.amount, tv.narration
+        FROM tally_vouchers tv
+        JOIN tally_ledgers tl ON tv.ledger_id=tl.id
+        JOIN tally_groups  tg ON tl.group_id=tg.id
+        WHERE COALESCE(tv.type,'Payment')='Payment' AND {conds[0]}
+        ORDER BY tg.sort_order, {ic('tv.voucher_date')}
+    """, params).fetchall()
+
+    # Also include auto-income from LMS on the receipt side
+    lms_income = _tally_income(db, from_iso, to_iso_)
+    lms_penalty = db.execute(
+        f"SELECT COALESCE(SUM(penalty),0) FROM recovery_postings rp "
+        f"WHERE rp.installment_no>0 AND {ic('rp.posting_date')} BETWEEN ? AND ?",
+        (from_iso, to_iso_)
+    ).fetchone()[0] or 0
+
+    # Group receipts by group_name
+    from collections import defaultdict
+    rec_groups  = defaultdict(list)
+    for r in receipt_rows:
+        rec_groups[r[0]].append(r)
+    pay_groups  = defaultdict(list)
+    for r in payment_rows:
+        pay_groups[r[0]].append(r)
+
+    total_manual_receipts  = sum(r[3] for r in receipt_rows)
+    total_lms_receipts     = sum(lms_income.values()) + lms_penalty
+    total_receipts         = total_manual_receipts + total_lms_receipts
+    total_payments         = sum(r[3] for r in payment_rows)
+
+    from_disp = datetime.strptime(from_iso,'%Y-%m-%d').strftime('%d/%m/%Y')
+    to_disp   = datetime.strptime(to_iso_,'%Y-%m-%d').strftime('%d/%m/%Y')
+
+    db.close()
+    return render_template('tally/receipts_payments.html',
+        rec_groups=rec_groups, pay_groups=pay_groups,
+        lms_income=lms_income, lms_penalty=lms_penalty,
+        total_manual_receipts=total_manual_receipts,
+        total_lms_receipts=total_lms_receipts,
+        total_receipts=total_receipts,
+        total_payments=total_payments,
+        net=total_receipts - total_payments,
+        from_date=from_disp, to_date=to_disp,
+    )
 
 
 @app.route('/tally/ledgers/add', methods=['POST'])

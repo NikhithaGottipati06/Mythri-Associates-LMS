@@ -1,42 +1,83 @@
 {% extends 'base.html' %}
-{% block title %}Expenses{% endblock %}
+{% block title %}Receipts &amp; Payments Entry{% endblock %}
 {% block content %}
 <div class="page-header">
   <i class="bi bi-journal-plus" style="font-size:20px;color:#1a3c6e;"></i>
-  <h5>Expense Entry</h5>
+  <h5>Receipts &amp; Payments Entry</h5>
 </div>
 <div class="action-bar">
   <a href="{{ url_for('tally_dashboard') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Dashboard</a>
-  <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addLedgerModal">
+  <a href="{{ url_for('tally_rp_statement') }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-printer me-1"></i>R&amp;P Statement</a>
+  <button type="button" class="btn btn-outline-dark btn-sm" data-bs-toggle="modal" data-bs-target="#addLedgerModal">
     <i class="bi bi-plus-circle me-1"></i>Add New Ledger
   </button>
 </div>
 
-<!-- Expense Entry Form -->
+<!-- Entry Form -->
 <div class="form-card mb-4">
-  <div class="section-title">Add Expense</div>
+  <div class="section-title mb-3">Add Entry</div>
   <form method="POST" action="{{ url_for('tally_vouchers') }}">
+
+    <!-- Receipt / Payment toggle -->
+    <div class="mb-3 d-flex gap-3">
+      <div class="form-check form-check-inline">
+        <input class="form-check-input" type="radio" name="entry_type" id="typePayment"
+               value="Payment" checked onchange="toggleType()">
+        <label class="form-check-label fw-semibold text-danger" for="typePayment">
+          <i class="bi bi-arrow-up-circle me-1"></i>Payment (goes out)
+        </label>
+      </div>
+      <div class="form-check form-check-inline">
+        <input class="form-check-input" type="radio" name="entry_type" id="typeReceipt"
+               value="Receipt" onchange="toggleType()">
+        <label class="form-check-label fw-semibold text-success" for="typeReceipt">
+          <i class="bi bi-arrow-down-circle me-1"></i>Receipt (comes in)
+        </label>
+      </div>
+    </div>
+
     <div class="row g-3">
       <div class="col-md-2">
         <label class="form-label required">Date</label>
         <input type="text" name="voucher_date" class="form-control" placeholder="DD/MM/YYYY" required>
       </div>
-      <div class="col-md-4">
-        <label class="form-label required">Expense Ledger / Group</label>
-        <select name="ledger_id" class="form-select" required>
+
+      <!-- Payment ledger select -->
+      <div class="col-md-4" id="paymentLedgerWrap">
+        <label class="form-label required">Payment Ledger / Group</label>
+        <select name="ledger_id" id="paymentLedger" class="form-select" required>
           <option value="">— Select Ledger —</option>
-          {% set current_group = namespace(name='') %}
+          {% set cur = namespace(g='') %}
           {% for l in expense_ledgers %}
-            {% if l.group_name != current_group.name %}
-              {% if current_group.name != '' %}</optgroup>{% endif %}
+            {% if l.group_name != cur.g %}
+              {% if cur.g %}</optgroup>{% endif %}
               <optgroup label="{{ l.group_name }}">
-              {% set current_group.name = l.group_name %}
+              {% set cur.g = l.group_name %}
             {% endif %}
             <option value="{{ l.id }}">{{ l.name }}</option>
           {% endfor %}
           {% if expense_ledgers %}</optgroup>{% endif %}
         </select>
       </div>
+
+      <!-- Receipt ledger select (hidden by default) -->
+      <div class="col-md-4 d-none" id="receiptLedgerWrap">
+        <label class="form-label required">Receipt Ledger / Group</label>
+        <select name="ledger_id_receipt" id="receiptLedger" class="form-select">
+          <option value="">— Select Ledger —</option>
+          {% set cur2 = namespace(g='') %}
+          {% for l in receipt_ledgers %}
+            {% if l.group_name != cur2.g %}
+              {% if cur2.g %}</optgroup>{% endif %}
+              <optgroup label="{{ l.group_name }}">
+              {% set cur2.g = l.group_name %}
+            {% endif %}
+            <option value="{{ l.id }}">{{ l.name }}</option>
+          {% endfor %}
+          {% if receipt_ledgers %}</optgroup>{% endif %}
+        </select>
+      </div>
+
       <div class="col-md-2">
         <label class="form-label required">Amount (₹)</label>
         <input type="number" name="amount" class="form-control" step="0.01" min="0.01" placeholder="0.00" required>
@@ -46,54 +87,124 @@
         <input type="text" name="narration" class="form-control" placeholder="Optional note">
       </div>
       <div class="col-md-1 d-flex align-items-end">
-        <button type="submit" class="btn btn-success w-100"><i class="bi bi-check-lg"></i></button>
+        <button type="submit" class="btn btn-success w-100" id="saveBtn">
+          <i class="bi bi-check-lg"></i>
+        </button>
       </div>
     </div>
   </form>
 </div>
 
-<!-- Expense List -->
-<div class="form-card">
-  <div class="section-title">Recent Expenses</div>
-  {% if vouchers %}
-  <div class="table-responsive">
-    <table class="table table-sm table-hover align-middle mb-0">
-      <thead class="table-dark">
-        <tr>
-          <th>#</th>
-          <th>Date</th>
-          <th>Group</th>
-          <th>Ledger</th>
-          <th class="text-end">Amount (₹)</th>
-          <th>Narration</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for v in vouchers %}
-        <tr>
-          <td class="text-muted small">{{ v.id }}</td>
-          <td>{{ v.voucher_date }}</td>
-          <td><span class="badge bg-secondary">{{ v.group_name }}</span></td>
-          <td>{{ v.ledger_name }}</td>
-          <td class="text-end fw-semibold text-danger">₹{{ "%.2f"|format(v.amount) }}</td>
-          <td class="text-muted small">{{ v.narration or '—' }}</td>
-          <td>
-            <form method="POST" action="{{ url_for('tally_voucher_delete', vid=v.id) }}"
-                  onsubmit="return confirm('Delete this expense?')">
-              <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-1">
-                <i class="bi bi-trash"></i>
-              </button>
-            </form>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+<!-- Tabs: Receipts | Payments -->
+<ul class="nav nav-tabs mb-0" id="rpTabs">
+  <li class="nav-item">
+    <button class="nav-link active text-danger fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-payments">
+      <i class="bi bi-arrow-up-circle me-1"></i>Payments
+      {% if payments %}<span class="badge bg-danger ms-1">{{ payments|length }}</span>{% endif %}
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link text-success fw-semibold" data-bs-toggle="tab" data-bs-target="#tab-receipts">
+      <i class="bi bi-arrow-down-circle me-1"></i>Receipts
+      {% if receipts %}<span class="badge bg-success ms-1">{{ receipts|length }}</span>{% endif %}
+    </button>
+  </li>
+</ul>
+
+<div class="tab-content form-card" style="border-top:none;border-top-left-radius:0;">
+
+  <!-- PAYMENTS tab -->
+  <div class="tab-pane fade show active" id="tab-payments">
+    <div class="section-title text-danger mt-2 mb-2"><i class="bi bi-arrow-up-circle-fill me-1"></i>Recent Payments (Last 100)</div>
+    {% if payments %}
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th>#</th><th>Date</th><th>Group</th><th>Ledger</th>
+            <th class="text-end">Amount (₹)</th><th>Narration</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set total = namespace(v=0) %}
+          {% for v in payments %}
+          {% set total.v = total.v + v.amount %}
+          <tr>
+            <td class="text-muted small">{{ v.id }}</td>
+            <td>{{ v.voucher_date }}</td>
+            <td><span class="badge bg-secondary">{{ v.group_name }}</span></td>
+            <td>{{ v.ledger_name }}</td>
+            <td class="text-end fw-semibold text-danger">₹{{ "%.2f"|format(v.amount) }}</td>
+            <td class="text-muted small">{{ v.narration or '—' }}</td>
+            <td>
+              <form method="POST" action="{{ url_for('tally_voucher_delete', vid=v.id) }}"
+                    onsubmit="return confirm('Delete this entry?')">
+                <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-1"><i class="bi bi-trash"></i></button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot class="table-secondary fw-bold">
+          <tr>
+            <td colspan="4">Total Payments</td>
+            <td class="text-end text-danger">₹{{ "%.2f"|format(total.v) }}</td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted text-center py-3">No payment entries recorded yet.</p>
+    {% endif %}
   </div>
-  {% else %}
-  <p class="text-muted text-center py-3">No expenses recorded yet.</p>
-  {% endif %}
+
+  <!-- RECEIPTS tab -->
+  <div class="tab-pane fade" id="tab-receipts">
+    <div class="section-title text-success mt-2 mb-2"><i class="bi bi-arrow-down-circle-fill me-1"></i>Recent Receipts (Last 100)</div>
+    {% if receipts %}
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle mb-0">
+        <thead class="table-dark">
+          <tr>
+            <th>#</th><th>Date</th><th>Group</th><th>Ledger</th>
+            <th class="text-end">Amount (₹)</th><th>Narration</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set total = namespace(v=0) %}
+          {% for v in receipts %}
+          {% set total.v = total.v + v.amount %}
+          <tr>
+            <td class="text-muted small">{{ v.id }}</td>
+            <td>{{ v.voucher_date }}</td>
+            <td><span class="badge bg-secondary">{{ v.group_name }}</span></td>
+            <td>{{ v.ledger_name }}</td>
+            <td class="text-end fw-semibold text-success">₹{{ "%.2f"|format(v.amount) }}</td>
+            <td class="text-muted small">{{ v.narration or '—' }}</td>
+            <td>
+              <form method="POST" action="{{ url_for('tally_voucher_delete', vid=v.id) }}"
+                    onsubmit="return confirm('Delete this entry?')">
+                <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-1"><i class="bi bi-trash"></i></button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot class="table-secondary fw-bold">
+          <tr>
+            <td colspan="4">Total Receipts</td>
+            <td class="text-end text-success">₹{{ "%.2f"|format(total.v) }}</td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted text-center py-3">No receipt entries recorded yet.</p>
+    {% endif %}
+  </div>
+
 </div>
 
 <!-- Add Ledger Modal -->
@@ -108,7 +219,7 @@
         <div class="modal-body">
           <div class="mb-3">
             <label class="form-label">Ledger Name</label>
-            <input type="text" name="name" class="form-control" required placeholder="e.g. Office Supplies">
+            <input type="text" name="name" class="form-control" required placeholder="e.g. HO Remittance Received">
           </div>
           <div class="mb-3">
             <label class="form-label">Under Group</label>
@@ -117,7 +228,7 @@
               {% set cur_nature = namespace(val='') %}
               {% for g in all_groups %}
                 {% if g.nature != cur_nature.val %}
-                  {% if cur_nature.val != '' %}</optgroup>{% endif %}
+                  {% if cur_nature.val %}</optgroup>{% endif %}
                   <optgroup label="{{ g.nature }}">
                   {% set cur_nature.val = g.nature %}
                 {% endif %}
@@ -125,6 +236,9 @@
               {% endfor %}
               {% if all_groups %}</optgroup>{% endif %}
             </select>
+          </div>
+          <div class="alert alert-info small mb-0">
+            <strong>Tip:</strong> Choose an <em>Income</em> group for Receipt ledgers; an <em>Expense</em> group for Payment ledgers.
           </div>
         </div>
         <div class="modal-footer">
@@ -135,4 +249,39 @@
     </div>
   </div>
 </div>
+
+<script>
+function toggleType() {
+  const isReceipt = document.getElementById('typeReceipt').checked;
+  const payWrap = document.getElementById('paymentLedgerWrap');
+  const recWrap = document.getElementById('receiptLedgerWrap');
+  const payLed  = document.getElementById('paymentLedger');
+  const recLed  = document.getElementById('receiptLedger');
+
+  if (isReceipt) {
+    payWrap.classList.add('d-none');
+    recWrap.classList.remove('d-none');
+    payLed.removeAttribute('required');
+    payLed.disabled = true;
+    recLed.setAttribute('required','');
+    recLed.disabled = false;
+    // rename so POST sends ledger_id
+    recLed.name = 'ledger_id';
+    payLed.name = 'ledger_id_payment';
+    document.getElementById('saveBtn').className = 'btn btn-success w-100';
+  } else {
+    recWrap.classList.add('d-none');
+    payWrap.classList.remove('d-none');
+    recLed.removeAttribute('required');
+    recLed.disabled = true;
+    payLed.setAttribute('required','');
+    payLed.disabled = false;
+    payLed.name = 'ledger_id';
+    recLed.name = 'ledger_id_receipt';
+    document.getElementById('saveBtn').className = 'btn btn-danger w-100';
+  }
+}
+// init
+toggleType();
+</script>
 {% endblock %}

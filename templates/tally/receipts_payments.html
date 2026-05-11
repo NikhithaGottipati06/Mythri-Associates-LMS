@@ -1,0 +1,158 @@
+{% extends 'base.html' %}
+{% block title %}Receipts &amp; Payments Statement{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-arrow-left-right" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Receipts &amp; Payments Statement
+    <small class="text-muted fw-normal fs-6">{{ from_date }} to {{ to_date }}</small>
+  </h5>
+</div>
+
+<!-- Filter + Print bar -->
+<div class="form-card mb-3 no-print">
+  <form method="GET" class="row g-2 align-items-end">
+    <div class="col-auto">
+      <label class="form-label mb-1 small">From Date</label>
+      <input type="text" name="from_date" class="form-control form-control-sm"
+             placeholder="DD/MM/YYYY" value="{{ from_date }}" style="width:130px;">
+    </div>
+    <div class="col-auto">
+      <label class="form-label mb-1 small">To Date</label>
+      <input type="text" name="to_date" class="form-control form-control-sm"
+             placeholder="DD/MM/YYYY" value="{{ to_date }}" style="width:130px;">
+    </div>
+    <div class="col-auto">
+      <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>Show</button>
+    </div>
+    <div class="col-auto ms-auto">
+      <a href="{{ url_for('tally_vouchers') }}" class="btn btn-outline-secondary btn-sm me-2">
+        <i class="bi bi-pencil me-1"></i>Add Entry
+      </a>
+      <button onclick="window.print()" type="button" class="btn btn-dark btn-sm">
+        <i class="bi bi-printer me-1"></i>Print
+      </button>
+    </div>
+  </form>
+</div>
+
+<!-- Two-column statement -->
+<div class="row g-3">
+
+  <!-- RECEIPTS (Dr) -->
+  <div class="col-md-6">
+    <div class="form-card h-100">
+      <div class="section-title text-success mb-3">
+        <i class="bi bi-arrow-down-circle-fill me-1"></i>Receipts (Dr)
+      </div>
+
+      <!-- LMS Auto-Receipts -->
+      <div class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em;">Loan Operations (Auto)</div>
+      <table class="table table-sm mb-3">
+        <tbody>
+          {% if lms_income.interest %}
+          <tr><td class="ps-3">Interest on Loans Collected</td>
+              <td class="text-end text-success fw-semibold">₹{{ "%.2f"|format(lms_income.interest) }}</td></tr>
+          {% endif %}
+          {% if lms_income.processing_fee %}
+          <tr><td class="ps-3">Processing Fees Received</td>
+              <td class="text-end">₹{{ "%.2f"|format(lms_income.processing_fee) }}</td></tr>
+          {% endif %}
+          {% if lms_income.insurance_fee %}
+          <tr><td class="ps-3">Insurance Collection</td>
+              <td class="text-end">₹{{ "%.2f"|format(lms_income.insurance_fee) }}</td></tr>
+          {% endif %}
+          {% if lms_income.membership_fee %}
+          <tr><td class="ps-3">Membership Fees Collected</td>
+              <td class="text-end">₹{{ "%.2f"|format(lms_income.membership_fee) }}</td></tr>
+          {% endif %}
+          {% if lms_penalty %}
+          <tr><td class="ps-3">Penalty / Fine Collection</td>
+              <td class="text-end">₹{{ "%.2f"|format(lms_penalty) }}</td></tr>
+          {% endif %}
+          {% if not (lms_income.interest or lms_income.processing_fee or lms_income.insurance_fee or lms_income.membership_fee or lms_penalty) %}
+          <tr><td colspan="2" class="text-muted small ps-3">No LMS collections in this period.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+
+      <!-- Manual Receipts grouped by ledger group -->
+      {% if rec_groups %}
+        {% for grp, rows in rec_groups.items() %}
+        <div class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em;">{{ grp }}</div>
+        <table class="table table-sm mb-3">
+          <tbody>
+            {% for r in rows %}
+            <tr>
+              <td class="ps-3">{{ r.ledger_name }}
+                {% if r.narration %}<span class="text-muted small"> — {{ r.narration }}</span>{% endif %}
+              </td>
+              <td class="text-end text-success fw-semibold">₹{{ "%.2f"|format(r.amount) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endfor %}
+      {% endif %}
+
+      <div class="border-top pt-2 mt-1 fw-bold d-flex justify-content-between">
+        <span>Total Receipts</span>
+        <span class="text-success fs-6">₹{{ "%.2f"|format(total_receipts) }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAYMENTS (Cr) -->
+  <div class="col-md-6">
+    <div class="form-card h-100">
+      <div class="section-title text-danger mb-3">
+        <i class="bi bi-arrow-up-circle-fill me-1"></i>Payments (Cr)
+      </div>
+
+      {% if pay_groups %}
+        {% for grp, rows in pay_groups.items() %}
+        <div class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em;">{{ grp }}</div>
+        <table class="table table-sm mb-3">
+          <tbody>
+            {% for r in rows %}
+            <tr>
+              <td class="ps-3">{{ r.ledger_name }}
+                {% if r.narration %}<span class="text-muted small"> — {{ r.narration }}</span>{% endif %}
+              </td>
+              <td class="text-end text-danger fw-semibold">₹{{ "%.2f"|format(r.amount) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endfor %}
+      {% else %}
+        <p class="text-muted small py-2">No payment entries for this period.</p>
+      {% endif %}
+
+      <div class="border-top pt-2 mt-1 fw-bold d-flex justify-content-between">
+        <span>Total Payments</span>
+        <span class="text-danger fs-6">₹{{ "%.2f"|format(total_payments) }}</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Net balance -->
+<div class="form-card mt-3 d-flex justify-content-between align-items-center py-3">
+  <span class="fw-bold fs-6">Net Balance (Receipts − Payments)</span>
+  <span class="fw-bold fs-5 {% if net >= 0 %}text-success{% else %}text-danger{% endif %}">
+    ₹{{ "%.2f"|format(net) }}
+    <small class="fs-6 ms-1">{% if net >= 0 %}(Surplus){% else %}(Deficit){% endif %}</small>
+  </span>
+</div>
+
+<style>
+@media print {
+  .no-print, .action-bar, .sidebar, .topbar, .btn { display: none !important; }
+  .main-content { margin: 0 !important; padding: 0 !important; }
+  .form-card { border: 1px solid #ccc !important; box-shadow: none !important; }
+  .page-header h5 { font-size: 16px; }
+  table { font-size: 11px; }
+}
+</style>
+{% endblock %}
