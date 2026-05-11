@@ -1150,16 +1150,19 @@ def loan_bulk_disburse():
     count = 0
     for aid in selected_ids:
         aid = int(aid)
-        app_rec = db.execute(
-            "SELECT * FROM loan_applications WHERE id=? AND status='Approved'", (aid,)
-        ).fetchone()
+        app_rec = db.execute("""
+            SELECT la.*, COALESCE(apr.approved_amount, la.applied_amount) as disburse_amount
+            FROM loan_applications la
+            LEFT JOIN loan_approvals apr ON apr.application_id=la.id
+            WHERE la.id=? AND la.status='Approved'
+        """, (aid,)).fetchone()
         if not app_rec:
             continue
         last = db.execute("SELECT disbursement_no FROM loan_disbursements ORDER BY id DESC LIMIT 1").fetchone()
         num = int(last['disbursement_no'][3:]) + 1 if last else 1
         dis_no = f"DIS{num:06d}"
         loan_id = _next_loan_id(db)
-        disbursed_amount = float(app_rec['approved_amount'] or app_rec['applied_amount'] or 0)
+        disbursed_amount = float(app_rec['disburse_amount'] or 0)
         inst_amount = round(disbursed_amount / total_inst, 2) if total_inst else 0
         db.execute("""
             INSERT INTO loan_disbursements (application_id,disbursement_no,loan_id,disbursed_amount,
