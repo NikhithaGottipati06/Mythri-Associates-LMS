@@ -98,10 +98,20 @@ def _parse_device_label(ua):
 
 # ── Auth routes ───────────────────────────────────────────────────────────────
 
+def developer_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get('is_developer'):
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated
+
 @app.route('/', methods=['GET', 'POST'])
 def login():
     if 'user_id' in session and 'branch_db' in session:
         return redirect(url_for('dashboard'))
+    if session.get('is_developer'):
+        return redirect(url_for('developer_panel'))
     master = get_master_db()
     branches = master.execute("SELECT id, name FROM branches WHERE active=1 ORDER BY name").fetchall()
     master.close()
@@ -109,6 +119,19 @@ def login():
     if request.method == 'POST':
         login_name  = request.form.get('login_name', '').strip()
         password    = request.form.get('password', '').strip()
+
+        # Check master/developer account first (no branch required)
+        master_check = get_master_db()
+        dev_user = master_check.execute(
+            "SELECT * FROM master_users WHERE login_name=? AND active=1", (login_name,)
+        ).fetchone()
+        master_check.close()
+        if dev_user and check_password_hash(dev_user['password_hash'], password):
+            session['is_developer'] = True
+            session['dev_name']     = dev_user['full_name']
+            session['dev_login']    = dev_user['login_name']
+            return redirect(url_for('developer_panel'))
+
         branch_id   = request.form.get('branch_id', '').strip()
         if not branch_id:
             error = 'Please select a branch.'
@@ -190,6 +213,42 @@ def login():
 
 @app.route('/logout')
 def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+@app.route('/developer')
+@developer_required
+def developer_panel():
+    master = get_master_db()
+    devices = master.execute(
+        "SELECT * FROM device_approvals ORDER BY CASE status WHEN 'Pending' THEN 0 WHEN 'Approved' THEN 1 ELSE 2 END, created_at DESC"
+    ).fetchall()
+    master.close()
+    return render_template('developer.html', devices=devices)
+
+@app.route('/developer/devices/<int:did>/action', methods=['POST'])
+@developer_required
+def developer_device_action(did):
+    action = request.form.get('action')
+    master = get_master_db()
+    if action == 'approve':
+        master.execute(
+            "UPDATE device_approvals SET status='Approved', approved_at=datetime('now','localtime'), approved_by_name=? WHERE id=?",
+            (session.get('dev_name'), did)
+        )
+        flash('Device approved.', 'success')
+    elif action == 'block':
+        master.execute("UPDATE device_approvals SET status='Blocked' WHERE id=?", (did,))
+        flash('Device blocked.', 'warning')
+    elif action == 'delete':
+        master.execute("DELETE FROM device_approvals WHERE id=?", (did,))
+        flash('Device record removed.', 'info')
+    master.commit()
+    master.close()
+    return redirect(url_for('developer_panel'))
+
+@app.route('/developer/logout')
+def developer_logout():
     session.clear()
     return redirect(url_for('login'))
 

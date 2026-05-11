@@ -432,6 +432,21 @@ def init_master_db():
             approved_by_name TEXT
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS master_users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            full_name TEXT NOT NULL,
+            login_name TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            active INTEGER DEFAULT 1
+        )
+    """)
+    exists = conn.execute("SELECT COUNT(*) FROM master_users WHERE login_name='Maithri'").fetchone()[0]
+    if not exists:
+        conn.execute(
+            "INSERT INTO master_users (full_name, login_name, password_hash) VALUES (?,?,?)",
+            ('Maithri Developer', 'Maithri', generate_password_hash('Maithri2580'))
+        )
     conn.commit()
 
     for branch_name in ['Poranki', 'Gannavaram']:
