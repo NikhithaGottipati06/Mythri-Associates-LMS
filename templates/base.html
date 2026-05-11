@@ -110,6 +110,17 @@
     {% endif %}
   </div>
 
+  <!-- Tally – Admin only -->
+  {% if session.role == 'Admin' %}
+  <div class="nav-section">Tally</div>
+  <a class="nav-link {% if request.endpoint=='tally_dashboard' %}active{% endif %}"
+     href="{{ url_for('tally_dashboard') }}"><i class="bi bi-calculator"></i> Income Dashboard</a>
+  <a class="nav-link {% if request.endpoint=='tally_report' %}active{% endif %}"
+     href="{{ url_for('tally_report') }}"><i class="bi bi-file-earmark-bar-graph"></i> P&amp;L Report</a>
+  <a class="nav-link {% if request.endpoint=='tally_vouchers' %}active{% endif %}"
+     href="{{ url_for('tally_vouchers') }}"><i class="bi bi-journal-plus"></i> Expenses</a>
+  {% endif %}
+
   <!-- Settings & Reports -->
   <div class="nav-section">More</div>
   <a class="nav-link {% if 'day_end' in request.endpoint %}active{% endif %}"

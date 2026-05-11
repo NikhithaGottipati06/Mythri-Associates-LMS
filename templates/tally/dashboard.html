@@ -1,0 +1,141 @@
+{% extends 'base.html' %}
+{% block title %}Income Dashboard{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-calculator" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Income & Profit Dashboard</h5>
+</div>
+<div class="action-bar">
+  <a href="{{ url_for('tally_report') }}" class="btn btn-primary btn-sm"><i class="bi bi-file-earmark-bar-graph me-1"></i>P&L Report</a>
+  <a href="{{ url_for('tally_vouchers') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-journal-plus me-1"></i>Add Expense</a>
+</div>
+
+<!-- Summary Cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card text-center border-0 shadow-sm h-100" style="border-left:4px solid #198754 !important;">
+      <div class="card-body py-3">
+        <div class="text-muted small mb-1">This Week – Interest</div>
+        <div class="fw-bold fs-5 text-success">₹{{ "%.2f"|format(week_inc.interest) }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center border-0 shadow-sm h-100" style="border-left:4px solid #0d6efd !important;">
+      <div class="card-body py-3">
+        <div class="text-muted small mb-1">This Month – Interest</div>
+        <div class="fw-bold fs-5 text-primary">₹{{ "%.2f"|format(month_inc.interest) }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center border-0 shadow-sm h-100" style="border-left:4px solid #fd7e14 !important;">
+      <div class="card-body py-3">
+        <div class="text-muted small mb-1">This Month – Total Income</div>
+        {% set m_total = month_inc.interest + month_inc.processing_fee + month_inc.insurance_fee + month_inc.membership_fee %}
+        <div class="fw-bold fs-5" style="color:#fd7e14;">₹{{ "%.2f"|format(m_total) }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center border-0 shadow-sm h-100" style="border-left:4px solid {% if (m_total - month_exp) >= 0 %}#198754{% else %}#dc3545{% endif %} !important;">
+      <div class="card-body py-3">
+        <div class="text-muted small mb-1">This Month – Net Profit</div>
+        {% set net = m_total - month_exp %}
+        <div class="fw-bold fs-5 {% if net >= 0 %}text-success{% else %}text-danger{% endif %}">₹{{ "%.2f"|format(net) }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Income breakdown this month -->
+<div class="row g-3 mb-4">
+  <div class="col-md-6">
+    <div class="form-card">
+      <div class="section-title">{{ month_label }} – Income Breakdown</div>
+      <table class="table table-sm mb-0">
+        <tbody>
+          <tr><td>Interest on Loans</td><td class="text-end fw-semibold text-success">₹{{ "%.2f"|format(month_inc.interest) }}</td></tr>
+          <tr><td>Processing Fee</td><td class="text-end">₹{{ "%.2f"|format(month_inc.processing_fee) }}</td></tr>
+          <tr><td>Insurance Fee</td><td class="text-end">₹{{ "%.2f"|format(month_inc.insurance_fee) }}</td></tr>
+          <tr><td>Membership Fee</td><td class="text-end">₹{{ "%.2f"|format(month_inc.membership_fee) }}</td></tr>
+          <tr class="table-light fw-bold border-top"><td>Total Income</td><td class="text-end text-primary">₹{{ "%.2f"|format(m_total) }}</td></tr>
+          <tr><td>Total Expenses</td><td class="text-end text-danger">₹{{ "%.2f"|format(month_exp) }}</td></tr>
+          <tr class="fw-bold {% if (m_total-month_exp)>=0 %}table-success{% else %}table-danger{% endif %}">
+            <td>Net Profit</td><td class="text-end">₹{{ "%.2f"|format(m_total - month_exp) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="form-card">
+      <div class="section-title">This Week – Income Breakdown</div>
+      {% set w_total = week_inc.interest + week_inc.processing_fee + week_inc.insurance_fee + week_inc.membership_fee %}
+      <table class="table table-sm mb-0">
+        <tbody>
+          <tr><td>Interest on Loans</td><td class="text-end fw-semibold text-success">₹{{ "%.2f"|format(week_inc.interest) }}</td></tr>
+          <tr><td>Processing Fee</td><td class="text-end">₹{{ "%.2f"|format(week_inc.processing_fee) }}</td></tr>
+          <tr><td>Insurance Fee</td><td class="text-end">₹{{ "%.2f"|format(week_inc.insurance_fee) }}</td></tr>
+          <tr><td>Membership Fee</td><td class="text-end">₹{{ "%.2f"|format(week_inc.membership_fee) }}</td></tr>
+          <tr class="table-light fw-bold border-top"><td>Total Income</td><td class="text-end text-primary">₹{{ "%.2f"|format(w_total) }}</td></tr>
+          <tr><td>Total Expenses</td><td class="text-end text-danger">₹{{ "%.2f"|format(week_exp) }}</td></tr>
+          <tr class="fw-bold {% if (w_total-week_exp)>=0 %}table-success{% else %}table-danger{% endif %}">
+            <td>Net Profit</td><td class="text-end">₹{{ "%.2f"|format(w_total - week_exp) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Weekly breakdown table -->
+<div class="form-card">
+  <div class="section-title">Week-wise Breakdown – {{ month_label }}</div>
+  {% if weekly %}
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead class="table-dark">
+        <tr>
+          <th>Week</th>
+          <th class="text-end">Interest</th>
+          <th class="text-end">Proc. Fee</th>
+          <th class="text-end">Insurance</th>
+          <th class="text-end">Total Income</th>
+          <th class="text-end">Expenses</th>
+          <th class="text-end">Net Profit</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set ns = namespace(ti=0, te=0, tn=0) %}
+        {% for w in weekly %}
+        {% set ns.ti = ns.ti + w.total_income %}
+        {% set ns.te = ns.te + w.expenses %}
+        {% set ns.tn = ns.tn + w.net %}
+        <tr>
+          <td class="text-nowrap">{{ w.week_label }}</td>
+          <td class="text-end text-success fw-semibold">₹{{ "%.2f"|format(w.interest) }}</td>
+          <td class="text-end">₹{{ "%.2f"|format(w.processing) }}</td>
+          <td class="text-end">₹{{ "%.2f"|format(w.insurance) }}</td>
+          <td class="text-end fw-semibold text-primary">₹{{ "%.2f"|format(w.total_income) }}</td>
+          <td class="text-end text-danger">₹{{ "%.2f"|format(w.expenses) }}</td>
+          <td class="text-end fw-bold {% if w.net >= 0 %}text-success{% else %}text-danger{% endif %}">₹{{ "%.2f"|format(w.net) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-secondary fw-bold">
+        <tr>
+          <td>Total</td>
+          <td></td><td></td><td></td>
+          <td class="text-end text-primary">₹{{ "%.2f"|format(ns.ti) }}</td>
+          <td class="text-end text-danger">₹{{ "%.2f"|format(ns.te) }}</td>
+          <td class="text-end {% if ns.tn >= 0 %}text-success{% else %}text-danger{% endif %}">₹{{ "%.2f"|format(ns.tn) }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-muted text-center py-3">No data for this month yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -3922,6 +3922,318 @@ def report_insurance():
 def help_page():
     return render_template('help.html')
 
+# ── Tally Income & Profit ─────────────────────────────────────────────────────
+
+def _tally_income(db, from_iso, to_iso):
+    """Return dict of income amounts for the given ISO date range."""
+    def ic(col):
+        return f"substr({col},7,4)||'-'||substr({col},4,2)||'-'||substr({col},1,2)"
+
+    def between(col):
+        conds, p = [], []
+        if from_iso: conds.append(f"{ic(col)} >= ?"); p.append(from_iso)
+        if to_iso:   conds.append(f"{ic(col)} <= ?"); p.append(to_iso)
+        return (' AND '.join(conds) if conds else '1=1'), tuple(p)
+
+    c_rp, p_rp = between('rp.posting_date')
+    interest = db.execute(
+        f"SELECT COALESCE(SUM(rp.interest),0) FROM recovery_postings rp WHERE rp.installment_no>0 AND {c_rp}", p_rp
+    ).fetchone()[0]
+
+    c_ld, p_ld = between('ld.disbursement_date')
+    proc = db.execute(
+        f"SELECT COALESCE(SUM(la.processing_fee),0) FROM loan_disbursements ld "
+        f"LEFT JOIN loan_applications la ON ld.application_id=la.id WHERE {c_ld}", p_ld
+    ).fetchone()[0]
+    ins = db.execute(
+        f"SELECT COALESCE(SUM(la.insurance_fee+la.nominee_insurance_fee),0) FROM loan_disbursements ld "
+        f"LEFT JOIN loan_applications la ON ld.application_id=la.id WHERE {c_ld}", p_ld
+    ).fetchone()[0]
+
+    c_m, p_m = between('m.date_of_join')
+    mem_fee = db.execute(
+        f"SELECT COALESCE(SUM(m.total_fees),0) FROM members m WHERE {c_m}", p_m
+    ).fetchone()[0]
+
+    return {'interest': interest, 'processing_fee': proc, 'insurance_fee': ins, 'membership_fee': mem_fee}
+
+
+def _tally_expenses(db, from_iso, to_iso):
+    """Return list of (group_name, total) for manual vouchers in the date range."""
+    def ic(col):
+        return f"substr({col},7,4)||'-'||substr({col},4,2)||'-'||substr({col},1,2)"
+    conds, p = ["1=1"], []
+    if from_iso: conds.append(f"{ic('tv.voucher_date')} >= ?"); p.append(from_iso)
+    if to_iso:   conds.append(f"{ic('tv.voucher_date')} <= ?"); p.append(to_iso)
+    where = ' AND '.join(conds)
+    rows = db.execute(
+        f"SELECT tg.name, COALESCE(SUM(tv.amount),0) as total "
+        f"FROM tally_vouchers tv "
+        f"JOIN tally_ledgers tl ON tv.ledger_id=tl.id "
+        f"JOIN tally_groups tg ON tl.group_id=tg.id "
+        f"WHERE {where} GROUP BY tg.name ORDER BY tg.sort_order", p
+    ).fetchall()
+    return rows
+
+
+def _week_label(iso_date_str):
+    """Given YYYY-MM-DD return DD/MM - DD/MM for the Mon-Sun week."""
+    from datetime import datetime, timedelta
+    try:
+        d = datetime.strptime(iso_date_str, '%Y-%m-%d')
+        mon = d - timedelta(days=d.weekday())
+        sun = mon + timedelta(days=6)
+        return f"{mon.strftime('%d/%m')} – {sun.strftime('%d/%m')}"
+    except Exception:
+        return iso_date_str
+
+
+@app.route('/tally')
+@admin_required
+def tally_dashboard():
+    db = get_db()
+    from datetime import datetime, timedelta
+    today = datetime.now()
+    # Current week (Mon-Sun)
+    wk_start = today - timedelta(days=today.weekday())
+    wk_end   = wk_start + timedelta(days=6)
+    # Current month
+    mo_start = today.replace(day=1)
+    import calendar
+    mo_end   = today.replace(day=calendar.monthrange(today.year, today.month)[1])
+
+    wk_s_iso = wk_start.strftime('%Y-%m-%d')
+    wk_e_iso = wk_end.strftime('%Y-%m-%d')
+    mo_s_iso = mo_start.strftime('%Y-%m-%d')
+    mo_e_iso = mo_end.strftime('%Y-%m-%d')
+
+    week_inc  = _tally_income(db, wk_s_iso, wk_e_iso)
+    month_inc = _tally_income(db, mo_s_iso, mo_e_iso)
+
+    week_exp  = sum(r['total'] for r in _tally_expenses(db, wk_s_iso, wk_e_iso))
+    month_exp = sum(r['total'] for r in _tally_expenses(db, mo_s_iso, mo_e_iso))
+
+    # Weekly breakdown for current month (group by ISO week Mon start)
+    ic = "substr(rp.posting_date,7,4)||'-'||substr(rp.posting_date,4,2)||'-'||substr(rp.posting_date,1,2)"
+    weekly_rows = db.execute(f"""
+        SELECT
+            date({ic}, 'weekday 1', '-6 days') as week_start,
+            COALESCE(SUM(CASE WHEN rp.installment_no>0 THEN rp.interest ELSE 0 END),0) as interest
+        FROM recovery_postings rp
+        WHERE {ic} >= ? AND {ic} <= ?
+        GROUP BY week_start ORDER BY week_start
+    """, (mo_s_iso, mo_e_iso)).fetchall()
+
+    ic_ld = "substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2)"
+    weekly_fees = db.execute(f"""
+        SELECT
+            date({ic_ld}, 'weekday 1', '-6 days') as week_start,
+            COALESCE(SUM(la.processing_fee),0) as proc,
+            COALESCE(SUM(la.insurance_fee+la.nominee_insurance_fee),0) as ins
+        FROM loan_disbursements ld
+        LEFT JOIN loan_applications la ON ld.application_id=la.id
+        WHERE {ic_ld} >= ? AND {ic_ld} <= ?
+        GROUP BY week_start ORDER BY week_start
+    """, (mo_s_iso, mo_e_iso)).fetchall()
+
+    # Build weekly expense per week_start
+    ic_tv = "substr(tv.voucher_date,7,4)||'-'||substr(tv.voucher_date,4,2)||'-'||substr(tv.voucher_date,1,2)"
+    weekly_exp_rows = db.execute(f"""
+        SELECT date({ic_tv}, 'weekday 1', '-6 days') as week_start,
+               COALESCE(SUM(tv.amount),0) as exp
+        FROM tally_vouchers tv
+        WHERE {ic_tv} >= ? AND {ic_tv} <= ?
+        GROUP BY week_start ORDER BY week_start
+    """, (mo_s_iso, mo_e_iso)).fetchall()
+
+    fees_map = {r['week_start']: r for r in weekly_fees}
+    exp_map  = {r['week_start']: r['exp'] for r in weekly_exp_rows}
+
+    weekly = []
+    for r in weekly_rows:
+        ws = r['week_start']
+        proc = fees_map.get(ws, {}).get('proc', 0) or 0
+        ins  = fees_map.get(ws, {}).get('ins', 0)  or 0
+        exp  = exp_map.get(ws, 0)
+        total_inc = (r['interest'] or 0) + proc + ins
+        weekly.append({
+            'week_label': _week_label(ws),
+            'interest': r['interest'] or 0,
+            'processing': proc,
+            'insurance': ins,
+            'total_income': total_inc,
+            'expenses': exp,
+            'net': total_inc - exp,
+        })
+
+    expense_groups = db.execute(
+        "SELECT id, name FROM tally_groups WHERE nature='Expense' ORDER BY sort_order"
+    ).fetchall()
+    expense_ledgers = db.execute(
+        "SELECT tl.id, tl.name, tg.name as group_name FROM tally_ledgers tl "
+        "JOIN tally_groups tg ON tl.group_id=tg.id WHERE tg.nature='Expense' AND tl.active=1 ORDER BY tg.sort_order"
+    ).fetchall()
+
+    db.close()
+    return render_template('tally/dashboard.html',
+        week_inc=week_inc, month_inc=month_inc,
+        week_exp=week_exp, month_exp=month_exp,
+        weekly=weekly,
+        month_label=today.strftime('%B %Y'),
+        expense_ledgers=expense_ledgers)
+
+
+@app.route('/tally/report')
+@admin_required
+def tally_report():
+    db = get_db()
+    from_date = request.args.get('from_date', '')
+    to_date   = request.args.get('to_date', '')
+    from_iso  = _to_iso(from_date) if from_date else ''
+    to_iso    = _to_iso(to_date)   if to_date   else ''
+
+    income = _tally_income(db, from_iso, to_iso)
+    total_income = sum(income.values())
+
+    exp_rows = _tally_expenses(db, from_iso, to_iso)
+    total_expenses = sum(r['total'] for r in exp_rows)
+    net_profit = total_income - total_expenses
+
+    # Weekly breakdown within range
+    ic = "substr(rp.posting_date,7,4)||'-'||substr(rp.posting_date,4,2)||'-'||substr(rp.posting_date,1,2)"
+    conds = ['rp.installment_no>0']
+    p = []
+    if from_iso: conds.append(f"{ic} >= ?"); p.append(from_iso)
+    if to_iso:   conds.append(f"{ic} <= ?"); p.append(to_iso)
+    where = ' AND '.join(conds)
+    weekly_int = db.execute(f"""
+        SELECT date({ic}, 'weekday 1', '-6 days') as week_start,
+               COALESCE(SUM(rp.interest),0) as interest
+        FROM recovery_postings rp WHERE {where}
+        GROUP BY week_start ORDER BY week_start
+    """, p).fetchall()
+
+    ic_ld = "substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2)"
+    conds2, p2 = [], []
+    if from_iso: conds2.append(f"{ic_ld} >= ?"); p2.append(from_iso)
+    if to_iso:   conds2.append(f"{ic_ld} <= ?"); p2.append(to_iso)
+    w2 = (' AND '.join(conds2)) if conds2 else '1=1'
+    weekly_fees = db.execute(f"""
+        SELECT date({ic_ld}, 'weekday 1', '-6 days') as week_start,
+               COALESCE(SUM(la.processing_fee),0) as proc,
+               COALESCE(SUM(la.insurance_fee+la.nominee_insurance_fee),0) as ins
+        FROM loan_disbursements ld
+        LEFT JOIN loan_applications la ON ld.application_id=la.id
+        WHERE {w2} GROUP BY week_start ORDER BY week_start
+    """, p2).fetchall()
+
+    ic_tv = "substr(tv.voucher_date,7,4)||'-'||substr(tv.voucher_date,4,2)||'-'||substr(tv.voucher_date,1,2)"
+    conds3, p3 = [], []
+    if from_iso: conds3.append(f"{ic_tv} >= ?"); p3.append(from_iso)
+    if to_iso:   conds3.append(f"{ic_tv} <= ?"); p3.append(to_iso)
+    w3 = (' AND '.join(conds3)) if conds3 else '1=1'
+    weekly_exp_rows = db.execute(f"""
+        SELECT date({ic_tv}, 'weekday 1', '-6 days') as week_start,
+               COALESCE(SUM(tv.amount),0) as exp
+        FROM tally_vouchers tv WHERE {w3}
+        GROUP BY week_start ORDER BY week_start
+    """, p3).fetchall()
+
+    fees_map = {r['week_start']: r for r in weekly_fees}
+    exp_map  = {r['week_start']: r['exp'] for r in weekly_exp_rows}
+    # Merge all weeks
+    all_weeks = sorted(set(
+        [r['week_start'] for r in weekly_int] +
+        list(fees_map.keys()) + list(exp_map.keys())
+    ))
+    weekly = []
+    for ws in all_weeks:
+        int_v  = next((r['interest'] for r in weekly_int if r['week_start']==ws), 0) or 0
+        proc   = (fees_map.get(ws) or {}).get('proc', 0) or 0
+        ins    = (fees_map.get(ws) or {}).get('ins', 0)  or 0
+        exp    = exp_map.get(ws, 0) or 0
+        ti     = int_v + proc + ins
+        weekly.append({'week_label': _week_label(ws), 'interest': int_v,
+                       'processing': proc, 'insurance': ins,
+                       'total_income': ti, 'expenses': exp, 'net': ti - exp})
+
+    db.close()
+    return render_template('tally/report.html',
+        income=income, total_income=total_income,
+        exp_rows=exp_rows, total_expenses=total_expenses,
+        net_profit=net_profit, weekly=weekly,
+        from_date=from_date, to_date=to_date)
+
+
+@app.route('/tally/vouchers', methods=['GET', 'POST'])
+@admin_required
+def tally_vouchers():
+    db = get_db()
+    if request.method == 'POST':
+        ledger_id   = request.form.get('ledger_id')
+        vdate       = request.form.get('voucher_date', '')
+        amount      = request.form.get('amount', 0)
+        narration   = request.form.get('narration', '')
+        if ledger_id and vdate and float(amount or 0) > 0:
+            db.execute(
+                "INSERT INTO tally_vouchers (ledger_id,voucher_date,amount,narration,created_by) VALUES (?,?,?,?,?)",
+                (ledger_id, vdate, amount, narration, session['user_id'])
+            )
+            db.commit()
+            flash('Expense saved.', 'success')
+        else:
+            flash('Please fill all required fields.', 'danger')
+        db.close()
+        return redirect(url_for('tally_vouchers'))
+
+    expense_ledgers = db.execute(
+        "SELECT tl.id, tl.name, tg.name as group_name FROM tally_ledgers tl "
+        "JOIN tally_groups tg ON tl.group_id=tg.id WHERE tg.nature='Expense' AND tl.active=1 ORDER BY tg.sort_order, tl.name"
+    ).fetchall()
+    # All expense groups (to add new ledger on the fly via modal)
+    expense_groups = db.execute(
+        "SELECT id, name FROM tally_groups WHERE nature='Expense' ORDER BY sort_order"
+    ).fetchall()
+    vouchers = db.execute("""
+        SELECT tv.*, tl.name as ledger_name, tg.name as group_name
+        FROM tally_vouchers tv
+        JOIN tally_ledgers tl ON tv.ledger_id=tl.id
+        JOIN tally_groups tg ON tl.group_id=tg.id
+        ORDER BY tv.id DESC LIMIT 100
+    """).fetchall()
+    db.close()
+    return render_template('tally/vouchers.html',
+        expense_ledgers=expense_ledgers, expense_groups=expense_groups, vouchers=vouchers)
+
+
+@app.route('/tally/vouchers/<int:vid>/delete', methods=['POST'])
+@admin_required
+def tally_voucher_delete(vid):
+    db = get_db()
+    db.execute("DELETE FROM tally_vouchers WHERE id=?", (vid,))
+    db.commit()
+    db.close()
+    flash('Expense deleted.', 'success')
+    return redirect(url_for('tally_vouchers'))
+
+
+@app.route('/tally/ledgers/add', methods=['POST'])
+@admin_required
+def tally_ledger_add():
+    db = get_db()
+    name     = request.form.get('name', '').strip()
+    group_id = request.form.get('group_id')
+    if name and group_id:
+        try:
+            db.execute("INSERT INTO tally_ledgers (name, group_id) VALUES (?,?)", (name, group_id))
+            db.commit()
+            flash(f'Ledger "{name}" added.', 'success')
+        except Exception as e:
+            flash(f'Error: {e}', 'danger')
+    db.close()
+    return redirect(url_for('tally_vouchers'))
+
+
 if __name__ == '__main__':
     init_db()
     app.run(debug=True, host='0.0.0.0', port=5000)

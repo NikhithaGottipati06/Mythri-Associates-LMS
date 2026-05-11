@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+{% block title %}P&L Report{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-file-earmark-bar-graph" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Profit & Loss Report{% if from_date or to_date %} — {{ from_date or '—' }} to {{ to_date or '—' }}{% endif %}</h5>
+</div>
+
+<!-- Date range filter -->
+<div class="form-card mb-3">
+  <form method="GET" class="row g-2 align-items-end">
+    <div class="col-auto">
+      <label class="form-label mb-1 small">From Date</label>
+      <input type="text" name="from_date" class="form-control form-control-sm" placeholder="DD/MM/YYYY" value="{{ from_date }}" style="width:130px;">
+    </div>
+    <div class="col-auto">
+      <label class="form-label mb-1 small">To Date</label>
+      <input type="text" name="to_date" class="form-control form-control-sm" placeholder="DD/MM/YYYY" value="{{ to_date }}" style="width:130px;">
+    </div>
+    <div class="col-auto">
+      <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>Show</button>
+      <a href="{{ url_for('tally_report') }}" class="btn btn-outline-secondary btn-sm ms-1">All Time</a>
+    </div>
+    <div class="col-auto ms-auto">
+      <button onclick="window.print()" type="button" class="btn btn-outline-dark btn-sm"><i class="bi bi-printer me-1"></i>Print</button>
+    </div>
+  </form>
+</div>
+
+<div class="row g-3 mb-4">
+  <!-- Income Statement -->
+  <div class="col-md-5">
+    <div class="form-card h-100">
+      <div class="section-title text-success"><i class="bi bi-arrow-up-circle me-1"></i>Income</div>
+      <table class="table table-sm mb-0">
+        <tbody>
+          <tr>
+            <td>Interest on Loans</td>
+            <td class="text-end fw-semibold text-success">₹{{ "%.2f"|format(income.interest) }}</td>
+          </tr>
+          <tr>
+            <td>Processing Fee</td>
+            <td class="text-end">₹{{ "%.2f"|format(income.processing_fee) }}</td>
+          </tr>
+          <tr>
+            <td>Insurance Fee</td>
+            <td class="text-end">₹{{ "%.2f"|format(income.insurance_fee) }}</td>
+          </tr>
+          <tr>
+            <td>Membership Fee</td>
+            <td class="text-end">₹{{ "%.2f"|format(income.membership_fee) }}</td>
+          </tr>
+          <tr class="table-success fw-bold border-top">
+            <td>Total Income</td>
+            <td class="text-end text-success">₹{{ "%.2f"|format(total_income) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Expenses -->
+  <div class="col-md-4">
+    <div class="form-card h-100">
+      <div class="section-title text-danger"><i class="bi bi-arrow-down-circle me-1"></i>Expenses</div>
+      {% if exp_rows %}
+      <table class="table table-sm mb-0">
+        <tbody>
+          {% for r in exp_rows %}
+          <tr>
+            <td>{{ r.name }}</td>
+            <td class="text-end text-danger">₹{{ "%.2f"|format(r.total) }}</td>
+          </tr>
+          {% endfor %}
+          <tr class="table-danger fw-bold border-top">
+            <td>Total Expenses</td>
+            <td class="text-end">₹{{ "%.2f"|format(total_expenses) }}</td>
+          </tr>
+        </tbody>
+      </table>
+      {% else %}
+      <p class="text-muted small py-2">No expenses recorded.</p>
+      <div class="fw-bold">Total Expenses: ₹0.00</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Net Profit -->
+  <div class="col-md-3">
+    <div class="form-card h-100 text-center d-flex flex-column justify-content-center"
+         style="border-left:5px solid {% if net_profit >= 0 %}#198754{% else %}#dc3545{% endif %};">
+      <div class="text-muted small mb-2">Net Profit / (Loss)</div>
+      <div class="display-6 fw-bold {% if net_profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+        ₹{{ "%.2f"|format(net_profit) }}
+      </div>
+      {% if net_profit >= 0 %}
+      <div class="text-success small mt-1"><i class="bi bi-emoji-smile"></i> Profit</div>
+      {% else %}
+      <div class="text-danger small mt-1"><i class="bi bi-emoji-frown"></i> Loss</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Weekly breakdown -->
+<div class="form-card">
+  <div class="section-title">Week-wise Breakdown{% if from_date %} from {{ from_date }}{% endif %}{% if to_date %} to {{ to_date }}{% endif %}</div>
+  {% if weekly %}
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead class="table-dark">
+        <tr>
+          <th>Week</th>
+          <th class="text-end">Interest</th>
+          <th class="text-end">Proc. Fee</th>
+          <th class="text-end">Insurance</th>
+          <th class="text-end">Total Income</th>
+          <th class="text-end">Expenses</th>
+          <th class="text-end">Net Profit</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set ns = namespace(ti=0, te=0, tn=0) %}
+        {% for w in weekly %}
+        {% set ns.ti = ns.ti + w.total_income %}
+        {% set ns.te = ns.te + w.expenses %}
+        {% set ns.tn = ns.tn + w.net %}
+        <tr>
+          <td class="text-nowrap">{{ w.week_label }}</td>
+          <td class="text-end text-success">₹{{ "%.2f"|format(w.interest) }}</td>
+          <td class="text-end">₹{{ "%.2f"|format(w.processing) }}</td>
+          <td class="text-end">₹{{ "%.2f"|format(w.insurance) }}</td>
+          <td class="text-end fw-semibold text-primary">₹{{ "%.2f"|format(w.total_income) }}</td>
+          <td class="text-end text-danger">₹{{ "%.2f"|format(w.expenses) }}</td>
+          <td class="text-end fw-bold {% if w.net >= 0 %}text-success{% else %}text-danger{% endif %}">₹{{ "%.2f"|format(w.net) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-secondary fw-bold">
+        <tr>
+          <td>Grand Total</td>
+          <td></td><td></td><td></td>
+          <td class="text-end text-primary">₹{{ "%.2f"|format(ns.ti) }}</td>
+          <td class="text-end text-danger">₹{{ "%.2f"|format(ns.te) }}</td>
+          <td class="text-end {% if ns.tn >= 0 %}text-success{% else %}text-danger{% endif %}">₹{{ "%.2f"|format(ns.tn) }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-muted text-center py-3">No data for the selected period.</p>
+  {% endif %}
+</div>
+
+<style>
+@media print {
+  .action-bar, .sidebar, .topbar, form, .btn { display: none !important; }
+  .main-content { margin: 0 !important; padding: 0 !important; }
+}
+</style>
+{% endblock %}
