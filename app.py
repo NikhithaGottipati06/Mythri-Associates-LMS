@@ -3724,6 +3724,10 @@ def report_glance():
         return scalar(
             f'SELECT COALESCE(SUM(pt.amount),0) FROM prepaid_transactions pt WHERE pt.is_undo=0 AND {c}', p)
 
+    def adv_collected(period):
+        c, p = dc('ar.recovery_date', period)
+        return scalar(f'SELECT COALESCE(SUM(ar.amount),0) FROM advance_recoveries ar WHERE {c}', p)
+
     total_centers   = scalar("SELECT COUNT(*) FROM centers WHERE active=1")
     total_withdrawn = scalar("SELECT COUNT(*) FROM members WHERE status='WITHDRAWN'")
     loans_closed    = scalar("SELECT COUNT(*) FROM loan_disbursements WHERE status='Closed'")
@@ -3794,14 +3798,13 @@ def report_glance():
     R(26, 'Prepaid on Death', 0, 0, 0)
     # ── 27 Prepaid Charges ────────────────────────────────────────────────────
     R(27, 'Prepaid Charges', 0, 0, 0)
-    # ── 28 Advance Collected (savings deposits) ───────────────────────────────
-    R(28, 'Advance Collected', save_dep('open'), save_dep('during'), save_dep('close'))
-    # ── 29 Advance Withdrawn (savings withdrawals) ────────────────────────────
-    sw_o = save_with('open'); sw_d = save_with('during'); sw_c = save_with('close')
-    R(29, 'Advance Withdrawn', sw_o, sw_d, sw_c)
+    # ── 28 Advance Collected ──────────────────────────────────────────────────
+    ac_o = adv_collected('open'); ac_d = adv_collected('during'); ac_c = adv_collected('close')
+    R(28, 'Advance Collected', ac_o, ac_d, ac_c)
+    # ── 29 Advance Withdrawn ──────────────────────────────────────────────────
+    R(29, 'Advance Withdrawn', 0, 0, 0)
     # ── 30 Net Advance Recovery ───────────────────────────────────────────────
-    R(30, 'Net Advance Recovery',
-      save_dep('open') - sw_o, save_dep('during') - sw_d, save_dep('close') - sw_c)
+    R(30, 'Net Advance Recovery', ac_o, ac_d, ac_c)
 
     db.close()
     return render_template('reports/glance_report.html', rows=rows, centers=centers,
