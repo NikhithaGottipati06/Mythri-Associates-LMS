@@ -148,21 +148,62 @@
 
   {% if sub_warning_days is not none %}
   <div class="alert alert-warning alert-dismissible fade show py-2 mb-3 d-flex align-items-center gap-2" role="alert">
-    <i class="bi bi-exclamation-triangle-fill"></i>
-    <div>
+    <i class="bi bi-exclamation-triangle-fill flex-shrink-0"></i>
+    <div class="flex-grow-1">
       <strong>Payment Due in {{ sub_warning_days }} day{% if sub_warning_days != 1 %}s{% endif %}!</strong>
-      Subscription payment is due on <strong>{{ sub_due_date_str }}</strong>.
-      Please pay on time to avoid disruption.
+      Subscription payment{% if sub_amount %} of <strong>₹{{ "%.0f"|format(sub_amount) }}</strong>{% endif %} is due on <strong>{{ sub_due_date_str }}</strong>.
+      {% if not sub_paid_pending %}Please pay on time to avoid disruption.{% endif %}
     </div>
     {% if session.role == 'Admin' %}
-    <form method="POST" action="{{ url_for('subscription_submit_payment') }}" class="ms-auto me-2 flex-shrink-0">
-      <button type="submit" class="btn btn-sm btn-warning fw-semibold">
-        <i class="bi bi-check-circle me-1"></i>I have Paid
-      </button>
-    </form>
+      {% if sub_paid_pending %}
+      <span class="badge bg-warning text-dark flex-shrink-0 me-1 py-2">
+        <i class="bi bi-hourglass-split me-1"></i>Awaiting Approval
+      </span>
+      {% else %}
+        <button type="button" class="btn btn-sm btn-outline-warning flex-shrink-0" data-bs-toggle="modal" data-bs-target="#subPayModal">
+          <i class="bi bi-qr-code me-1"></i>Pay Now
+        </button>
+        <form method="POST" action="{{ url_for('subscription_submit_payment') }}" class="flex-shrink-0">
+          <button type="submit" class="btn btn-sm btn-warning fw-semibold">
+            <i class="bi bi-check-circle me-1"></i>I have Paid
+          </button>
+        </form>
+      {% endif %}
     {% endif %}
-    <button type="button" class="btn-close {% if session.role != 'Admin' %}ms-auto{% endif %}" data-bs-dismiss="alert"></button>
+    <button type="button" class="btn-close flex-shrink-0" data-bs-dismiss="alert"></button>
   </div>
+
+  {% if session.role == 'Admin' and not sub_paid_pending %}
+  <div class="modal fade" id="subPayModal" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header py-2">
+          <h6 class="modal-title fw-bold">
+            <i class="bi bi-qr-code me-1"></i>
+            Pay via UPI{% if sub_amount %} – ₹{{ "%.0f"|format(sub_amount) }}{% endif %}
+          </h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body text-center p-3">
+          {% if sub_scanner %}
+          <img src="{{ url_for('static', filename='uploads/' + sub_scanner) }}" alt="UPI Scanner"
+               style="max-width:220px;border-radius:8px;border:1px solid #e2e8f0;">
+          <p class="text-muted small mt-2 mb-0">Scan using any UPI app to pay</p>
+          {% else %}
+          <div class="alert alert-warning py-2 mb-0">UPI Scanner not configured. Contact the developer.</div>
+          {% endif %}
+        </div>
+        <div class="modal-footer py-2">
+          <form method="POST" action="{{ url_for('subscription_submit_payment') }}" class="w-100">
+            <button type="submit" class="btn btn-success btn-sm w-100 fw-semibold">
+              <i class="bi bi-check-circle me-1"></i>I have Paid
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
   {% endif %}
 
   {% block content %}{% endblock %}

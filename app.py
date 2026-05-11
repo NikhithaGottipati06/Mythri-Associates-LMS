@@ -29,6 +29,9 @@ def inject_subscription_ctx():
     return {
         'sub_warning_days': getattr(g, 'sub_warning_days', None),
         'sub_due_date_str': getattr(g, 'sub_due_date_str', ''),
+        'sub_amount':       getattr(g, 'sub_amount', 0),
+        'sub_scanner':      getattr(g, 'sub_scanner', None),
+        'sub_paid_pending': getattr(g, 'sub_paid_pending', False),
     }
 
 _SUBSCRIPTION_EXEMPT = frozenset([
@@ -75,9 +78,15 @@ def check_subscription():
         "SELECT * FROM subscription_payments WHERE branch_db=? AND month_key=?",
         (branch_db, month_key)
     ).fetchone()
+    scanner_row = master.execute(
+        "SELECT value FROM developer_settings WHERE key='scanner_image'"
+    ).fetchone()
     master.close()
     if payment and payment['status'] == 'Approved':
         return None
+    g.sub_amount = sub['monthly_amount'] if sub else 0
+    g.sub_scanner = scanner_row['value'] if scanner_row else None
+    g.sub_paid_pending = (payment is not None)
     days_left = (due_date - today).days
     _h12 = dh % 12 or 12
     _ampm = 'AM' if dh < 12 else 'PM'
