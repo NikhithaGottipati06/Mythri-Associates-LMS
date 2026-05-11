@@ -4422,7 +4422,7 @@ def _tally_income(db, from_iso, to_iso):
 
 
 def _tally_expenses(db, from_iso, to_iso):
-    """Return list of (group_name, total) for manual vouchers in the date range."""
+    """Return list of rows with (name, nature, total) for manual vouchers in the date range."""
     def ic(col):
         return f"substr({col},7,4)||'-'||substr({col},4,2)||'-'||substr({col},1,2)"
     conds, p = ["1=1"], []
@@ -4430,7 +4430,7 @@ def _tally_expenses(db, from_iso, to_iso):
     if to_iso:   conds.append(f"{ic('tv.voucher_date')} <= ?"); p.append(to_iso)
     where = ' AND '.join(conds)
     rows = db.execute(
-        f"SELECT tg.name, COALESCE(SUM(tv.amount),0) as total "
+        f"SELECT tg.name, tg.nature, COALESCE(SUM(tv.amount),0) as total "
         f"FROM tally_vouchers tv "
         f"JOIN tally_ledgers tl ON tv.ledger_id=tl.id "
         f"JOIN tally_groups tg ON tl.group_id=tg.id "
@@ -4863,16 +4863,13 @@ def tally_trial_balance():
         f"SELECT COALESCE(SUM(principal),0) FROM recovery_postings "
         f"WHERE installment_no>0 AND {ic('posting_date')} <= ?", (as_at_iso,))
 
-    # ── Expenses (Debit) — from inception to as_at ────────────────────────────
-    expenses = _tally_expenses(db, None, as_at_iso)
+    # ── Manual vouchers — split by group nature ───────────────────────────────
+    voucher_rows = _tally_expenses(db, None, as_at_iso)
 
     # ── Build DR / CR rows ────────────────────────────────────────────────────
     debit = []
     if loans_outstanding:
         debit.append({'name': 'Loans Outstanding to Members', 'nature': 'Asset',   'amount': loans_outstanding})
-    for grp_name, total in expenses:
-        if total:
-            debit.append({'name': grp_name,                   'nature': 'Expense', 'amount': total})
 
     credit = []
     if income['membership_fee']:
@@ -4883,6 +4880,16 @@ def tally_trial_balance():
         credit.append({'name': 'Member Savings',       'nature': 'Liability', 'amount': member_savings})
     if principal_recovered:
         credit.append({'name': 'Loan Repayments (Principal Recovered)', 'nature': 'Liability', 'amount': principal_recovered})
+
+    # Route each voucher group to the correct side based on its nature
+    for row in voucher_rows:
+        grp_name, nature, total = row['name'], row['nature'], row['total']
+        if not total:
+            continue
+        if nature in ('Expense', 'Asset'):
+            debit.append({'name': grp_name, 'nature': nature, 'amount': total})
+        else:  # Income or Liability
+            credit.append({'name': grp_name, 'nature': nature, 'amount': total})
 
     total_dr = sum(r['amount'] for r in debit)
     total_cr = sum(r['amount'] for r in credit)
@@ -4903,7 +4910,7 @@ def tally_trial_balance():
         as_at=as_at_display,
         disbursed=disbursed, recovered=recovered,
         total_income=sum([income['membership_fee'], penalty]),
-        total_expenses=sum(t for _, t in expenses),
+        total_expenses=sum(r['total'] for r in voucher_rows if r['nature'] == 'Expense'),
     )
 
 
