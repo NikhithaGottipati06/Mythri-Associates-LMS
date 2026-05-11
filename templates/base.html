@@ -269,7 +269,7 @@ document.addEventListener('input', function(e) {
       const banner = document.createElement('div');
       banner.id = 'pwaInstallBanner';
       banner.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#fff;border:1px solid #dee2e6;border-radius:12px;padding:12px 16px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:9999;display:flex;align-items:center;gap:10px;max-width:340px;font-size:13px;';
-      banner.innerHTML = '<i class="bi bi-display" style="font-size:20px;color:#ffc107;flex-shrink:0;"></i><span class="flex-grow-1">Install <strong>Maitri LMS</strong> as an app on this device</span><button id="pwaInstallBtn" class="btn btn-sm btn-warning fw-semibold flex-shrink-0">Install</button><button onclick="sessionStorage.setItem(\'installDismissed\',\'1\');this.parentElement.remove();" style="background:none;border:none;font-size:18px;line-height:1;cursor:pointer;color:#6c757d;flex-shrink:0;">&times;</button>';
+      banner.innerHTML = '<img src="{{ url_for("static", filename="images/logo.jpeg") }}" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;"><span class="flex-grow-1">Install <strong>Maitri LMS</strong> as an app on this device</span><button id="pwaInstallBtn" class="btn btn-sm btn-warning fw-semibold flex-shrink-0">Install</button><button onclick="sessionStorage.setItem(\'installDismissed\',\'1\');this.parentElement.remove();" style="background:none;border:none;font-size:18px;line-height:1;cursor:pointer;color:#6c757d;flex-shrink:0;">&times;</button>';
       document.body.appendChild(banner);
       document.getElementById('pwaInstallBtn').addEventListener('click', function() {
         _installPrompt.prompt();
@@ -288,7 +288,7 @@ document.addEventListener('input', function(e) {
     if (isIos && !isStandalone && !sessionStorage.getItem('iosHintDismissed')) {
       const banner = document.createElement('div');
       banner.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#fff;border:1px solid #dee2e6;border-radius:12px;padding:12px 16px;box-shadow:0 4px 16px rgba(0,0,0,.15);z-index:9999;display:flex;align-items:center;gap:10px;max-width:320px;font-size:13px;';
-      banner.innerHTML = '<i class="bi bi-box-arrow-up" style="font-size:20px;color:#ffc107;flex-shrink:0;"></i><span>To install the app, tap <strong>Share</strong> then <strong>Add to Home Screen</strong></span><button onclick="sessionStorage.setItem(\'iosHintDismissed\',\'1\');this.parentElement.remove();" style="background:none;border:none;font-size:18px;line-height:1;cursor:pointer;color:#6c757d;flex-shrink:0;">&times;</button>';
+      banner.innerHTML = '<img src="{{ url_for("static", filename="images/logo.jpeg") }}" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;"><span>To install, tap <i class="bi bi-box-arrow-up"></i> <strong>Share</strong> then <strong>Add to Home Screen</strong></span><button onclick="sessionStorage.setItem(\'iosHintDismissed\',\'1\');this.parentElement.remove();" style="background:none;border:none;font-size:18px;line-height:1;cursor:pointer;color:#6c757d;flex-shrink:0;">&times;</button>';
       document.body.appendChild(banner);
     }
   })();
