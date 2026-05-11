@@ -7,6 +7,7 @@ import json
 import sqlite3
 import secrets
 from datetime import datetime, timedelta
+from financial_statements import fin_stmt
 
 def get_db():
     """Return a connection to the current branch database."""
@@ -18,6 +19,7 @@ def get_db():
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'mythri-lms-secret-2024')
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'static', 'uploads')
+app.register_blueprint(fin_stmt)
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 @app.context_processor

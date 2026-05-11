@@ -1,7 +1,10 @@
 import sqlite3
 import os
 from werkzeug.security import generate_password_hash
-from chart_of_accounts import INCOME_GROUPS, EXPENSE_GROUPS, ASSET_GROUPS, LIABILITY_GROUPS, AUTO_LEDGERS
+from chart_of_accounts import (
+    INCOME_GROUPS, EXPENSE_GROUPS, ASSET_GROUPS, LIABILITY_GROUPS,
+    AUTO_LEDGERS, ALL_RP_HEADS,
+)
 
 MASTER_DB_PATH = os.path.join(os.path.dirname(__file__), 'master.db')
 BRANCHES_DIR   = os.path.join(os.path.dirname(__file__), 'branches')
@@ -417,6 +420,25 @@ def migrate_branch_db(db_path):
             created_by INTEGER REFERENCES users(id),
             created_at TEXT DEFAULT (datetime('now'))
         );
+        CREATE TABLE IF NOT EXISTS rp_heads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            type TEXT NOT NULL CHECK(type IN ('Receipt','Payment')),
+            category TEXT NOT NULL,
+            sort_order INTEGER DEFAULT 99,
+            is_auto INTEGER DEFAULT 0,
+            lms_source TEXT,
+            active INTEGER DEFAULT 1
+        );
+        CREATE TABLE IF NOT EXISTS rp_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            head_id INTEGER REFERENCES rp_heads(id),
+            entry_date TEXT NOT NULL,
+            amount REAL NOT NULL,
+            narration TEXT,
+            created_by INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT (datetime('now'))
+        );
     """
     for sql in migrations:
         try:
@@ -447,6 +469,18 @@ def migrate_branch_db(db_path):
                 if not existing:
                     c.execute("INSERT INTO tally_ledgers (name, group_id, is_auto, lms_source) VALUES (?,?,1,?)",
                               (lname, row[0], src))
+        except Exception:
+            pass
+
+    # Seed Receipts & Payments heads — defined in chart_of_accounts.py
+    for name, rp_type, category, sort, is_auto, lms_src in ALL_RP_HEADS:
+        try:
+            c.execute(
+                """INSERT OR IGNORE INTO rp_heads
+                   (name, type, category, sort_order, is_auto, lms_source)
+                   VALUES (?,?,?,?,?,?)""",
+                (name, rp_type, category, sort, is_auto, lms_src),
+            )
         except Exception:
             pass
 
