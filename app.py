@@ -1050,9 +1050,13 @@ def loan_applications_new():
         finally:
             db.close()
         return redirect(url_for('loan_applications_list'))
-    members = db.execute(
-        "SELECT id, member_code, full_name, center_id, income, kyc_type, kyc_number FROM members WHERE status='ACTIVE'"
-    ).fetchall()
+    members = db.execute("""
+        SELECT m.id, m.member_code, m.full_name, m.center_id, m.income, m.kyc_type, m.kyc_number
+        FROM members m
+        LEFT JOIN (SELECT member_id, MAX(id) as last_app_id FROM loan_applications GROUP BY member_id) la ON m.id = la.member_id
+        WHERE m.status='ACTIVE'
+        ORDER BY CASE WHEN la.last_app_id IS NULL THEN 1 ELSE 0 END, la.last_app_id DESC, m.member_code
+    """).fetchall()
     centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
     loan_types = db.execute(
         "SELECT id, loan_type_code, loan_type_name, tenure_weeks, processing_fee, insurance_fee FROM loan_types WHERE active=1"
@@ -1096,9 +1100,13 @@ def loan_applications_edit(aid):
         db.close()
         flash('Application updated.', 'success')
         return redirect(url_for('loan_applications_list'))
-    members = db.execute(
-        "SELECT id, member_code, full_name, center_id, income, kyc_type, kyc_number FROM members WHERE status='ACTIVE'"
-    ).fetchall()
+    members = db.execute("""
+        SELECT m.id, m.member_code, m.full_name, m.center_id, m.income, m.kyc_type, m.kyc_number
+        FROM members m
+        LEFT JOIN (SELECT member_id, MAX(id) as last_app_id FROM loan_applications GROUP BY member_id) la ON m.id = la.member_id
+        WHERE m.status='ACTIVE'
+        ORDER BY CASE WHEN la.last_app_id IS NULL THEN 1 ELSE 0 END, la.last_app_id DESC, m.member_code
+    """).fetchall()
     centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
     loan_types = db.execute(
         "SELECT id, loan_type_code, loan_type_name, tenure_weeks, processing_fee, insurance_fee FROM loan_types WHERE active=1"
@@ -1289,9 +1297,13 @@ def loan_disburse_new():
             db.close()
         return redirect(url_for('loan_disbursement_list'))
 
-    members = db.execute(
-        "SELECT id, member_code, full_name, center_id, income, kyc_type, kyc_number FROM members WHERE status='ACTIVE'"
-    ).fetchall()
+    members = db.execute("""
+        SELECT m.id, m.member_code, m.full_name, m.center_id, m.income, m.kyc_type, m.kyc_number
+        FROM members m
+        LEFT JOIN (SELECT member_id, MAX(id) as last_app_id FROM loan_applications GROUP BY member_id) la ON m.id = la.member_id
+        WHERE m.status='ACTIVE'
+        ORDER BY CASE WHEN la.last_app_id IS NULL THEN 1 ELSE 0 END, la.last_app_id DESC, m.member_code
+    """).fetchall()
     loan_types = db.execute(
         "SELECT id, loan_type_code, loan_type_name, tenure_weeks, processing_fee, insurance_fee, interest_rate, interest_type, interest_method FROM loan_types WHERE active=1"
     ).fetchall()

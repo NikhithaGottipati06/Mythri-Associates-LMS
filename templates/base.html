@@ -164,6 +164,18 @@ document.querySelectorAll('.sidebar .nav-link:not(.collapse-toggle)').forEach(li
     if (window.innerWidth < 768) closeSidebar();
   });
 });
+
+// Auto-convert date separators: replace - with / for all DD/MM/YYYY inputs
+document.addEventListener('input', function(e) {
+  if (e.target.matches('input[placeholder="DD/MM/YYYY"]')) {
+    var v = e.target.value;
+    if (v.includes('-')) {
+      var pos = e.target.selectionStart;
+      e.target.value = v.replace(/-/g, '/');
+      try { e.target.setSelectionRange(pos, pos); } catch(ex) {}
+    }
+  }
+});
 </script>
 {% block scripts %}{% endblock %}
 </body>
