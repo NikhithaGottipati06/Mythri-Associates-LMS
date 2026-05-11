@@ -7,7 +7,6 @@ import json
 import sqlite3
 import secrets
 from datetime import datetime, timedelta
-from financial_statements import fin_stmt
 
 def get_db():
     """Return a connection to the current branch database."""
@@ -19,7 +18,6 @@ def get_db():
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'mythri-lms-secret-2024')
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'static', 'uploads')
-app.register_blueprint(fin_stmt)
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 @app.context_processor
@@ -4597,6 +4595,106 @@ def tally_ledger_add():
             flash(f'Error: {e}', 'danger')
     db.close()
     return redirect(url_for('tally_vouchers'))
+
+
+@app.route('/tally/trial-balance')
+@admin_required
+def tally_trial_balance():
+    db  = get_db()
+    raw = request.args.get('as_at', '').strip()
+    try:
+        as_at_iso = datetime.strptime(raw, '%d/%m/%Y').strftime('%Y-%m-%d')
+    except Exception:
+        as_at_iso = datetime.now().strftime('%Y-%m-%d')
+    as_at_display = datetime.strptime(as_at_iso, '%Y-%m-%d').strftime('%d/%m/%Y')
+
+    # Date-column converter: stored as DD/MM/YYYY → compare as YYYY-MM-DD
+    def ic(col):
+        return f"substr({col},7,4)||'-'||substr({col},4,2)||'-'||substr({col},1,2)"
+
+    def scalar(sql, p=()):
+        r = db.execute(sql, p).fetchone()
+        return (r[0] or 0) if r else 0
+
+    # ── Balance-sheet items ───────────────────────────────────────────────────
+    # Loans Outstanding (Asset DR) = disbursed − principal recovered (inception → as_at)
+    disbursed  = scalar(
+        f"SELECT COALESCE(SUM(disbursed_amount),0) FROM loan_disbursements "
+        f"WHERE {ic('disbursement_date')} <= ?", (as_at_iso,))
+    recovered  = scalar(
+        f"SELECT COALESCE(SUM(principal),0) FROM recovery_postings "
+        f"WHERE installment_no>0 AND {ic('posting_date')} <= ?", (as_at_iso,))
+    loans_outstanding = max(disbursed - recovered, 0)
+
+    # Member Savings (Liability CR) = total deposits − withdrawals
+    sav_dep = scalar(
+        f"SELECT COALESCE(SUM(deposit_amount),0)  FROM savings_transactions WHERE {ic('transaction_date')} <= ?",
+        (as_at_iso,))
+    sav_wit = scalar(
+        f"SELECT COALESCE(SUM(withdraw_amount),0) FROM savings_transactions WHERE {ic('transaction_date')} <= ?",
+        (as_at_iso,))
+    member_savings = max(sav_dep - sav_wit, 0)
+
+    # ── Income (Credit) — from inception to as_at ─────────────────────────────
+    income = _tally_income(db, None, as_at_iso)
+
+    penalty = scalar(
+        f"SELECT COALESCE(SUM(penalty),0) FROM recovery_postings "
+        f"WHERE installment_no>0 AND {ic('posting_date')} <= ?", (as_at_iso,))
+
+    principal_recovered = scalar(
+        f"SELECT COALESCE(SUM(principal),0) FROM recovery_postings "
+        f"WHERE installment_no>0 AND {ic('posting_date')} <= ?", (as_at_iso,))
+
+    # ── Expenses (Debit) — from inception to as_at ────────────────────────────
+    expenses = _tally_expenses(db, None, as_at_iso)
+
+    # ── Build DR / CR rows ────────────────────────────────────────────────────
+    debit = []
+    if loans_outstanding:
+        debit.append({'name': 'Loans Outstanding to Members', 'nature': 'Asset',   'amount': loans_outstanding})
+    for grp_name, total in expenses:
+        if total:
+            debit.append({'name': grp_name,                   'nature': 'Expense', 'amount': total})
+
+    credit = []
+    if income['interest']:
+        credit.append({'name': 'Interest on Loans',    'nature': 'Income',    'amount': income['interest']})
+    if income['processing_fee']:
+        credit.append({'name': 'Processing Fees',      'nature': 'Income',    'amount': income['processing_fee']})
+    if income['insurance_fee']:
+        credit.append({'name': 'Insurance Fees',       'nature': 'Income',    'amount': income['insurance_fee']})
+    if income['membership_fee']:
+        credit.append({'name': 'Membership Fees',      'nature': 'Income',    'amount': income['membership_fee']})
+    if penalty:
+        credit.append({'name': 'Penalty / Fine Income','nature': 'Income',    'amount': penalty})
+    if member_savings:
+        credit.append({'name': 'Member Savings',       'nature': 'Liability', 'amount': member_savings})
+    if principal_recovered:
+        credit.append({'name': 'Loan Repayments (Principal Recovered)', 'nature': 'Liability', 'amount': principal_recovered})
+
+    total_dr = sum(r['amount'] for r in debit)
+    total_cr = sum(r['amount'] for r in credit)
+
+    # Balancing figure
+    diff = round(total_dr - total_cr, 2)
+    if diff > 0:
+        credit.append({'name': 'Surplus (Net Profit)',  'nature': 'Capital', 'amount': diff})
+        total_cr = total_dr
+    elif diff < 0:
+        debit.append({'name':  'Deficit (Net Loss)',    'nature': 'Capital', 'amount': -diff})
+        total_dr = total_cr
+
+    db.close()
+    return render_template('tally/trial_balance.html',
+        debit=debit, credit=credit,
+        total_dr=total_dr, total_cr=total_cr,
+        as_at=as_at_display,
+        disbursed=disbursed, recovered=recovered,
+        total_income=sum([income['interest'], income['processing_fee'],
+                          income['insurance_fee'], income['membership_fee'], penalty]),
+        total_expenses=sum(t for _, t in expenses),
+    )
 
 
 if __name__ == '__main__':
