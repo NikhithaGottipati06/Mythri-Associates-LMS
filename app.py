@@ -337,6 +337,11 @@ def developer_panel():
         WHERE status='Pending' ORDER BY paid_at DESC
     """).fetchall()
 
+    approved_payments = master.execute("""
+        SELECT * FROM subscription_payments
+        WHERE status='Approved' ORDER BY approved_at DESC LIMIT 50
+    """).fetchall()
+
     scanner_row = master.execute(
         "SELECT value FROM developer_settings WHERE key='scanner_image'"
     ).fetchone()
@@ -347,6 +352,7 @@ def developer_panel():
         devices=devices, branches_stats=branches_stats,
         branches_list=branches_list,
         sub_map=sub_map, pending_payments=pending_payments,
+        approved_payments=approved_payments,
         scanner_image=scanner_image)
 
 @app.route('/developer/devices/<int:did>/action', methods=['POST'])
@@ -4154,6 +4160,21 @@ def developer_subscription_approve(pid):
     master.commit()
     master.close()
     flash('Payment approved. Branch access restored.', 'success')
+    return redirect(url_for('developer_panel'))
+
+
+@app.route('/developer/subscriptions/<int:pid>/undo', methods=['POST'])
+@developer_required
+def developer_subscription_undo(pid):
+    master = get_master_db()
+    master.execute("""
+        UPDATE subscription_payments
+        SET status='Pending', approved_at=NULL, approved_by=NULL
+        WHERE id=?
+    """, (pid,))
+    master.commit()
+    master.close()
+    flash('Payment approval undone. Branch will be blocked again.', 'warning')
     return redirect(url_for('developer_panel'))
 
 
