@@ -60,7 +60,60 @@
 
 <div class="dev-body">
 
-  <!-- Stats -->
+  <!-- Branch Statistics -->
+  <div class="form-card mb-4" style="background:#fff;border-radius:10px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);">
+    <div style="font-weight:700;font-size:13px;letter-spacing:.06em;color:#1a3c6e;text-transform:uppercase;border-bottom:2px solid #e2e8f0;padding-bottom:8px;margin-bottom:14px;">
+      <i class="bi bi-diagram-3 me-1"></i>Branch Overview
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle mb-0">
+        <thead style="background:#1a3c6e;color:#fff;">
+          <tr>
+            <th>Branch</th>
+            <th>Status</th>
+            <th class="text-center">Active Members</th>
+            <th class="text-center">Active Loans</th>
+            <th class="text-center">Closed Loans</th>
+            <th class="text-end">Outstanding (₹)</th>
+            <th class="text-center">Approved Devices</th>
+            <th class="text-center">Pending Devices</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in branches_stats %}
+          <tr>
+            <td><strong>{{ b.name }}</strong></td>
+            <td>
+              {% if b.active %}
+              <span class="badge bg-success">Active</span>
+              {% else %}
+              <span class="badge bg-secondary">Inactive</span>
+              {% endif %}
+            </td>
+            <td class="text-center">{{ b.members }}</td>
+            <td class="text-center">
+              <span class="badge bg-primary">{{ b.active_loans }}</span>
+            </td>
+            <td class="text-center text-muted">{{ b.closed_loans }}</td>
+            <td class="text-end fw-semibold text-success">₹{{ "{:,.2f}".format(b.outstanding) }}</td>
+            <td class="text-center">
+              <span class="badge bg-success">{{ b.approved_devices }}</span>
+            </td>
+            <td class="text-center">
+              {% if b.pending_devices > 0 %}
+              <span class="badge bg-warning text-dark">{{ b.pending_devices }}</span>
+              {% else %}
+              <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Device Stats -->
   <div class="row g-3 mb-4">
     <div class="col-4">
       <div class="stat-card">

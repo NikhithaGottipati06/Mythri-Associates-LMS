@@ -177,13 +177,14 @@ def login():
                             return redirect(url_for('device_pending'))
                     else:
                         new_token = secrets.token_hex(32)
-                        approved_count = master2.execute(
-                            "SELECT COUNT(*) FROM device_approvals WHERE user_id=? AND branch_db=? AND status='Approved'",
-                            (user['id'], branch['db_path'])
+                        # Bootstrap only if user has NO approved device across ANY branch
+                        global_approved = master2.execute(
+                            "SELECT COUNT(*) FROM device_approvals WHERE user_id=? AND status='Approved'",
+                            (user['id'],)
                         ).fetchone()[0]
                         label = _parse_device_label(request.headers.get('User-Agent', ''))
                         ip = request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip()
-                        initial_status = 'Approved' if approved_count == 0 else 'Pending'
+                        initial_status = 'Approved' if global_approved == 0 else 'Pending'
                         master2.execute("""
                             INSERT INTO device_approvals
                             (user_id, branch_db, user_login_name, user_full_name, branch_name,
@@ -223,8 +224,45 @@ def developer_panel():
     devices = master.execute(
         "SELECT * FROM device_approvals ORDER BY CASE status WHEN 'Pending' THEN 0 WHEN 'Approved' THEN 1 ELSE 2 END, created_at DESC"
     ).fetchall()
+    branches_raw = master.execute("SELECT * FROM branches ORDER BY name").fetchall()
+    branches_stats = []
+    for br in branches_raw:
+        stat = {
+            'name': br['name'], 'active': br['active'],
+            'members': 0, 'active_loans': 0, 'closed_loans': 0,
+            'outstanding': 0.0, 'approved_devices': 0, 'pending_devices': 0
+        }
+        stat['approved_devices'] = master.execute(
+            "SELECT COUNT(*) FROM device_approvals WHERE branch_db=? AND status='Approved'", (br['db_path'],)
+        ).fetchone()[0]
+        stat['pending_devices'] = master.execute(
+            "SELECT COUNT(*) FROM device_approvals WHERE branch_db=? AND status='Pending'", (br['db_path'],)
+        ).fetchone()[0]
+        if os.path.exists(br['db_path']):
+            try:
+                bdb = get_branch_db(br['db_path'])
+                stat['members'] = bdb.execute(
+                    "SELECT COUNT(*) FROM members WHERE status='ACTIVE'"
+                ).fetchone()[0]
+                stat['active_loans'] = bdb.execute(
+                    "SELECT COUNT(*) FROM loan_disbursements WHERE status='Disbursed'"
+                ).fetchone()[0]
+                stat['closed_loans'] = bdb.execute(
+                    "SELECT COUNT(*) FROM loan_disbursements WHERE status='Closed'"
+                ).fetchone()[0]
+                row = bdb.execute("""
+                    SELECT COALESCE(SUM(ld.disbursed_amount),0) -
+                           COALESCE((SELECT SUM(rp.principal) FROM recovery_postings rp
+                                     WHERE rp.disbursement_id=ld.id AND rp.installment_no>0),0)
+                    FROM loan_disbursements ld WHERE ld.status='Disbursed'
+                """).fetchone()
+                stat['outstanding'] = round(row[0] or 0, 2)
+                bdb.close()
+            except Exception:
+                pass
+        branches_stats.append(stat)
     master.close()
-    return render_template('developer.html', devices=devices)
+    return render_template('developer.html', devices=devices, branches_stats=branches_stats)
 
 @app.route('/developer/devices/<int:did>/action', methods=['POST'])
 @developer_required
