@@ -1133,6 +1133,47 @@ def loan_disburse(aid):
     flash(f'Loan {loan_id} disbursed successfully.', 'success')
     return redirect(url_for('loan_disbursement_list'))
 
+@app.route('/loans/disbursement/bulk-disburse', methods=['POST'])
+@admin_required
+def loan_bulk_disburse():
+    db = get_db()
+    selected_ids = request.form.getlist('selected_ids')
+    if not selected_ids:
+        flash('No loans selected.', 'warning')
+        db.close()
+        return redirect(url_for('loan_disbursement_list'))
+    disbursement_date = request.form.get('disbursement_date', datetime.now().strftime('%d/%m/%Y'))
+    total_inst = int(request.form.get('total_installments', 50))
+    mode = request.form.get('mode', 'Cash')
+    account_no = request.form.get('account_no', '')
+    remarks = request.form.get('remarks', '')
+    count = 0
+    for aid in selected_ids:
+        aid = int(aid)
+        app_rec = db.execute(
+            "SELECT * FROM loan_applications WHERE id=? AND status='Approved'", (aid,)
+        ).fetchone()
+        if not app_rec:
+            continue
+        last = db.execute("SELECT disbursement_no FROM loan_disbursements ORDER BY id DESC LIMIT 1").fetchone()
+        num = int(last['disbursement_no'][3:]) + 1 if last else 1
+        dis_no = f"DIS{num:06d}"
+        loan_id = _next_loan_id(db)
+        disbursed_amount = float(app_rec['approved_amount'] or app_rec['applied_amount'] or 0)
+        inst_amount = round(disbursed_amount / total_inst, 2) if total_inst else 0
+        db.execute("""
+            INSERT INTO loan_disbursements (application_id,disbursement_no,loan_id,disbursed_amount,
+            disbursement_date,mode,account_no,disbursed_by,status,total_installments,installment_amount,remarks)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (aid, dis_no, loan_id, disbursed_amount, disbursement_date,
+              mode, account_no, session['user_id'], 'Disbursed', total_inst, inst_amount, remarks))
+        db.execute("UPDATE loan_applications SET status='Disbursed' WHERE id=?", (aid,))
+        db.commit()
+        count += 1
+    db.close()
+    flash(f'{count} loan(s) disbursed successfully.', 'success')
+    return redirect(url_for('loan_disbursement_list'))
+
 # ── Disbursement Delete ───────────────────────────────────────────────────────
 
 @app.route('/loans/disbursement/<int:did>/delete', methods=['POST'])

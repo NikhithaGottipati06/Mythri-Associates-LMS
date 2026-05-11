@@ -15,12 +15,39 @@
 {% if approved %}
 <div class="form-card mb-3">
   <div class="section-title"><i class="bi bi-hourglass-split me-1"></i>Approved – Awaiting Disbursement ({{ approved|length }})</div>
+
+  {% if session.role == 'Admin' and approved|length > 0 %}
+  <div class="d-flex align-items-center gap-2 px-3 py-2 border-bottom bg-light">
+    <div class="form-check mb-0">
+      <input class="form-check-input" type="checkbox" id="selectAllApproved">
+      <label class="form-check-label fw-semibold" for="selectAllApproved">Select All</label>
+    </div>
+    <button class="btn btn-primary btn-sm ms-2" id="bulkDisburseBtn" disabled
+            data-bs-toggle="modal" data-bs-target="#bulkDisburseModal">
+      <i class="bi bi-cash me-1"></i>Disburse Selected (<span id="selectedCount">0</span>)
+    </button>
+  </div>
+  {% endif %}
+
   <div class="lms-table" style="margin:0;">
     <table class="table table-hover mb-0">
-      <thead><tr><th>App No</th><th>Member</th><th>Loan Type</th><th>Approved Amt</th><th>Actions</th></tr></thead>
+      <thead>
+        <tr>
+          {% if session.role == 'Admin' %}<th style="width:40px;"></th>{% endif %}
+          <th>App No</th><th>Member</th><th>Loan Type</th><th>Approved Amt</th><th>Actions</th>
+        </tr>
+      </thead>
       <tbody>
       {% for a in approved %}
         <tr>
+          {% if session.role == 'Admin' %}
+          <td>
+            <input class="form-check-input approved-checkbox" type="checkbox"
+                   value="{{ a.id }}"
+                   data-member="{{ a.member_code }} – {{ a.member_name }}"
+                   data-appno="{{ a.application_no }}">
+          </td>
+          {% endif %}
           <td class="fw-semibold text-primary">{{ a.application_no }}</td>
           <td>{{ a.member_code }} – {{ a.member_name }}</td>
           <td>{{ a.loan_type_name or '—' }}</td>
@@ -83,6 +110,51 @@
     </table>
   </div>
 </div>
+
+<!-- Bulk Disburse Modal -->
+<div class="modal fade" id="bulkDisburseModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('loan_bulk_disburse') }}" id="bulkDisburseForm">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-cash me-1"></i>Disburse Selected Loans</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div id="selectedLoansList" class="alert alert-info py-2 small mb-3"></div>
+          <div class="row g-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold">Disbursement Date</label>
+              <input type="text" name="disbursement_date" class="form-control" placeholder="DD/MM/YYYY" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Total Installments</label>
+              <input type="number" name="total_installments" class="form-control" value="50" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Mode</label>
+              <select name="mode" class="form-select">
+                <option>Cash</option><option>Bank Transfer</option><option>Cheque</option>
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Account No</label>
+              <input type="text" name="account_no" class="form-control">
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Remarks</label>
+              <input type="text" name="remarks" class="form-control">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-primary">Confirm Disbursement</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 {% endif %}
 
 <div class="form-card">
@@ -128,4 +200,58 @@
     </table>
   </div>
 </div>
+
+<script>
+(function () {
+  var selectAll = document.getElementById('selectAllApproved');
+  var bulkBtn = document.getElementById('bulkDisburseBtn');
+  var countSpan = document.getElementById('selectedCount');
+
+  if (!selectAll) return;
+
+  function getChecked() {
+    return document.querySelectorAll('.approved-checkbox:checked');
+  }
+
+  function updateBulkBtn() {
+    var checked = getChecked();
+    var all = document.querySelectorAll('.approved-checkbox');
+    var n = checked.length;
+    countSpan.textContent = n;
+    bulkBtn.disabled = n === 0;
+    selectAll.indeterminate = n > 0 && n < all.length;
+    selectAll.checked = all.length > 0 && n === all.length;
+  }
+
+  selectAll.addEventListener('change', function () {
+    document.querySelectorAll('.approved-checkbox').forEach(function (cb) {
+      cb.checked = selectAll.checked;
+    });
+    updateBulkBtn();
+  });
+
+  document.querySelectorAll('.approved-checkbox').forEach(function (cb) {
+    cb.addEventListener('change', updateBulkBtn);
+  });
+
+  document.getElementById('bulkDisburseModal').addEventListener('show.bs.modal', function () {
+    var form = document.getElementById('bulkDisburseForm');
+    // Remove previously added hidden inputs
+    form.querySelectorAll('input[name="selected_ids"]').forEach(function (el) { el.remove(); });
+
+    var checked = getChecked();
+    var labels = [];
+    checked.forEach(function (cb) {
+      var hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.name = 'selected_ids';
+      hidden.value = cb.value;
+      form.appendChild(hidden);
+      labels.push(cb.getAttribute('data-appno') + ' (' + cb.getAttribute('data-member') + ')');
+    });
+    document.getElementById('selectedLoansList').textContent =
+      checked.length + ' loan(s) selected: ' + labels.join(', ');
+  });
+})();
+</script>
 {% endblock %}
