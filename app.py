@@ -34,7 +34,7 @@ def inject_subscription_ctx():
 _SUBSCRIPTION_EXEMPT = frozenset([
     'login', 'logout', 'static',
     'device_pending', 'device_check_status',
-    'developer_panel', 'developer_logout', 'developer_device_action',
+    'developer_panel', 'developer_logout', 'developer_device_action', 'developer_purge_duplicates',
     'developer_subscription_settings', 'developer_subscription_approve',
     'developer_subscription_undo', 'developer_subscription_delete',
     'developer_scanner_upload',
@@ -241,14 +241,47 @@ def login():
                             master2.close()
                             return redirect(url_for('device_pending'))
                     else:
+                        label = _parse_device_label(request.headers.get('User-Agent', ''))
+                        ip = request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip()
                         new_token = secrets.token_hex(32)
-                        # Bootstrap only if user has NO approved device across ANY branch
+                        # Check for existing record with same user + branch + device_label (cookie cleared)
+                        existing_label = master2.execute(
+                            "SELECT * FROM device_approvals WHERE user_id=? AND branch_db=? AND device_label=? "
+                            "ORDER BY id DESC LIMIT 1",
+                            (user['id'], branch['db_path'], label)
+                        ).fetchone()
+                        if existing_label:
+                            # Reuse existing record — just refresh the token and IP
+                            device = existing_label
+                            master2.execute(
+                                "UPDATE device_approvals SET device_token=?, ip_address=? WHERE id=?",
+                                (new_token, ip, device['id'])
+                            )
+                            master2.commit()
+                            master2.close()
+                            if device['status'] == 'Approved':
+                                session['user_id']    = user['id']
+                                session['role']       = user['role']
+                                session['full_name']  = user['full_name']
+                                session['login_name'] = user['login_name']
+                                session['branch_id']  = branch['id']
+                                session['branch_name']= branch['name']
+                                session['branch_db']  = branch['db_path']
+                                resp = make_response(redirect(url_for('dashboard')))
+                            elif device['status'] == 'Blocked':
+                                return render_template('login.html',
+                                    branches=get_master_db().execute("SELECT * FROM branches WHERE active=1").fetchall(),
+                                    error='This device has been blocked. Contact your administrator.')
+                            else:
+                                resp = make_response(redirect(url_for('device_pending')))
+                            resp.set_cookie('device_token', new_token,
+                                            max_age=365*24*3600, httponly=True, samesite='Lax')
+                            return resp
+                        # Truly new device — bootstrap only if user has NO approved device across ANY branch
                         global_approved = master2.execute(
                             "SELECT COUNT(*) FROM device_approvals WHERE user_id=? AND status='Approved'",
                             (user['id'],)
                         ).fetchone()[0]
-                        label = _parse_device_label(request.headers.get('User-Agent', ''))
-                        ip = request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip()
                         initial_status = 'Approved' if global_approved == 0 else 'Pending'
                         master2.execute("""
                             INSERT INTO device_approvals
@@ -376,6 +409,26 @@ def developer_device_action(did):
     master.commit()
     master.close()
     return redirect(url_for('developer_panel'))
+
+@app.route('/developer/devices/purge-duplicates', methods=['POST'])
+@developer_required
+def developer_purge_duplicates():
+    master = get_master_db()
+    # Keep only the most recent record per (user_id, branch_db, device_label); delete the rest
+    master.execute("""
+        DELETE FROM device_approvals
+        WHERE id NOT IN (
+            SELECT MAX(id)
+            FROM device_approvals
+            GROUP BY user_id, branch_db, device_label
+        )
+    """)
+    deleted = master.execute("SELECT changes()").fetchone()[0]
+    master.commit()
+    master.close()
+    flash(f'Removed {deleted} duplicate device record(s).', 'success')
+    return redirect(url_for('developer_panel'))
+
 
 @app.route('/developer/logout')
 def developer_logout():
