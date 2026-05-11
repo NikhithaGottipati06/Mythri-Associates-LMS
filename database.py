@@ -1,6 +1,7 @@
 import sqlite3
 import os
 from werkzeug.security import generate_password_hash
+from chart_of_accounts import INCOME_GROUPS, EXPENSE_GROUPS, ASSET_GROUPS, LIABILITY_GROUPS, AUTO_LEDGERS
 
 MASTER_DB_PATH = os.path.join(os.path.dirname(__file__), 'master.db')
 BRANCHES_DIR   = os.path.join(os.path.dirname(__file__), 'branches')
@@ -428,67 +429,8 @@ def migrate_branch_db(db_path):
             try: c.execute(stmt)
             except Exception: pass
 
-    # Seed Tally groups (all from Tally screenshots + MFI-specific)
-    income_groups = [
-        ('Interest on Loans', 'Income', 1),
-        ('PROCESSING FEE', 'Income', 2),
-        ('Processing Fee & Insurance', 'Income', 3),
-        ('LOAN TO MEMBERS Income', 'Income', 4),
-        ('Direct Incomes', 'Income', 5),
-        ('Indirect Incomes', 'Income', 6),
-        ('Income (Direct)', 'Income', 7),
-        ('Income (Indirect)', 'Income', 8),
-        ('Sales Accounts', 'Income', 9),
-    ]
-    expense_groups = [
-        ('STAFF SALARIES', 'Expense', 1),
-        ('RENT', 'Expense', 2),
-        ('ELECTRICITY BILL', 'Expense', 3),
-        ('PRINTING & STATIONARY', 'Expense', 4),
-        ('GENERAL & OFFICE MAINTANANCE', 'Expense', 5),
-        ('COMPUTER & ACCESSORIES', 'Expense', 6),
-        ('FURNITURE AND FIXURES', 'Expense', 7),
-        ('HO REMITTANCE', 'Expense', 8),
-        ('INTREST PAID ON REMITTANCE', 'Expense', 9),
-        ('SPECIAL ALLOWANCES', 'Expense', 10),
-        ('Insurance', 'Expense', 11),
-        ('Duties & Taxes', 'Expense', 12),
-        ('Provisions', 'Expense', 13),
-        ('Direct Expenses', 'Expense', 14),
-        ('Indirect Expenses', 'Expense', 15),
-        ('Expenses (Direct)', 'Expense', 16),
-        ('Expenses (Indirect)', 'Expense', 17),
-        ('Misc. Expenses (ASSET)', 'Expense', 18),
-        ('Purchase Accounts', 'Expense', 19),
-    ]
-    asset_groups = [
-        ('Cash-in-hand', 'Asset', 1),
-        ('Bank Accounts', 'Asset', 2),
-        ('Bank OCC A/c', 'Asset', 3),
-        ('Bank OD A/c', 'Asset', 4),
-        ('LOAN TO MEMBERS', 'Asset', 5),
-        ('Current Assets', 'Asset', 6),
-        ('Fixed Assets', 'Asset', 7),
-        ('Deposits (Asset)', 'Asset', 8),
-        ('Investments', 'Asset', 9),
-        ('Loans & Advances (Asset)', 'Asset', 10),
-        ('Sundry Debtors', 'Asset', 11),
-        ('Stock-in-hand', 'Asset', 12),
-        ('RENT DEPOSTI', 'Asset', 13),
-    ]
-    liability_groups = [
-        ('Capital Account', 'Liability', 1),
-        ('Unsecured Loans', 'Liability', 2),
-        ('Secured Loans', 'Liability', 3),
-        ('Current Liabilities', 'Liability', 4),
-        ('Loans (Liability)', 'Liability', 5),
-        ('Sundry Creditors', 'Liability', 6),
-        ('Reserves & Surplus', 'Liability', 7),
-        ('Retained Earnings', 'Liability', 8),
-        ('Branch / Divisions', 'Liability', 9),
-        ('Suspense A/c', 'Liability', 10),
-    ]
-    for grp_list in [income_groups, expense_groups, asset_groups, liability_groups]:
+    # Seed Tally groups — defined in chart_of_accounts.py
+    for grp_list in [INCOME_GROUPS, EXPENSE_GROUPS, ASSET_GROUPS, LIABILITY_GROUPS]:
         for name, nature, sort in grp_list:
             try:
                 c.execute("INSERT OR IGNORE INTO tally_groups (name, nature, sort_order) VALUES (?,?,?)",
@@ -497,13 +439,7 @@ def migrate_branch_db(db_path):
                 pass
 
     # Seed auto-income ledgers (computed from LMS data)
-    auto_ledgers = [
-        ('Interest Collected', 'Interest on Loans', 'interest'),
-        ('Processing Fee Collected', 'PROCESSING FEE', 'processing_fee'),
-        ('Insurance Fee Collected', 'Processing Fee & Insurance', 'insurance_fee'),
-        ('Membership Joining Fee', 'Direct Incomes', 'membership_fee'),
-    ]
-    for lname, gname, src in auto_ledgers:
+    for lname, gname, src in AUTO_LEDGERS:
         try:
             row = c.execute("SELECT id FROM tally_groups WHERE name=?", (gname,)).fetchone()
             if row:
