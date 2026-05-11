@@ -4166,7 +4166,11 @@ def subscription_submit_payment():
         """, (branch_db, branch_name, month_key, due_date_str, amount))
         master.commit()
     master.close()
-    return redirect(url_for('subscription_blocked'))
+    flash('Payment submitted. Access will be confirmed once the developer approves.', 'success')
+    # If already blocked redirect to blocked page; otherwise back to dashboard
+    if getattr(g, 'sub_blocked', False):
+        return redirect(url_for('subscription_blocked'))
+    return redirect(url_for('dashboard'))
 
 
 # ── Developer – Subscription Management ──────────────────────────────────────
