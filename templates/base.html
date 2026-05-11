@@ -312,7 +312,7 @@ document.addEventListener('input', function(e) {
 </script>
 
 <!-- ── Support Chatbot ──────────────────────────────────────────────────── -->
-<button id="chatBtn" onclick="chatToggle()" title="Help &amp; Support">
+<button id="chatBtn" onclick="chatToggle()" title="Help &amp; Support" style="position:relative;">
   <i class="bi bi-chat-dots-fill"></i>
   <span id="chatBadge" style="position:absolute;top:-3px;right:-3px;background:#dc3545;color:#fff;border-radius:50%;width:18px;height:18px;font-size:10px;display:none;align-items:center;justify-content:center;font-weight:700;"></span>
 </button>
@@ -384,6 +384,28 @@ document.addEventListener('input', function(e) {
 
 var _chatOpen = false, _chatCurTab = 'faq';
 
+function _updateBadge(count) {
+  var badge = document.getElementById('chatBadge');
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent = count > 9 ? '9+' : count;
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function _fetchUnreadCount() {
+  fetch('/support/unread-count', {headers:{'X-Requested-With':'XMLHttpRequest'}})
+  .then(function(r){ return r.json(); })
+  .then(function(d){ _updateBadge(d.count || 0); })
+  .catch(function(){});
+}
+
+// Check for new responses on page load and every 60 seconds
+_fetchUnreadCount();
+setInterval(_fetchUnreadCount, 60000);
+
 function chatToggle() {
   _chatOpen = !_chatOpen;
   var p = document.getElementById('chatPanel');
@@ -441,14 +463,23 @@ function _chatLoadQueries() {
     }
     var html = '';
     rows.forEach(function(q) {
-      var badge = q.status==='Resolved' ? '<span class="badge bg-success">Resolved</span>' : '<span class="badge bg-warning text-dark">Open</span>';
+      var isNew = q.status==='Resolved' && !q.user_seen_at;
+      var badge = q.status==='Resolved'
+        ? '<span class="badge bg-success">' + (isNew ? '<i class="bi bi-bell-fill me-1"></i>' : '') + 'Resolved</span>'
+        : '<span class="badge bg-warning text-dark">Open</span>';
+      var cardStyle = isNew
+        ? 'border:1.5px solid #3b82f6;background:#eff6ff;border-radius:8px;padding:10px 12px;margin-bottom:8px;'
+        : 'border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:8px;';
       var resp = q.response
         ? '<div class="q-resp mt-1"><i class="bi bi-headset me-1"></i><strong>Support:</strong> ' + _ce(q.response) + '</div>'
         : '<div class="q-pending mt-1"><i class="bi bi-hourglass me-1"></i>Awaiting response...</div>';
-      html += '<div class="query-card"><div class="q-text">' + _ce(q.query) + '</div>'
+      html += '<div class="query-card" style="' + cardStyle + '"><div class="q-text">' + _ce(q.query) + '</div>'
             + '<div class="q-meta">' + (q.created_at||'') + ' &nbsp;' + badge + '</div>' + resp + '</div>';
     });
     box.innerHTML = html;
+    // Mark all resolved queries as seen and clear badge
+    fetch('/support/mark-seen', {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}})
+    .then(function(){ _updateBadge(0); }).catch(function(){});
   }).catch(function() {
     box.innerHTML='<div style="color:#dc2626;font-size:12px;padding:8px;">Failed to load queries.</div>';
   });

@@ -441,8 +441,23 @@
             <span class="badge {{ 'bg-success' if sq.status=='Resolved' else 'bg-warning text-dark' }} me-1">{{ sq.status }}</span>
             <strong style="font-size:13px;">{{ sq.branch_name }}</strong>
             <span class="text-muted small ms-2">{{ sq.user_name }} ({{ sq.user_role }})</span>
+            {% if sq.email_status and sq.email_status != 'sent' %}
+            <span class="badge bg-danger ms-1" title="{{ sq.email_status }}" style="font-size:10px;cursor:help;">
+              <i class="bi bi-envelope-x me-1"></i>Email Failed
+            </span>
+            {% elif sq.email_status == 'sent' %}
+            <span class="badge bg-secondary ms-1" style="font-size:10px;">
+              <i class="bi bi-envelope-check me-1"></i>Email Sent
+            </span>
+            {% endif %}
           </div>
-          <small class="text-muted">{{ sq.created_at }}</small>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <small class="text-muted">{{ sq.created_at }}</small>
+            <button class="btn btn-outline-danger btn-sm" onclick="sqDelete({{ sq.id }})" title="Delete query"
+                    style="padding:1px 6px;font-size:11px;">
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
         </div>
         <div style="font-size:13px;color:#1e293b;margin-bottom:8px;">{{ sq.query }}</div>
         {% if sq.response %}
@@ -532,6 +547,19 @@ function sqRespond(id) {
     if (d.ok) { location.reload(); }
     else { alert(d.msg || 'Failed'); btn.disabled=false; btn.innerHTML='<i class="bi bi-send me-1"></i>Send Response'; }
   }).catch(function() { alert('Network error'); btn.disabled=false; btn.innerHTML='<i class="bi bi-send me-1"></i>Send Response'; });
+}
+
+function sqDelete(id) {
+  if (!confirm('Delete this support query permanently?')) return;
+  fetch('/developer/support/' + id + '/delete', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'}
+  }).then(function(r){ return r.json(); }).then(function(d) {
+    if (d.ok) {
+      var el = document.getElementById('sq-' + id);
+      if (el) el.remove();
+    } else { alert('Failed to delete'); }
+  }).catch(function() { alert('Network error'); });
 }
 </script>
 </body>

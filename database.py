@@ -592,6 +592,17 @@ def init_master_db():
     except Exception:
         pass
 
+    # Add email_status and user_seen_at to support_queries
+    for col_sql in [
+        "ALTER TABLE support_queries ADD COLUMN email_status TEXT DEFAULT NULL",
+        "ALTER TABLE support_queries ADD COLUMN user_seen_at TEXT DEFAULT NULL",
+    ]:
+        try:
+            conn.execute(col_sql)
+            conn.commit()
+        except Exception:
+            pass
+
     for branch_name in ['Poranki', 'Gannavaram']:
         db_path = os.path.join(BRANCHES_DIR, f"{branch_name.lower()}.db")
         exists = conn.execute("SELECT id FROM branches WHERE name=?", (branch_name,)).fetchone()

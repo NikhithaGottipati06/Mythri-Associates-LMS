@@ -14,27 +14,38 @@ from datetime import datetime, timedelta
 SUPPORT_EMAIL = 'nikhithagottipati@gmail.com'
 
 def _send_support_email(qid, branch_name, user_name, query_text):
+    """Returns (True, None) on success or (False, error_str) on failure."""
     smtp_user = os.environ.get('SMTP_USER', '')
     smtp_pass = os.environ.get('SMTP_PASS', '')
     if not smtp_user or not smtp_pass:
-        return
+        return False, 'SMTP credentials not configured'
     try:
+        from email.utils import formatdate
+        import uuid
+        now_str = datetime.now().strftime('%d %b %Y %I:%M %p')
         msg = MIMEMultipart()
-        msg['Subject'] = f'[Maitri LMS] Support Query #{qid} – {branch_name}'
+        msg['Subject'] = f'[Maitri LMS] New Query #{qid} from {user_name} – {now_str}'
         msg['From'] = smtp_user
         msg['To'] = SUPPORT_EMAIL
+        msg['Date'] = formatdate(localtime=True)
+        msg['Message-ID'] = f'<lms-query-{qid}-{uuid.uuid4().hex}@maitrilms>'
         body = (f"New support query received.\n\n"
                 f"Query ID : #{qid}\n"
                 f"Branch   : {branch_name}\n"
-                f"User     : {user_name}\n\n"
+                f"User     : {user_name}\n"
+                f"Time     : {now_str}\n\n"
                 f"Query:\n{query_text}\n\n"
                 f"Log in to the Developer Panel to respond.")
         msg.attach(MIMEText(body, 'plain'))
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as s:
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=15) as s:
             s.login(smtp_user, smtp_pass)
             s.sendmail(smtp_user, SUPPORT_EMAIL, msg.as_string())
+        print(f"[Support Email] Sent for query #{qid}", flush=True)
+        return True, None
     except Exception as e:
-        pass  # Email is best-effort; query is already saved in DB
+        err = str(e)
+        print(f"[Support Email ERROR] Query #{qid}: {err}", flush=True)
+        return False, err
 
 def get_db():
     """Return a connection to the current branch database."""
@@ -68,9 +79,9 @@ _SUBSCRIPTION_EXEMPT = frozenset([
     'developer_panel', 'developer_logout', 'developer_device_action', 'developer_purge_duplicates',
     'developer_subscription_settings', 'developer_subscription_approve',
     'developer_subscription_undo', 'developer_subscription_delete',
-    'developer_scanner_upload', 'developer_support_respond',
+    'developer_scanner_upload', 'developer_support_respond', 'developer_support_delete',
     'subscription_blocked', 'subscription_submit_payment',
-    'support_send', 'support_history',
+    'support_send', 'support_history', 'support_unread_count', 'support_mark_seen',
 ])
 
 @app.before_request
@@ -4344,8 +4355,11 @@ def support_send():
     )
     qid = cur.lastrowid
     master.commit()
+    ok, err = _send_support_email(qid, session.get('branch_name', ''), session.get('full_name', ''), query_text)
+    status_str = 'sent' if ok else f'failed: {err}'
+    master.execute("UPDATE support_queries SET email_status=? WHERE id=?", (status_str, qid))
+    master.commit()
     master.close()
-    _send_support_email(qid, session.get('branch_name', ''), session.get('full_name', ''), query_text)
     return jsonify({'ok': True, 'id': qid})
 
 
@@ -4355,7 +4369,7 @@ def support_history():
     master = get_master_db()
     try:
         rows = master.execute(
-            """SELECT id, query, status, response, created_at, responded_at
+            """SELECT id, query, status, response, created_at, responded_at, user_seen_at
                FROM support_queries WHERE branch_db=? AND user_id=?
                ORDER BY created_at DESC LIMIT 20""",
             (session.get('branch_db', ''), session.get('user_id'))
@@ -4377,8 +4391,48 @@ def developer_support_respond(qid):
     master = get_master_db()
     master.execute(
         """UPDATE support_queries SET response=?, status='Resolved',
-           responded_at=datetime('now','localtime') WHERE id=?""",
+           responded_at=datetime('now','localtime'), user_seen_at=NULL WHERE id=?""",
         (response_text, qid)
+    )
+    master.commit()
+    master.close()
+    return jsonify({'ok': True})
+
+
+@app.route('/developer/support/<int:qid>/delete', methods=['POST'])
+@developer_required
+def developer_support_delete(qid):
+    master = get_master_db()
+    master.execute("DELETE FROM support_queries WHERE id=?", (qid,))
+    master.commit()
+    master.close()
+    return jsonify({'ok': True})
+
+
+@app.route('/support/unread-count')
+@login_required
+def support_unread_count():
+    master = get_master_db()
+    try:
+        count = master.execute(
+            """SELECT COUNT(*) FROM support_queries
+               WHERE branch_db=? AND user_id=? AND status='Resolved' AND user_seen_at IS NULL""",
+            (session.get('branch_db', ''), session.get('user_id'))
+        ).fetchone()[0]
+    except Exception:
+        count = 0
+    master.close()
+    return jsonify({'count': count})
+
+
+@app.route('/support/mark-seen', methods=['POST'])
+@login_required
+def support_mark_seen():
+    master = get_master_db()
+    master.execute(
+        """UPDATE support_queries SET user_seen_at=datetime('now','localtime')
+           WHERE branch_db=? AND user_id=? AND status='Resolved' AND user_seen_at IS NULL""",
+        (session.get('branch_db', ''), session.get('user_id'))
     )
     master.commit()
     master.close()
