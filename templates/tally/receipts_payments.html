@@ -11,6 +11,7 @@
 <!-- Filter + Print bar -->
 <div class="form-card mb-3 no-print">
   <form method="GET" class="row g-2 align-items-end">
+    <input type="hidden" name="view" value="{{ 'consolidated' if consolidated else 'detailed' }}">
     <div class="col-auto">
       <label class="form-label mb-1 small">From Date</label>
       <input type="text" name="from_date" class="form-control form-control-sm"
@@ -24,8 +25,26 @@
     <div class="col-auto">
       <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>Show</button>
     </div>
-    <div class="col-auto ms-auto">
-      <a href="{{ url_for('tally_vouchers') }}" class="btn btn-outline-secondary btn-sm me-2">
+    <div class="col-auto ms-auto d-flex gap-2 align-items-center">
+      <!-- Consolidated / Detailed toggle -->
+      {% if consolidated %}
+      <a href="?from_date={{ from_date }}&to_date={{ to_date }}&view=detailed"
+         class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-list-ul me-1"></i>Detailed
+      </a>
+      <span class="btn btn-sm btn-success disabled" style="cursor:default;">
+        <i class="bi bi-layers-fill me-1"></i>Consolidated
+      </span>
+      {% else %}
+      <span class="btn btn-sm btn-primary disabled" style="cursor:default;">
+        <i class="bi bi-list-ul me-1"></i>Detailed
+      </span>
+      <a href="?from_date={{ from_date }}&to_date={{ to_date }}&view=consolidated"
+         class="btn btn-sm btn-outline-success">
+        <i class="bi bi-layers-fill me-1"></i>Consolidated
+      </a>
+      {% endif %}
+      <a href="{{ url_for('tally_vouchers') }}" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-pencil me-1"></i>Add Entry
       </a>
       <button onclick="window.print()" type="button" class="btn btn-dark btn-sm">
@@ -34,6 +53,12 @@
     </div>
   </form>
 </div>
+
+{% if consolidated %}
+<div class="alert alert-success py-2 px-3 mb-3 no-print" style="font-size:13px;">
+  <i class="bi bi-layers-fill me-1"></i><strong>Consolidated View</strong> — Same ledger entries are merged and totalled. Click <strong>Detailed</strong> to see individual entries.
+</div>
+{% endif %}
 
 <!-- Two-column statement -->
 <div class="row g-3">
@@ -84,7 +109,11 @@
             {% for r in rows %}
             <tr>
               <td class="ps-3">{{ r.ledger_name }}
-                {% if r.narration %}<span class="text-muted small"> — {{ r.narration }}</span>{% endif %}
+                {% if consolidated and r.entry_count > 1 %}
+                  <span class="badge bg-secondary ms-1" style="font-size:10px;">{{ r.entry_count }} entries</span>
+                {% elif r.narration %}
+                  <span class="text-muted small"> — {{ r.narration }}</span>
+                {% endif %}
               </td>
               <td class="text-end text-success fw-semibold">₹{{ "%.2f"|format(r.amount) }}</td>
             </tr>
@@ -116,7 +145,11 @@
             {% for r in rows %}
             <tr>
               <td class="ps-3">{{ r.ledger_name }}
-                {% if r.narration %}<span class="text-muted small"> — {{ r.narration }}</span>{% endif %}
+                {% if consolidated and r.entry_count > 1 %}
+                  <span class="badge bg-secondary ms-1" style="font-size:10px;">{{ r.entry_count }} entries</span>
+                {% elif r.narration %}
+                  <span class="text-muted small"> — {{ r.narration }}</span>
+                {% endif %}
               </td>
               <td class="text-end text-danger fw-semibold">₹{{ "%.2f"|format(r.amount) }}</td>
             </tr>

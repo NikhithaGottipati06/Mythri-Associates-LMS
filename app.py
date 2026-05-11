@@ -4758,8 +4758,9 @@ def tally_voucher_delete(vid):
 @admin_required
 def tally_rp_statement():
     db  = get_db()
-    raw_from = request.args.get('from_date', '').strip()
-    raw_to   = request.args.get('to_date', '').strip()
+    raw_from     = request.args.get('from_date', '').strip()
+    raw_to       = request.args.get('to_date', '').strip()
+    consolidated = request.args.get('view', 'detailed') == 'consolidated'
 
     def to_iso(s):
         try:    return datetime.strptime(s, '%d/%m/%Y').strftime('%Y-%m-%d')
@@ -4775,26 +4776,51 @@ def tally_rp_statement():
     def ic(col):
         return f"substr({col},7,4)||'-'||substr({col},4,2)||'-'||substr({col},1,2)"
 
-    conds = [f"{ic('tv.voucher_date')} BETWEEN ? AND ?"]
+    date_cond = f"{ic('tv.voucher_date')} BETWEEN ? AND ?"
     params = [from_iso, to_iso_]
 
-    receipt_rows = db.execute(f"""
-        SELECT tg.name as group_name, tl.name as ledger_name, tv.voucher_date, tv.amount, tv.narration
-        FROM tally_vouchers tv
-        JOIN tally_ledgers tl ON tv.ledger_id=tl.id
-        JOIN tally_groups  tg ON tl.group_id=tg.id
-        WHERE COALESCE(tv.type,'Payment')='Receipt' AND {conds[0]}
-        ORDER BY tg.sort_order, {ic('tv.voucher_date')}
-    """, params).fetchall()
-
-    payment_rows = db.execute(f"""
-        SELECT tg.name as group_name, tl.name as ledger_name, tv.voucher_date, tv.amount, tv.narration
-        FROM tally_vouchers tv
-        JOIN tally_ledgers tl ON tv.ledger_id=tl.id
-        JOIN tally_groups  tg ON tl.group_id=tg.id
-        WHERE COALESCE(tv.type,'Payment')='Payment' AND {conds[0]}
-        ORDER BY tg.sort_order, {ic('tv.voucher_date')}
-    """, params).fetchall()
+    if consolidated:
+        receipt_rows = db.execute(f"""
+            SELECT tg.name as group_name, tl.name as ledger_name,
+                   NULL as voucher_date, SUM(tv.amount) as amount, NULL as narration,
+                   COUNT(*) as entry_count
+            FROM tally_vouchers tv
+            JOIN tally_ledgers tl ON tv.ledger_id=tl.id
+            JOIN tally_groups  tg ON tl.group_id=tg.id
+            WHERE COALESCE(tv.type,'Payment')='Receipt' AND {date_cond}
+            GROUP BY tg.name, tl.name
+            ORDER BY tg.sort_order, tl.name
+        """, params).fetchall()
+        payment_rows = db.execute(f"""
+            SELECT tg.name as group_name, tl.name as ledger_name,
+                   NULL as voucher_date, SUM(tv.amount) as amount, NULL as narration,
+                   COUNT(*) as entry_count
+            FROM tally_vouchers tv
+            JOIN tally_ledgers tl ON tv.ledger_id=tl.id
+            JOIN tally_groups  tg ON tl.group_id=tg.id
+            WHERE COALESCE(tv.type,'Payment')='Payment' AND {date_cond}
+            GROUP BY tg.name, tl.name
+            ORDER BY tg.sort_order, tl.name
+        """, params).fetchall()
+    else:
+        receipt_rows = db.execute(f"""
+            SELECT tg.name as group_name, tl.name as ledger_name,
+                   tv.voucher_date, tv.amount, tv.narration, 1 as entry_count
+            FROM tally_vouchers tv
+            JOIN tally_ledgers tl ON tv.ledger_id=tl.id
+            JOIN tally_groups  tg ON tl.group_id=tg.id
+            WHERE COALESCE(tv.type,'Payment')='Receipt' AND {date_cond}
+            ORDER BY tg.sort_order, {ic('tv.voucher_date')}
+        """, params).fetchall()
+        payment_rows = db.execute(f"""
+            SELECT tg.name as group_name, tl.name as ledger_name,
+                   tv.voucher_date, tv.amount, tv.narration, 1 as entry_count
+            FROM tally_vouchers tv
+            JOIN tally_ledgers tl ON tv.ledger_id=tl.id
+            JOIN tally_groups  tg ON tl.group_id=tg.id
+            WHERE COALESCE(tv.type,'Payment')='Payment' AND {date_cond}
+            ORDER BY tg.sort_order, {ic('tv.voucher_date')}
+        """, params).fetchall()
 
     # Also include auto-income from LMS on the receipt side
     lms_income = _tally_income(db, from_iso, to_iso_)
@@ -4804,19 +4830,18 @@ def tally_rp_statement():
         (from_iso, to_iso_)
     ).fetchone()[0] or 0
 
-    # Group receipts by group_name
     from collections import defaultdict
-    rec_groups  = defaultdict(list)
+    rec_groups = defaultdict(list)
     for r in receipt_rows:
         rec_groups[r[0]].append(r)
-    pay_groups  = defaultdict(list)
+    pay_groups = defaultdict(list)
     for r in payment_rows:
         pay_groups[r[0]].append(r)
 
-    total_manual_receipts  = sum(r[3] for r in receipt_rows)
-    total_lms_receipts     = sum(lms_income.values()) + lms_penalty
-    total_receipts         = total_manual_receipts + total_lms_receipts
-    total_payments         = sum(r[3] for r in payment_rows)
+    total_manual_receipts = sum(r[3] for r in receipt_rows)
+    total_lms_receipts    = sum(lms_income.values()) + lms_penalty
+    total_receipts        = total_manual_receipts + total_lms_receipts
+    total_payments        = sum(r[3] for r in payment_rows)
 
     from_disp = datetime.strptime(from_iso,'%Y-%m-%d').strftime('%d/%m/%Y')
     to_disp   = datetime.strptime(to_iso_,'%Y-%m-%d').strftime('%d/%m/%Y')
@@ -4831,6 +4856,7 @@ def tally_rp_statement():
         total_payments=total_payments,
         net=total_receipts - total_payments,
         from_date=from_disp, to_date=to_disp,
+        consolidated=consolidated,
     )
 
 
