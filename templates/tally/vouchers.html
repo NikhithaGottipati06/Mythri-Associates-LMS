@@ -114,9 +114,16 @@
             <label class="form-label">Under Group</label>
             <select name="group_id" class="form-select" required>
               <option value="">— Select Group —</option>
-              {% for g in expense_groups %}
-              <option value="{{ g.id }}">{{ g.name }}</option>
+              {% set cur_nature = namespace(val='') %}
+              {% for g in all_groups %}
+                {% if g.nature != cur_nature.val %}
+                  {% if cur_nature.val != '' %}</optgroup>{% endif %}
+                  <optgroup label="{{ g.nature }}">
+                  {% set cur_nature.val = g.nature %}
+                {% endif %}
+                <option value="{{ g.id }}">{{ g.name }}</option>
               {% endfor %}
+              {% if all_groups %}</optgroup>{% endif %}
             </select>
           </div>
         </div>

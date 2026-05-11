@@ -56,11 +56,19 @@ def check_subscription():
     if not sub:
         master.close()
         return None
-    today = datetime.now().date()
+    now = datetime.now()
+    today = now.date()
     last_day = _cal.monthrange(today.year, today.month)[1]
     due_day = min(int(sub['due_day']), last_day)
     from datetime import date as _date
     due_date = _date(today.year, today.month, due_day)
+    # Parse due_time (HH:MM), default 23:59
+    due_time_str = (sub['due_time'] if 'due_time' in sub.keys() else None) or '23:59'
+    try:
+        dh, dm = int(due_time_str.split(':')[0]), int(due_time_str.split(':')[1])
+    except Exception:
+        dh, dm = 23, 59
+    due_datetime = datetime(due_date.year, due_date.month, due_date.day, dh, dm)
     month_key = today.strftime('%Y-%m')
     payment = master.execute(
         "SELECT * FROM subscription_payments WHERE branch_db=? AND month_key=?",
@@ -70,8 +78,8 @@ def check_subscription():
     if payment and payment['status'] == 'Approved':
         return None
     days_left = (due_date - today).days
-    g.sub_due_date_str = due_date.strftime('%d/%m/%Y')
-    if today >= due_date:
+    g.sub_due_date_str = f"{due_date.strftime('%d/%m/%Y')} by {due_time_str}"
+    if now >= due_datetime:
         g.sub_blocked = True
         g.sub_payment_pending = (payment is not None)
         if ep not in ('subscription_blocked', 'subscription_submit_payment'):
@@ -119,7 +127,7 @@ app.jinja_env.globals['get_current_user'] = get_current_user
 
 @app.context_processor
 def inject_now():
-    return {'now': datetime.now().strftime('%A %d-%b-%Y  %I:%M %p')}
+    return {'now': datetime.now().strftime('%A %d-%b-%Y')}
 
 # ── Device helpers ────────────────────────────────────────────────────────────
 
@@ -4108,25 +4116,26 @@ def developer_subscription_settings():
     branches = master.execute("SELECT * FROM branches ORDER BY name").fetchall()
     for br in branches:
         bid     = br['id']
-        due_day = request.form.get(f'due_day_{bid}', '5')
-        amount  = request.form.get(f'amount_{bid}', '0')
-        enabled = 1 if request.form.get(f'enabled_{bid}') else 0
+        due_day  = request.form.get(f'due_day_{bid}', '5')
+        due_time = request.form.get(f'due_time_{bid}', '23:59') or '23:59'
+        amount   = request.form.get(f'amount_{bid}', '0')
+        enabled  = 1 if request.form.get(f'enabled_{bid}') else 0
         existing = master.execute(
             "SELECT id FROM branch_subscriptions WHERE branch_db=?", (br['db_path'],)
         ).fetchone()
         if existing:
             master.execute("""
                 UPDATE branch_subscriptions
-                SET due_day=?, monthly_amount=?, enabled=?, branch_name=?,
+                SET due_day=?, due_time=?, monthly_amount=?, enabled=?, branch_name=?,
                     updated_at=datetime('now')
                 WHERE branch_db=?
-            """, (due_day, amount, enabled, br['name'], br['db_path']))
+            """, (due_day, due_time, amount, enabled, br['name'], br['db_path']))
         else:
             master.execute("""
                 INSERT INTO branch_subscriptions
-                (branch_db, branch_name, due_day, monthly_amount, enabled)
-                VALUES (?,?,?,?,?)
-            """, (br['db_path'], br['name'], due_day, amount, enabled))
+                (branch_db, branch_name, due_day, due_time, monthly_amount, enabled)
+                VALUES (?,?,?,?,?,?)
+            """, (br['db_path'], br['name'], due_day, due_time, amount, enabled))
     master.commit()
     master.close()
     flash('Subscription settings saved.', 'success')
@@ -4440,9 +4449,9 @@ def tally_vouchers():
         "SELECT tl.id, tl.name, tg.name as group_name FROM tally_ledgers tl "
         "JOIN tally_groups tg ON tl.group_id=tg.id WHERE tg.nature='Expense' AND tl.active=1 ORDER BY tg.sort_order, tl.name"
     ).fetchall()
-    # All expense groups (to add new ledger on the fly via modal)
-    expense_groups = db.execute(
-        "SELECT id, name FROM tally_groups WHERE nature='Expense' ORDER BY sort_order"
+    # All groups (all natures) for Add Ledger modal
+    all_groups = db.execute(
+        "SELECT id, name, nature FROM tally_groups ORDER BY nature, sort_order, name"
     ).fetchall()
     vouchers = db.execute("""
         SELECT tv.*, tl.name as ledger_name, tg.name as group_name
@@ -4453,7 +4462,7 @@ def tally_vouchers():
     """).fetchall()
     db.close()
     return render_template('tally/vouchers.html',
-        expense_ledgers=expense_ledgers, expense_groups=expense_groups, vouchers=vouchers)
+        expense_ledgers=expense_ledgers, all_groups=all_groups, vouchers=vouchers)
 
 
 @app.route('/tally/vouchers/<int:vid>/delete', methods=['POST'])

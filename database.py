@@ -599,6 +599,13 @@ def init_master_db():
         )
     conn.commit()
 
+    # Add due_time column if it doesn't exist yet
+    try:
+        conn.execute("ALTER TABLE branch_subscriptions ADD COLUMN due_time TEXT DEFAULT '23:59'")
+        conn.commit()
+    except Exception:
+        pass
+
     for branch_name in ['Poranki', 'Gannavaram']:
         db_path = os.path.join(BRANCHES_DIR, f"{branch_name.lower()}.db")
         exists = conn.execute("SELECT id FROM branches WHERE name=?", (branch_name,)).fetchone()

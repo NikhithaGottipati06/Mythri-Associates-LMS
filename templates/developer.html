@@ -125,6 +125,7 @@
             <tr>
               <th>Branch</th>
               <th style="width:140px;">Due Day</th>
+              <th style="width:120px;">Due Time</th>
               <th style="width:140px;">Monthly Amount (₹)</th>
               <th style="width:100px;" class="text-center">Enabled</th>
             </tr>
@@ -142,6 +143,10 @@
                   </option>
                   {% endfor %}
                 </select>
+              </td>
+              <td>
+                <input type="time" name="due_time_{{ b.id }}" class="form-control form-control-sm"
+                       value="{{ sub.due_time if sub and sub.due_time else '23:59' }}" style="width:105px;">
               </td>
               <td>
                 <input type="number" name="amount_{{ b.id }}" class="form-control form-control-sm"
