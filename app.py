@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, make_response
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, make_response, g
 from werkzeug.security import check_password_hash, generate_password_hash
 from database import get_master_db, get_branch_db, init_db, init_branch_db, BRANCHES_DIR
 from functools import wraps
@@ -23,6 +23,62 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 @app.context_processor
 def inject_helpers():
     return dict(_number_to_words=_number_to_words)
+
+@app.context_processor
+def inject_subscription_ctx():
+    return {
+        'sub_warning_days': getattr(g, 'sub_warning_days', None),
+        'sub_due_date_str': getattr(g, 'sub_due_date_str', ''),
+    }
+
+_SUBSCRIPTION_EXEMPT = frozenset([
+    'login', 'logout', 'static',
+    'device_pending', 'device_check_status',
+    'developer_panel', 'developer_logout', 'developer_device_action',
+    'developer_subscription_settings', 'developer_subscription_approve',
+    'developer_scanner_upload',
+    'subscription_blocked', 'subscription_submit_payment',
+])
+
+@app.before_request
+def check_subscription():
+    ep = request.endpoint
+    if not ep or ep in _SUBSCRIPTION_EXEMPT or ep.startswith('static'):
+        return None
+    if 'user_id' not in session or 'branch_db' not in session:
+        return None
+    import calendar as _cal
+    branch_db = session['branch_db']
+    master = get_master_db()
+    sub = master.execute(
+        "SELECT * FROM branch_subscriptions WHERE branch_db=? AND enabled=1", (branch_db,)
+    ).fetchone()
+    if not sub:
+        master.close()
+        return None
+    today = datetime.now().date()
+    last_day = _cal.monthrange(today.year, today.month)[1]
+    due_day = min(int(sub['due_day']), last_day)
+    from datetime import date as _date
+    due_date = _date(today.year, today.month, due_day)
+    month_key = today.strftime('%Y-%m')
+    payment = master.execute(
+        "SELECT * FROM subscription_payments WHERE branch_db=? AND month_key=?",
+        (branch_db, month_key)
+    ).fetchone()
+    master.close()
+    if payment and payment['status'] == 'Approved':
+        return None
+    days_left = (due_date - today).days
+    g.sub_due_date_str = due_date.strftime('%d/%m/%Y')
+    if today >= due_date:
+        g.sub_blocked = True
+        g.sub_payment_pending = (payment is not None)
+        if ep not in ('subscription_blocked', 'subscription_submit_payment'):
+            return redirect(url_for('subscription_blocked'))
+    else:
+        g.sub_warning_days = days_left
+    return None
 
 LOAN_PURPOSES = [
     'Agriculture', 'Animal Husbandry', 'Buffalo', 'Cow', 'Goat',
@@ -225,6 +281,7 @@ def developer_panel():
         "SELECT * FROM device_approvals ORDER BY CASE status WHEN 'Pending' THEN 0 WHEN 'Approved' THEN 1 ELSE 2 END, created_at DESC"
     ).fetchall()
     branches_raw = master.execute("SELECT * FROM branches ORDER BY name").fetchall()
+    branches_list = [dict(b) for b in branches_raw]
     branches_stats = []
     for br in branches_raw:
         stat = {
@@ -261,8 +318,28 @@ def developer_panel():
             except Exception:
                 pass
         branches_stats.append(stat)
+    # Subscription data
+    sub_rows = master.execute(
+        "SELECT * FROM branch_subscriptions"
+    ).fetchall()
+    sub_map = {r['branch_db']: dict(r) for r in sub_rows}
+
+    pending_payments = master.execute("""
+        SELECT * FROM subscription_payments
+        WHERE status='Pending' ORDER BY paid_at DESC
+    """).fetchall()
+
+    scanner_row = master.execute(
+        "SELECT value FROM developer_settings WHERE key='scanner_image'"
+    ).fetchone()
+    scanner_image = scanner_row['value'] if scanner_row else None
+
     master.close()
-    return render_template('developer.html', devices=devices, branches_stats=branches_stats)
+    return render_template('developer.html',
+        devices=devices, branches_stats=branches_stats,
+        branches_list=branches_list,
+        sub_map=sub_map, pending_payments=pending_payments,
+        scanner_image=scanner_image)
 
 @app.route('/developer/devices/<int:did>/action', methods=['POST'])
 @developer_required
@@ -3959,6 +4036,141 @@ def report_insurance():
 @login_required
 def help_page():
     return render_template('help.html')
+
+# ── Subscription / Billing ────────────────────────────────────────────────────
+
+@app.route('/subscription/blocked')
+@login_required
+def subscription_blocked():
+    import calendar as _cal
+    branch_db = session['branch_db']
+    today = datetime.now()
+    month_key = today.strftime('%Y-%m')
+    master = get_master_db()
+    payment = master.execute(
+        "SELECT * FROM subscription_payments WHERE branch_db=? AND month_key=?",
+        (branch_db, month_key)
+    ).fetchone()
+    sub = master.execute(
+        "SELECT * FROM branch_subscriptions WHERE branch_db=?", (branch_db,)
+    ).fetchone()
+    scanner_row = master.execute(
+        "SELECT value FROM developer_settings WHERE key='scanner_image'"
+    ).fetchone()
+    scanner_image = scanner_row['value'] if scanner_row else None
+    last_day = _cal.monthrange(today.year, today.month)[1]
+    due_day = min(int(sub['due_day']), last_day) if sub else today.day
+    due_date = today.replace(day=due_day).strftime('%d/%m/%Y')
+    amount = sub['monthly_amount'] if sub else 0
+    master.close()
+    return render_template('subscription_blocked.html',
+        payment=payment, scanner_image=scanner_image,
+        due_date=due_date, amount=amount)
+
+
+@app.route('/subscription/pay', methods=['POST'])
+@login_required
+def subscription_submit_payment():
+    import calendar as _cal
+    branch_db = session['branch_db']
+    branch_name = session.get('branch_name', '')
+    today = datetime.now()
+    month_key = today.strftime('%Y-%m')
+    master = get_master_db()
+    sub = master.execute(
+        "SELECT * FROM branch_subscriptions WHERE branch_db=?", (branch_db,)
+    ).fetchone()
+    last_day = _cal.monthrange(today.year, today.month)[1]
+    due_day = min(int(sub['due_day']), last_day) if sub else today.day
+    due_date_str = today.replace(day=due_day).strftime('%Y-%m-%d')
+    amount = sub['monthly_amount'] if sub else 0
+    existing = master.execute(
+        "SELECT id FROM subscription_payments WHERE branch_db=? AND month_key=?",
+        (branch_db, month_key)
+    ).fetchone()
+    if not existing:
+        master.execute("""
+            INSERT INTO subscription_payments
+            (branch_db, branch_name, month_key, due_date, amount, status)
+            VALUES (?,?,?,?,?,'Pending')
+        """, (branch_db, branch_name, month_key, due_date_str, amount))
+        master.commit()
+    master.close()
+    return redirect(url_for('subscription_blocked'))
+
+
+# ── Developer – Subscription Management ──────────────────────────────────────
+
+@app.route('/developer/subscriptions', methods=['POST'])
+@developer_required
+def developer_subscription_settings():
+    master = get_master_db()
+    branches = master.execute("SELECT * FROM branches ORDER BY name").fetchall()
+    for br in branches:
+        bid     = br['id']
+        due_day = request.form.get(f'due_day_{bid}', '5')
+        amount  = request.form.get(f'amount_{bid}', '0')
+        enabled = 1 if request.form.get(f'enabled_{bid}') else 0
+        existing = master.execute(
+            "SELECT id FROM branch_subscriptions WHERE branch_db=?", (br['db_path'],)
+        ).fetchone()
+        if existing:
+            master.execute("""
+                UPDATE branch_subscriptions
+                SET due_day=?, monthly_amount=?, enabled=?, branch_name=?,
+                    updated_at=datetime('now')
+                WHERE branch_db=?
+            """, (due_day, amount, enabled, br['name'], br['db_path']))
+        else:
+            master.execute("""
+                INSERT INTO branch_subscriptions
+                (branch_db, branch_name, due_day, monthly_amount, enabled)
+                VALUES (?,?,?,?,?)
+            """, (br['db_path'], br['name'], due_day, amount, enabled))
+    master.commit()
+    master.close()
+    flash('Subscription settings saved.', 'success')
+    return redirect(url_for('developer_panel'))
+
+
+@app.route('/developer/subscriptions/<int:pid>/approve', methods=['POST'])
+@developer_required
+def developer_subscription_approve(pid):
+    master = get_master_db()
+    master.execute("""
+        UPDATE subscription_payments
+        SET status='Approved', approved_at=datetime('now','localtime'), approved_by=?
+        WHERE id=?
+    """, (session.get('dev_name', 'Developer'), pid))
+    master.commit()
+    master.close()
+    flash('Payment approved. Branch access restored.', 'success')
+    return redirect(url_for('developer_panel'))
+
+
+@app.route('/developer/scanner/upload', methods=['POST'])
+@developer_required
+def developer_scanner_upload():
+    f = request.files.get('scanner_image')
+    if f and f.filename:
+        ext = os.path.splitext(f.filename)[1].lower()
+        if ext in ('.png', '.jpg', '.jpeg', '.gif', '.webp'):
+            fname = 'upi_scanner' + ext
+            save_path = os.path.join(app.config['UPLOAD_FOLDER'], fname)
+            f.save(save_path)
+            master = get_master_db()
+            master.execute("""
+                INSERT OR REPLACE INTO developer_settings (key, value, updated_at)
+                VALUES ('scanner_image', ?, datetime('now'))
+            """, (fname,))
+            master.commit()
+            master.close()
+            flash('UPI Scanner image updated successfully.', 'success')
+        else:
+            flash('Invalid file type. Use PNG, JPG, or GIF.', 'danger')
+    else:
+        flash('No file selected.', 'danger')
+    return redirect(url_for('developer_panel'))
 
 # ── Tally Income & Profit ─────────────────────────────────────────────────────
 

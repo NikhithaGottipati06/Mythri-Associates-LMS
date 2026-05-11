@@ -550,6 +550,39 @@ def init_master_db():
         )
     """)
     conn.execute("""
+        CREATE TABLE IF NOT EXISTS branch_subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            branch_db TEXT UNIQUE NOT NULL,
+            branch_name TEXT NOT NULL,
+            due_day INTEGER NOT NULL DEFAULT 5,
+            monthly_amount REAL DEFAULT 0,
+            enabled INTEGER DEFAULT 1,
+            updated_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS subscription_payments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            branch_db TEXT NOT NULL,
+            branch_name TEXT NOT NULL,
+            month_key TEXT NOT NULL,
+            due_date TEXT NOT NULL,
+            amount REAL DEFAULT 0,
+            status TEXT DEFAULT 'Pending',
+            paid_at TEXT DEFAULT (datetime('now','localtime')),
+            approved_at TEXT,
+            approved_by TEXT,
+            notes TEXT
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS developer_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT,
+            updated_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS master_users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             full_name TEXT NOT NULL,

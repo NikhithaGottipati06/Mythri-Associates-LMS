@@ -146,6 +146,18 @@
     {% endfor %}
   {% endwith %}
 
+  {% if sub_warning_days is not none %}
+  <div class="alert alert-warning alert-dismissible fade show py-2 mb-3 d-flex align-items-center gap-2" role="alert">
+    <i class="bi bi-exclamation-triangle-fill"></i>
+    <div>
+      <strong>Payment Due in {{ sub_warning_days }} day{% if sub_warning_days != 1 %}s{% endif %}!</strong>
+      Subscription payment is due on <strong>{{ sub_due_date_str }}</strong>.
+      Please pay on time to avoid disruption.
+    </div>
+    <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+  </div>
+  {% endif %}
+
   {% block content %}{% endblock %}
 </div>
 
