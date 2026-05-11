@@ -79,7 +79,9 @@ def check_subscription():
     if payment and payment['status'] == 'Approved':
         return None
     days_left = (due_date - today).days
-    g.sub_due_date_str = f"{due_date.strftime('%d/%m/%Y')} by {due_time_str}"
+    _h12 = dh % 12 or 12
+    _ampm = 'AM' if dh < 12 else 'PM'
+    g.sub_due_date_str = f"{due_date.strftime('%d/%m/%Y')} by {_h12}:{dm:02d} {_ampm}"
     if now >= due_datetime:
         g.sub_blocked = True
         g.sub_payment_pending = (payment is not None)
