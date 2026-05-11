@@ -4577,10 +4577,19 @@ def tally_vouchers():
         WHERE COALESCE(tv.type,'Payment')='Payment'
         ORDER BY tv.id DESC LIMIT 100
     """).fetchall()
+    all_ledgers = db.execute("""
+        SELECT tl.id, tl.name, tl.is_auto, tg.name as group_name, tg.nature,
+               (SELECT COUNT(*) FROM tally_vouchers tv WHERE tv.ledger_id=tl.id) as usage_count
+        FROM tally_ledgers tl
+        JOIN tally_groups tg ON tl.group_id=tg.id
+        WHERE tl.active=1
+        ORDER BY tg.nature, tg.sort_order, tl.name
+    """).fetchall()
     db.close()
     return render_template('tally/vouchers.html',
         expense_ledgers=expense_ledgers, receipt_ledgers=receipt_ledgers,
-        all_groups=all_groups, receipts=receipts, payments=payments)
+        all_groups=all_groups, receipts=receipts, payments=payments,
+        all_ledgers=all_ledgers)
 
 
 @app.route('/tally/vouchers/<int:vid>/delete', methods=['POST'])
@@ -4689,6 +4698,23 @@ def tally_ledger_add():
             flash(f'Error: {e}', 'danger')
     db.close()
     return redirect(url_for('tally_vouchers'))
+
+
+@app.route('/tally/ledgers/<int:lid>/delete', methods=['POST'])
+@admin_required
+def tally_ledger_delete(lid):
+    db = get_db()
+    in_use = db.execute(
+        "SELECT COUNT(*) FROM tally_vouchers WHERE ledger_id=?", (lid,)
+    ).fetchone()[0]
+    if in_use:
+        flash(f'Cannot delete — this ledger has {in_use} voucher(s) linked to it.', 'danger')
+    else:
+        db.execute("DELETE FROM tally_ledgers WHERE id=? AND is_auto=0", (lid,))
+        db.commit()
+        flash('Ledger deleted.', 'success')
+    db.close()
+    return redirect(url_for('tally_vouchers') + '#tab-ledgers')
 
 
 @app.route('/tally/trial-balance')
