@@ -1,10 +1,11 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, make_response
 from werkzeug.security import check_password_hash, generate_password_hash
 from database import get_master_db, get_branch_db, init_db, init_branch_db, BRANCHES_DIR
 from functools import wraps
 import os
 import json
 import sqlite3
+import secrets
 from datetime import datetime, timedelta
 
 def get_db():
@@ -64,6 +65,37 @@ app.jinja_env.globals['get_current_user'] = get_current_user
 def inject_now():
     return {'now': datetime.now().strftime('%A %d-%b-%Y')}
 
+# ── Device helpers ────────────────────────────────────────────────────────────
+
+def _parse_device_label(ua):
+    ua = ua or ''
+    if 'Edg' in ua:
+        browser = 'Edge'
+    elif 'OPR' in ua or 'Opera' in ua:
+        browser = 'Opera'
+    elif 'Chrome' in ua:
+        browser = 'Chrome'
+    elif 'Firefox' in ua:
+        browser = 'Firefox'
+    elif 'Safari' in ua:
+        browser = 'Safari'
+    else:
+        browser = 'Browser'
+    if 'Android' in ua:
+        os_name = 'Android'
+    elif 'iPhone' in ua or 'iPad' in ua:
+        os_name = 'iOS'
+    elif 'Windows' in ua:
+        os_name = 'Windows'
+    elif 'Mac OS' in ua:
+        os_name = 'Mac'
+    elif 'Linux' in ua:
+        os_name = 'Linux'
+    else:
+        os_name = 'Unknown'
+    device = 'Mobile' if ('Mobile' in ua or 'Android' in ua or 'iPhone' in ua) else 'Desktop'
+    return f"{browser} on {os_name} ({device})"
+
 # ── Auth routes ───────────────────────────────────────────────────────────────
 
 @app.route('/', methods=['GET', 'POST'])
@@ -95,21 +127,126 @@ def login():
                 ).fetchone()
                 db.close()
                 if user and check_password_hash(user['password_hash'], password):
-                    session['user_id']    = user['id']
-                    session['role']       = user['role']
-                    session['full_name']  = user['full_name']
-                    session['login_name'] = user['login_name']
-                    session['branch_id']  = branch['id']
-                    session['branch_name']= branch['name']
-                    session['branch_db']  = branch['db_path']
-                    return redirect(url_for('dashboard'))
-                error = 'Invalid username or password.'
+                    master2 = get_master_db()
+                    token_cookie = request.cookies.get('device_token')
+                    device = None
+                    if token_cookie:
+                        device = master2.execute(
+                            "SELECT * FROM device_approvals WHERE device_token=? AND user_id=? AND branch_db=?",
+                            (token_cookie, user['id'], branch['db_path'])
+                        ).fetchone()
+                    if device:
+                        if device['status'] == 'Approved':
+                            master2.close()
+                            session['user_id']    = user['id']
+                            session['role']       = user['role']
+                            session['full_name']  = user['full_name']
+                            session['login_name'] = user['login_name']
+                            session['branch_id']  = branch['id']
+                            session['branch_name']= branch['name']
+                            session['branch_db']  = branch['db_path']
+                            return redirect(url_for('dashboard'))
+                        elif device['status'] == 'Blocked':
+                            master2.close()
+                            error = 'This device has been blocked by the admin. Contact your administrator.'
+                        else:
+                            master2.close()
+                            return redirect(url_for('device_pending'))
+                    else:
+                        new_token = secrets.token_hex(32)
+                        approved_count = master2.execute(
+                            "SELECT COUNT(*) FROM device_approvals WHERE user_id=? AND branch_db=? AND status='Approved'",
+                            (user['id'], branch['db_path'])
+                        ).fetchone()[0]
+                        label = _parse_device_label(request.headers.get('User-Agent', ''))
+                        ip = request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip()
+                        initial_status = 'Approved' if approved_count == 0 else 'Pending'
+                        master2.execute("""
+                            INSERT INTO device_approvals
+                            (user_id, branch_db, user_login_name, user_full_name, branch_name,
+                             device_token, device_label, ip_address, status)
+                            VALUES (?,?,?,?,?,?,?,?,?)
+                        """, (user['id'], branch['db_path'], user['login_name'], user['full_name'],
+                              branch['name'], new_token, label, ip, initial_status))
+                        master2.commit()
+                        master2.close()
+                        if initial_status == 'Approved':
+                            session['user_id']    = user['id']
+                            session['role']       = user['role']
+                            session['full_name']  = user['full_name']
+                            session['login_name'] = user['login_name']
+                            session['branch_id']  = branch['id']
+                            session['branch_name']= branch['name']
+                            session['branch_db']  = branch['db_path']
+                            resp = make_response(redirect(url_for('dashboard')))
+                        else:
+                            resp = make_response(redirect(url_for('device_pending')))
+                        resp.set_cookie('device_token', new_token,
+                                        max_age=365*24*3600, httponly=True, samesite='Lax')
+                        return resp
+                else:
+                    error = 'Invalid username or password.'
     return render_template('login.html', error=error, branches=branches)
 
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('login'))
+
+@app.route('/device-pending')
+def device_pending():
+    token = request.cookies.get('device_token')
+    if not token:
+        return redirect(url_for('login'))
+    master = get_master_db()
+    device = master.execute("SELECT * FROM device_approvals WHERE device_token=?", (token,)).fetchone()
+    master.close()
+    if not device:
+        return redirect(url_for('login'))
+    if device['status'] == 'Approved':
+        return redirect(url_for('login'))
+    return render_template('device_pending.html', device=device)
+
+@app.route('/device-status')
+def device_status():
+    token = request.cookies.get('device_token')
+    if not token:
+        return jsonify({'status': 'unknown'})
+    master = get_master_db()
+    device = master.execute("SELECT status FROM device_approvals WHERE device_token=?", (token,)).fetchone()
+    master.close()
+    return jsonify({'status': device['status'] if device else 'unknown'})
+
+@app.route('/admin/devices')
+@admin_required
+def admin_devices():
+    master = get_master_db()
+    devices = master.execute(
+        "SELECT * FROM device_approvals ORDER BY CASE status WHEN 'Pending' THEN 0 WHEN 'Approved' THEN 1 ELSE 2 END, created_at DESC"
+    ).fetchall()
+    master.close()
+    return render_template('admin/devices.html', devices=devices)
+
+@app.route('/admin/devices/<int:did>/action', methods=['POST'])
+@admin_required
+def admin_device_action(did):
+    action = request.form.get('action')
+    master = get_master_db()
+    if action == 'approve':
+        master.execute(
+            "UPDATE device_approvals SET status='Approved', approved_at=datetime('now','localtime'), approved_by_name=? WHERE id=?",
+            (session.get('full_name'), did)
+        )
+        flash('Device approved successfully.', 'success')
+    elif action == 'block':
+        master.execute("UPDATE device_approvals SET status='Blocked' WHERE id=?", (did,))
+        flash('Device blocked.', 'warning')
+    elif action == 'delete':
+        master.execute("DELETE FROM device_approvals WHERE id=?", (did,))
+        flash('Device record removed.', 'info')
+    master.commit()
+    master.close()
+    return redirect(url_for('admin_devices'))
 
 # ── Branch management (Admin only) ────────────────────────────────────────────
 

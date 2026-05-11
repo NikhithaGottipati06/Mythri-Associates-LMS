@@ -415,6 +415,23 @@ def init_master_db():
             created_at TEXT DEFAULT (datetime('now'))
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS device_approvals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            branch_db TEXT NOT NULL,
+            user_login_name TEXT,
+            user_full_name TEXT,
+            branch_name TEXT,
+            device_token TEXT NOT NULL UNIQUE,
+            device_label TEXT,
+            ip_address TEXT,
+            status TEXT DEFAULT 'Pending',
+            created_at TEXT DEFAULT (datetime('now', 'localtime')),
+            approved_at TEXT,
+            approved_by_name TEXT
+        )
+    """)
     conn.commit()
 
     for branch_name in ['Poranki', 'Gannavaram']:
