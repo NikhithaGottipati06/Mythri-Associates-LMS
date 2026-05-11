@@ -119,7 +119,7 @@ app.jinja_env.globals['get_current_user'] = get_current_user
 
 @app.context_processor
 def inject_now():
-    return {'now': datetime.now().strftime('%A %d-%b-%Y')}
+    return {'now': datetime.now().strftime('%A %d-%b-%Y  %I:%M %p')}
 
 # ── Device helpers ────────────────────────────────────────────────────────────
 
@@ -4296,7 +4296,7 @@ def tally_dashboard():
         GROUP BY week_start ORDER BY week_start
     """, (mo_s_iso, mo_e_iso)).fetchall()
 
-    fees_map = {r['week_start']: r for r in weekly_fees}
+    fees_map = {r['week_start']: dict(r) for r in weekly_fees}
     exp_map  = {r['week_start']: r['exp'] for r in weekly_exp_rows}
 
     weekly = []
@@ -4389,7 +4389,7 @@ def tally_report():
         GROUP BY week_start ORDER BY week_start
     """, p3).fetchall()
 
-    fees_map = {r['week_start']: r for r in weekly_fees}
+    fees_map = {r['week_start']: dict(r) for r in weekly_fees}
     exp_map  = {r['week_start']: r['exp'] for r in weekly_exp_rows}
     # Merge all weeks
     all_weeks = sorted(set(
