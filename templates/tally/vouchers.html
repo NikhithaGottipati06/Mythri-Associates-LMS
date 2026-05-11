@@ -1,5 +1,12 @@
 {% extends 'base.html' %}
 {% block title %}Receipts &amp; Payments Entry{% endblock %}
+{% block head %}
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+<style>
+  .ts-wrapper.single .ts-control { border-radius: 0.375rem; }
+  .ts-wrapper.focus .ts-control  { border-color: #86b7fe; box-shadow: 0 0 0 .25rem rgba(13,110,253,.25); }
+</style>
+{% endblock %}
 {% block content %}
 <div class="page-header">
   <i class="bi bi-journal-plus" style="font-size:20px;color:#1a3c6e;"></i>
@@ -51,7 +58,7 @@
       <!-- Single ledger dropdown — works for both Receipt and Payment -->
       <div class="col-md-4">
         <label class="form-label required">Account Ledger</label>
-        <select name="ledger_id" class="form-select" required>
+        <select name="ledger_id" id="ledger_id_entry" class="form-select" required>
           <option value="">— Select Ledger —</option>
           {% set cur = namespace(g='') %}
           {% for l in entry_ledgers %}
@@ -301,7 +308,7 @@
           </div>
           <div class="mb-0">
             <label class="form-label">Under Group</label>
-            <select name="group_id" class="form-select" required>
+            <select name="group_id" id="modalGroupSelect" class="form-select" required>
               <option value="">— Select Group —</option>
               {% set cur_n = namespace(v='') %}
               {% for g in all_groups %}
@@ -328,7 +335,9 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
 <script>
+// ── Entry-type styling ────────────────────────────────────────────────────
 function updateEntryStyle() {
   const isReceipt = document.getElementById('typeReceipt').checked;
   document.getElementById('saveBtn').className = isReceipt
@@ -339,7 +348,23 @@ function updateEntryStyle() {
 }
 updateEntryStyle();
 
-// Auto-open Ledgers tab if redirected with #tab-ledgers
+// ── Tom Select on entry ledger dropdown ──────────────────────────────────
+new TomSelect('#ledger_id_entry', {
+  placeholder: 'Type to search ledger…',
+  allowEmptyOption: true,
+  maxOptions: 300,
+  searchField: ['text'],
+});
+
+// ── Tom Select on modal group dropdown ───────────────────────────────────
+new TomSelect('#modalGroupSelect', {
+  placeholder: 'Type to search group…',
+  allowEmptyOption: true,
+  maxOptions: 300,
+  searchField: ['text'],
+});
+
+// ── Auto-open Ledgers tab if URL hash says so ─────────────────────────────
 if (window.location.hash === '#tab-ledgers') {
   document.getElementById('ledgersTabBtn').click();
 }
