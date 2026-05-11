@@ -310,5 +310,153 @@ document.addEventListener('input', function(e) {
     }
   })();
 </script>
+
+<!-- ── Support Chatbot ──────────────────────────────────────────────────── -->
+<button id="chatBtn" onclick="chatToggle()" title="Help &amp; Support">
+  <i class="bi bi-chat-dots-fill"></i>
+  <span id="chatBadge" style="position:absolute;top:-3px;right:-3px;background:#dc3545;color:#fff;border-radius:50%;width:18px;height:18px;font-size:10px;display:none;align-items:center;justify-content:center;font-weight:700;"></span>
+</button>
+
+<div id="chatPanel">
+  <div class="chat-head">
+    <span><i class="bi bi-headset me-2"></i>Help &amp; Support</span>
+    <button onclick="chatToggle()">&times;</button>
+  </div>
+  <div class="chat-tabs">
+    <button class="chat-tab active" onclick="chatTab('faq',this)">Quick Help</button>
+    <button class="chat-tab" onclick="chatTab('queries',this)">My Queries</button>
+  </div>
+
+  <!-- FAQ tab -->
+  <div class="chat-body" id="chatFaqBody">
+    <div class="chat-msg bot">Hi <strong>{{ session.full_name or 'there' }}</strong>! How can I help? Choose a topic below or send us a message.</div>
+    <div id="faqList"></div>
+    <div style="font-size:11.5px;color:#64748b;margin:6px 0 2px;font-weight:600;">Didn't find your answer?</div>
+  </div>
+  <div class="chat-compose" id="chatCompose">
+    <textarea id="chatQueryText" placeholder="Describe your issue or question..."></textarea>
+    <div style="display:flex;gap:6px;margin-top:6px;align-items:center;">
+      <span style="font-size:11px;color:#94a3b8;flex:1;">We'll respond via the Developer Panel</span>
+      <button class="chat-send-btn" onclick="chatSend()"><i class="bi bi-envelope-fill"></i> Send</button>
+    </div>
+    <div id="chatSendStatus" style="font-size:11px;margin-top:4px;display:none;"></div>
+  </div>
+
+  <!-- My Queries tab -->
+  <div class="chat-body" id="chatQueriesBody" style="display:none;">
+    <div id="queriesList"><div style="text-align:center;color:#94a3b8;padding:20px;font-size:12px;">Loading...</div></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var FAQS = [
+    {q:"How to add a new member?", a:"1. Go to <b>Masters → Members</b><br>2. Click <b>Add Member</b><br>3. Fill Name, Phone, Center<br>4. Click <b>Save</b>"},
+    {q:"How to apply for a loan?", a:"1. Go to <b>Loans → Loan Applications</b><br>2. Click <b>New Application</b><br>3. Select member &amp; loan type<br>4. Enter amount<br>5. Submit"},
+    {q:"How to post recovery/collection?", a:"1. Go to <b>Loans → Posting → Recovery Posting</b><br>2. Search the member/loan<br>3. Enter amount paid<br>4. Click <b>Save</b>"},
+    {q:"How to approve a loan?", a:"1. Go to <b>Loans → Loan Approvals</b><br>2. Find the pending loan<br>3. Click <b>Approve</b>"},
+    {q:"How to disburse a loan?", a:"1. Go to <b>Loans → Loan Disbursement</b><br>2. Select approved loan<br>3. Enter disbursement details<br>4. Click <b>Disburse</b>"},
+    {q:"How to do Day End?", a:"1. Go to <b>More → Day End</b><br>2. Verify the date<br>3. Click <b>Close Day</b>"},
+    {q:"How to generate reports?", a:"1. Go to <b>More → Reports</b><br>2. Select the report type<br>3. Apply filters<br>4. Click <b>Generate / Print</b>"},
+    {q:"How to add a voucher entry?", a:"1. Go to <b>Tally → R&amp;P Entry</b><br>2. Select Payment or Receipt<br>3. Choose ledger &amp; enter amount<br>4. Click <b>Save</b>"},
+    {q:"How to check savings balance?", a:"1. Go to <b>Savings &amp; Deposits → Savings Account</b><br>2. Search member name<br>3. Click member to view balance"},
+    {q:"How to reset a password?", a:"Contact your <b>Admin</b>. Admin can go to <b>File → Users</b>, edit the user and set a new password."}
+  ];
+  var list = document.getElementById('faqList');
+  FAQS.forEach(function(f, i) {
+    var btn = document.createElement('button');
+    btn.className = 'faq-btn';
+    btn.innerHTML = '<i class="bi bi-question-circle me-1"></i>' + f.q;
+    var ans = document.createElement('div');
+    ans.className = 'faq-answer';
+    ans.id = 'fa' + i;
+    ans.innerHTML = f.a;
+    btn.onclick = function() {
+      var open = ans.style.display === 'block';
+      document.querySelectorAll('.faq-answer').forEach(function(a){ a.style.display='none'; });
+      document.querySelectorAll('.faq-btn').forEach(function(b){ b.style.background=''; });
+      if (!open) { ans.style.display='block'; btn.style.background='#dce8f8'; }
+    };
+    list.appendChild(btn);
+    list.appendChild(ans);
+  });
+})();
+
+var _chatOpen = false, _chatCurTab = 'faq';
+
+function chatToggle() {
+  _chatOpen = !_chatOpen;
+  var p = document.getElementById('chatPanel');
+  if (_chatOpen) { p.classList.add('chat-open'); if (_chatCurTab==='queries') _chatLoadQueries(); }
+  else p.classList.remove('chat-open');
+}
+
+function chatTab(tab, el) {
+  _chatCurTab = tab;
+  document.querySelectorAll('.chat-tab').forEach(function(t){ t.classList.remove('active'); });
+  el.classList.add('active');
+  document.getElementById('chatFaqBody').style.display = tab==='faq' ? '' : 'none';
+  document.getElementById('chatCompose').style.display = tab==='faq' ? '' : 'none';
+  document.getElementById('chatQueriesBody').style.display = tab==='queries' ? '' : 'none';
+  if (tab==='queries') _chatLoadQueries();
+}
+
+function chatSend() {
+  var text = document.getElementById('chatQueryText').value.trim();
+  if (!text) return;
+  var btn = document.querySelector('.chat-send-btn');
+  var status = document.getElementById('chatSendStatus');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Sending...';
+  fetch('/support/send', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
+    body: JSON.stringify({query: text})
+  }).then(function(r){ return r.json(); }).then(function(d) {
+    if (d.ok) {
+      document.getElementById('chatQueryText').value = '';
+      status.style.display='block'; status.style.color='#16a34a';
+      status.innerHTML='<i class="bi bi-check-circle me-1"></i>Query sent! We\'ll respond soon.';
+      setTimeout(function(){ status.style.display='none'; }, 4000);
+    } else {
+      status.style.display='block'; status.style.color='#dc2626';
+      status.textContent = d.msg || 'Failed to send';
+    }
+    btn.disabled=false; btn.innerHTML='<i class="bi bi-envelope-fill"></i> Send';
+  }).catch(function() {
+    status.style.display='block'; status.style.color='#dc2626';
+    status.textContent='Network error. Please try again.';
+    btn.disabled=false; btn.innerHTML='<i class="bi bi-envelope-fill"></i> Send';
+  });
+}
+
+function _chatLoadQueries() {
+  var box = document.getElementById('queriesList');
+  box.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:20px;font-size:12px;">Loading...</div>';
+  fetch('/support/history', {headers:{'X-Requested-With':'XMLHttpRequest'}})
+  .then(function(r){ return r.json(); }).then(function(rows) {
+    if (!rows.length) {
+      box.innerHTML='<div style="text-align:center;color:#94a3b8;padding:20px;font-size:12px;"><i class="bi bi-inbox me-1"></i>No queries yet. Use Quick Help to send us a message.</div>';
+      return;
+    }
+    var html = '';
+    rows.forEach(function(q) {
+      var badge = q.status==='Resolved' ? '<span class="badge bg-success">Resolved</span>' : '<span class="badge bg-warning text-dark">Open</span>';
+      var resp = q.response
+        ? '<div class="q-resp mt-1"><i class="bi bi-headset me-1"></i><strong>Support:</strong> ' + _ce(q.response) + '</div>'
+        : '<div class="q-pending mt-1"><i class="bi bi-hourglass me-1"></i>Awaiting response...</div>';
+      html += '<div class="query-card"><div class="q-text">' + _ce(q.query) + '</div>'
+            + '<div class="q-meta">' + (q.created_at||'') + ' &nbsp;' + badge + '</div>' + resp + '</div>';
+    });
+    box.innerHTML = html;
+  }).catch(function() {
+    box.innerHTML='<div style="color:#dc2626;font-size:12px;padding:8px;">Failed to load queries.</div>';
+  });
+}
+
+function _ce(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
 </body>
 </html>

@@ -206,3 +206,58 @@ body { background: #eef2f7; font-family: 'Segoe UI', sans-serif; font-size: 14px
   align-items: center; gap: 6px;
 }
 .btn-print-pdf:hover { background: #b02a37; color: #fff; }
+
+/* ── Radio buttons – darker & more visible ── */
+.form-check-input[type="radio"] {
+  width: 18px; height: 18px; border: 2px solid #1a3c6e; cursor: pointer;
+  background-color: #fff;
+}
+.form-check-input[type="radio"]:checked {
+  background-color: #1a3c6e; border-color: #1a3c6e;
+}
+.form-check-input[type="radio"]:focus {
+  box-shadow: 0 0 0 3px rgba(26,60,110,.25);
+}
+
+/* ── Chatbot widget ── */
+#chatBtn {
+  position: fixed; bottom: 24px; right: 24px; z-index: 9000;
+  width: 56px; height: 56px; border-radius: 50%;
+  background: #1a3c6e; color: #fff; border: none; cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0,0,0,.3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; transition: .2s;
+}
+#chatBtn:hover { background: #2563a8; transform: scale(1.08); }
+#chatPanel {
+  position: fixed; bottom: 90px; right: 24px; z-index: 9001;
+  width: 360px; max-height: 560px; background: #fff;
+  border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,.2);
+  display: none; flex-direction: column; overflow: hidden;
+}
+#chatPanel.chat-open { display: flex; }
+.chat-head {
+  background: #1a3c6e; color: #fff; padding: 12px 16px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between; font-size: 14px; font-weight: 700;
+}
+.chat-head button { background: none; border: none; color: rgba(255,255,255,.75); font-size: 22px; cursor: pointer; line-height: 1; padding: 0; }
+.chat-head button:hover { color: #fff; }
+.chat-tabs { display: flex; border-bottom: 1px solid #e2e8f0; flex-shrink: 0; }
+.chat-tab { flex: 1; padding: 8px 4px; font-size: 12px; font-weight: 600; border: none; background: #f8fafc; cursor: pointer; color: #64748b; border-bottom: 2px solid transparent; transition: .15s; }
+.chat-tab.active { color: #1a3c6e; border-bottom-color: #1a3c6e; background: #fff; }
+.chat-body { flex: 1; overflow-y: auto; padding: 12px; }
+.chat-msg { margin-bottom: 8px; padding: 8px 12px; border-radius: 10px; font-size: 13px; line-height: 1.5; }
+.chat-msg.bot { background: #e8f0fb; color: #1a3c6e; border-radius: 10px 10px 10px 3px; }
+.faq-btn { display: block; width: 100%; text-align: left; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 7px; padding: 7px 10px; font-size: 12px; cursor: pointer; margin-bottom: 5px; color: #1a3c6e; transition: .15s; }
+.faq-btn:hover { background: #dce8f8; border-color: #1a3c6e; }
+.faq-answer { background: #e8f0fb; border-left: 3px solid #1a3c6e; border-radius: 0 7px 7px 0; padding: 8px 10px; font-size: 12.5px; margin: 0 0 8px 0; color: #1e3a5f; line-height: 1.7; display: none; }
+.chat-compose { border-top: 1px solid #e2e8f0; padding: 10px 12px; flex-shrink: 0; }
+.chat-compose textarea { width: 100%; border: 1px solid #c8d8ee; border-radius: 7px; padding: 8px 10px; font-size: 12.5px; resize: none; height: 60px; outline: none; font-family: 'Segoe UI', sans-serif; box-sizing: border-box; }
+.chat-compose textarea:focus { border-color: #1a3c6e; }
+.chat-send-btn { background: #1a3c6e; color: #fff; border: none; border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+.chat-send-btn:hover { background: #2563a8; }
+.query-card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; margin-bottom: 8px; font-size: 12px; }
+.query-card .q-text { color: #1a3c6e; font-weight: 600; margin-bottom: 4px; }
+.query-card .q-meta { color: #94a3b8; font-size: 11px; margin-bottom: 4px; }
+.query-card .q-resp { background: #f0fdf4; border-left: 3px solid #22c55e; padding: 6px 8px; border-radius: 0 6px 6px 0; color: #166534; }
+.query-card .q-pending { color: #92400e; font-size: 11px; font-style: italic; }

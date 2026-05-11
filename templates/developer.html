@@ -424,6 +424,49 @@
   </div>
 
   <!-- Blocked -->
+  <!-- ── Support Queries ──────────────────────────────────────────────── -->
+  <div class="form-card mb-4" style="background:#fff;border-radius:10px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #3b82f6;">
+    <div style="font-weight:700;font-size:13px;letter-spacing:.06em;color:#1d4ed8;text-transform:uppercase;border-bottom:2px solid #dbeafe;padding-bottom:8px;margin-bottom:14px;">
+      <i class="bi bi-chat-left-text-fill me-1"></i>Support Queries
+      {% if open_queries_count > 0 %}
+      <span class="badge bg-danger ms-2">{{ open_queries_count }} Open</span>
+      {% endif %}
+    </div>
+    {% if support_queries %}
+    <div id="sqList">
+      {% for sq in support_queries %}
+      <div id="sq-{{ sq.id }}" style="border:1px solid #e2e8f0;border-left:3px solid {{ '#22c55e' if sq.status=='Resolved' else '#f59e0b' }};border-radius:8px;padding:12px 14px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+          <div>
+            <span class="badge {{ 'bg-success' if sq.status=='Resolved' else 'bg-warning text-dark' }} me-1">{{ sq.status }}</span>
+            <strong style="font-size:13px;">{{ sq.branch_name }}</strong>
+            <span class="text-muted small ms-2">{{ sq.user_name }} ({{ sq.user_role }})</span>
+          </div>
+          <small class="text-muted">{{ sq.created_at }}</small>
+        </div>
+        <div style="font-size:13px;color:#1e293b;margin-bottom:8px;">{{ sq.query }}</div>
+        {% if sq.response %}
+        <div style="background:#f0fdf4;border-left:3px solid #22c55e;padding:8px 10px;border-radius:0 6px 6px 0;font-size:12px;color:#166534;">
+          <i class="bi bi-reply-fill me-1"></i><strong>Your Response:</strong> {{ sq.response }}
+          <div class="text-muted small">{{ sq.responded_at }}</div>
+        </div>
+        {% else %}
+        <div style="display:flex;gap:8px;align-items:flex-end;">
+          <textarea id="resp-{{ sq.id }}" class="form-control form-control-sm" rows="2"
+                    placeholder="Type your response..." style="font-size:12px;flex:1;"></textarea>
+          <button class="btn btn-primary btn-sm" onclick="sqRespond({{ sq.id }})" style="white-space:nowrap;">
+            <i class="bi bi-send me-1"></i>Send Response
+          </button>
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-muted small"><i class="bi bi-inbox me-1"></i>No support queries received yet.</div>
+    {% endif %}
+  </div>
+
   {% if blocked %}
   <div class="form-card">
     <div class="section-title" style="color:#dc2626;">
@@ -475,6 +518,21 @@ function syncDueTime(bid) {
 document.querySelectorAll('.time-h, .time-m, .time-p').forEach(function(el) {
   el.addEventListener('change', function() { syncDueTime(this.dataset.bid); });
 });
+
+function sqRespond(id) {
+  var text = (document.getElementById('resp-' + id) || {}).value;
+  if (!text || !text.trim()) { alert('Please type a response first.'); return; }
+  var btn = event.target.closest('button');
+  btn.disabled = true; btn.textContent = 'Sending...';
+  fetch('/developer/support/' + id + '/respond', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({response: text.trim()})
+  }).then(function(r){ return r.json(); }).then(function(d) {
+    if (d.ok) { location.reload(); }
+    else { alert(d.msg || 'Failed'); btn.disabled=false; btn.innerHTML='<i class="bi bi-send me-1"></i>Send Response'; }
+  }).catch(function() { alert('Network error'); btn.disabled=false; btn.innerHTML='<i class="bi bi-send me-1"></i>Send Response'; });
+}
 </script>
 </body>
 </html>

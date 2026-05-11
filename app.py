@@ -6,7 +6,35 @@ import os
 import json
 import sqlite3
 import secrets
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
+
+SUPPORT_EMAIL = 'nikhithagottipati@gmail.com'
+
+def _send_support_email(qid, branch_name, user_name, query_text):
+    smtp_user = os.environ.get('SMTP_USER', '')
+    smtp_pass = os.environ.get('SMTP_PASS', '')
+    if not smtp_user or not smtp_pass:
+        return
+    try:
+        msg = MIMEMultipart()
+        msg['Subject'] = f'[Maitri LMS] Support Query #{qid} – {branch_name}'
+        msg['From'] = smtp_user
+        msg['To'] = SUPPORT_EMAIL
+        body = (f"New support query received.\n\n"
+                f"Query ID : #{qid}\n"
+                f"Branch   : {branch_name}\n"
+                f"User     : {user_name}\n\n"
+                f"Query:\n{query_text}\n\n"
+                f"Log in to the Developer Panel to respond.")
+        msg.attach(MIMEText(body, 'plain'))
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as s:
+            s.login(smtp_user, smtp_pass)
+            s.sendmail(smtp_user, SUPPORT_EMAIL, msg.as_string())
+    except Exception as e:
+        pass  # Email is best-effort; query is already saved in DB
 
 def get_db():
     """Return a connection to the current branch database."""
@@ -40,8 +68,9 @@ _SUBSCRIPTION_EXEMPT = frozenset([
     'developer_panel', 'developer_logout', 'developer_device_action', 'developer_purge_duplicates',
     'developer_subscription_settings', 'developer_subscription_approve',
     'developer_subscription_undo', 'developer_subscription_delete',
-    'developer_scanner_upload',
+    'developer_scanner_upload', 'developer_support_respond',
     'subscription_blocked', 'subscription_submit_payment',
+    'support_send', 'support_history',
 ])
 
 @app.before_request
@@ -394,13 +423,24 @@ def developer_panel():
     ).fetchone()
     scanner_image = scanner_row['value'] if scanner_row else None
 
+    try:
+        support_queries = master.execute(
+            "SELECT * FROM support_queries ORDER BY CASE status WHEN 'Open' THEN 0 ELSE 1 END, created_at DESC LIMIT 100"
+        ).fetchall()
+        open_queries_count = sum(1 for q in support_queries if q['status'] == 'Open')
+    except Exception:
+        support_queries = []
+        open_queries_count = 0
+
     master.close()
     return render_template('developer.html',
         devices=devices, branches_stats=branches_stats,
         branches_list=branches_list,
         sub_map=sub_map, pending_payments=pending_payments,
         approved_payments=approved_payments,
-        scanner_image=scanner_image)
+        scanner_image=scanner_image,
+        support_queries=support_queries,
+        open_queries_count=open_queries_count)
 
 @app.route('/developer/devices/<int:did>/action', methods=['POST'])
 @developer_required
@@ -4285,6 +4325,66 @@ def developer_scanner_upload():
         flash('No file selected.', 'danger')
     return redirect(url_for('developer_panel'))
 
+# ── Support Chatbot ───────────────────────────────────────────────────────────
+
+@app.route('/support/send', methods=['POST'])
+@login_required
+def support_send():
+    data = request.get_json(silent=True) or {}
+    query_text = (data.get('query') or '').strip()
+    if not query_text:
+        return jsonify({'ok': False, 'msg': 'Query cannot be empty'})
+    master = get_master_db()
+    cur = master.execute(
+        """INSERT INTO support_queries (branch_db, branch_name, user_id, user_name, user_role, query)
+           VALUES (?,?,?,?,?,?)""",
+        (session.get('branch_db', ''), session.get('branch_name', ''),
+         session.get('user_id'), session.get('full_name', ''),
+         session.get('role', ''), query_text)
+    )
+    qid = cur.lastrowid
+    master.commit()
+    master.close()
+    _send_support_email(qid, session.get('branch_name', ''), session.get('full_name', ''), query_text)
+    return jsonify({'ok': True, 'id': qid})
+
+
+@app.route('/support/history')
+@login_required
+def support_history():
+    master = get_master_db()
+    try:
+        rows = master.execute(
+            """SELECT id, query, status, response, created_at, responded_at
+               FROM support_queries WHERE branch_db=? AND user_id=?
+               ORDER BY created_at DESC LIMIT 20""",
+            (session.get('branch_db', ''), session.get('user_id'))
+        ).fetchall()
+        result = [dict(r) for r in rows]
+    except Exception:
+        result = []
+    master.close()
+    return jsonify(result)
+
+
+@app.route('/developer/support/<int:qid>/respond', methods=['POST'])
+@developer_required
+def developer_support_respond(qid):
+    data = request.get_json(silent=True) or {}
+    response_text = (data.get('response') or '').strip()
+    if not response_text:
+        return jsonify({'ok': False, 'msg': 'Response cannot be empty'})
+    master = get_master_db()
+    master.execute(
+        """UPDATE support_queries SET response=?, status='Resolved',
+           responded_at=datetime('now','localtime') WHERE id=?""",
+        (response_text, qid)
+    )
+    master.commit()
+    master.close()
+    return jsonify({'ok': True})
+
+
 # ── Tally Income & Profit ─────────────────────────────────────────────────────
 
 def _tally_income(db, from_iso, to_iso):
@@ -4775,12 +4875,6 @@ def tally_trial_balance():
             debit.append({'name': grp_name,                   'nature': 'Expense', 'amount': total})
 
     credit = []
-    if income['interest']:
-        credit.append({'name': 'Interest on Loans',    'nature': 'Income',    'amount': income['interest']})
-    if income['processing_fee']:
-        credit.append({'name': 'Processing Fees',      'nature': 'Income',    'amount': income['processing_fee']})
-    if income['insurance_fee']:
-        credit.append({'name': 'Insurance Fees',       'nature': 'Income',    'amount': income['insurance_fee']})
     if income['membership_fee']:
         credit.append({'name': 'Membership Fees',      'nature': 'Income',    'amount': income['membership_fee']})
     if penalty:
@@ -4808,8 +4902,7 @@ def tally_trial_balance():
         total_dr=total_dr, total_cr=total_cr,
         as_at=as_at_display,
         disbursed=disbursed, recovered=recovered,
-        total_income=sum([income['interest'], income['processing_fee'],
-                          income['insurance_fee'], income['membership_fee'], penalty]),
+        total_income=sum([income['membership_fee'], penalty]),
         total_expenses=sum(t for _, t in expenses),
     )
 

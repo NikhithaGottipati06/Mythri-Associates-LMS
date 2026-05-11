@@ -562,6 +562,21 @@ def init_master_db():
             active INTEGER DEFAULT 1
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS support_queries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            branch_db TEXT,
+            branch_name TEXT,
+            user_id INTEGER,
+            user_name TEXT,
+            user_role TEXT,
+            query TEXT NOT NULL,
+            status TEXT DEFAULT 'Open',
+            response TEXT,
+            created_at TEXT DEFAULT (datetime('now', 'localtime')),
+            responded_at TEXT
+        )
+    """)
     exists = conn.execute("SELECT COUNT(*) FROM master_users WHERE login_name='Maithri'").fetchone()[0]
     if not exists:
         conn.execute(
