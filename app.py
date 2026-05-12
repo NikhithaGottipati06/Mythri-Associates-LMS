@@ -4445,6 +4445,15 @@ def _tally_income(db, from_iso, to_iso):
     return {'interest': interest, 'processing_fee': proc, 'insurance_fee': ins, 'membership_fee': mem_fee}
 
 
+def _ensure_voucher_type_col(db):
+    """Add type column to tally_vouchers if it doesn't exist yet."""
+    try:
+        db.execute("ALTER TABLE tally_vouchers ADD COLUMN type TEXT DEFAULT 'Payment'")
+        db.commit()
+    except Exception:
+        pass  # column already exists
+
+
 def _tally_expenses(db, from_iso, to_iso):
     """Return Expense-nature Payment-type manual vouchers grouped by group, for P&L."""
     def ic(col):
@@ -4596,6 +4605,7 @@ def tally_dashboard():
 def tally_report():
     db = get_db()
     # Ensure HO REMITTANCE is Liability (balance-sheet transfer, not a P&L expense)
+    _ensure_voucher_type_col(db)
     db.execute("UPDATE tally_groups SET nature='Liability' WHERE name='HO REMITTANCE' AND nature='Expense'")
     db.commit()
 
@@ -4690,6 +4700,7 @@ def tally_report():
 @admin_required
 def tally_vouchers():
     db = get_db()
+    _ensure_voucher_type_col(db)
     if request.method == 'POST':
         entry_type  = request.form.get('entry_type', 'Payment')
         ledger_id   = request.form.get('ledger_id')
@@ -4762,6 +4773,7 @@ def tally_voucher_delete(vid):
 @admin_required
 def tally_rp_statement():
     db  = get_db()
+    _ensure_voucher_type_col(db)
     raw_from     = request.args.get('from_date', '').strip()
     raw_to       = request.args.get('to_date', '').strip()
     consolidated = request.args.get('view', 'detailed') == 'consolidated'
