@@ -5024,14 +5024,19 @@ def tally_trial_balance():
         debit.append({'name':  'Deficit (Net Loss)',    'nature': 'Capital', 'amount': -diff})
         total_dr = total_cr
 
+    total_inc = (income['interest'] + income['processing_fee'] + income['insurance_fee'] +
+                 income['membership_fee'] + penalty +
+                 sum(r['total'] for r in manual_inc_rows))
+    total_exp = sum(r['total'] for r in expense_rows)
+
     db.close()
     return render_template('tally/trial_balance.html',
         debit=debit, credit=credit,
         total_dr=total_dr, total_cr=total_cr,
         as_at=as_at_display,
         disbursed=disbursed, recovered=recovered,
-        total_income=sum([income['membership_fee'], penalty]),
-        total_expenses=sum(r['total'] for r in voucher_rows if r['nature'] == 'Expense'),
+        total_income=total_inc,
+        total_expenses=total_exp,
     )
 
 
