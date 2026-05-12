@@ -5001,13 +5001,7 @@ def tally_trial_balance():
     if principal_recovered:
         credit.append({'name': 'Loan Repayments (Principal Recovered)', 'nature': 'Liability', 'amount': principal_recovered})
 
-    # Auto Income (CR)
-    if income['interest']:
-        credit.append({'name': 'Interest on Loans',  'nature': 'Income', 'amount': income['interest']})
-    if income['processing_fee']:
-        credit.append({'name': 'Processing Fee',     'nature': 'Income', 'amount': income['processing_fee']})
-    if income['insurance_fee']:
-        credit.append({'name': 'Insurance Fee',      'nature': 'Income', 'amount': income['insurance_fee']})
+    # Auto Income (CR) — membership fee and penalty only
     if income['membership_fee']:
         credit.append({'name': 'Membership Fees',    'nature': 'Income', 'amount': income['membership_fee']})
     if penalty:
@@ -5035,8 +5029,7 @@ def tally_trial_balance():
         debit.append({'name':  'Deficit (Net Loss)',    'nature': 'Capital', 'amount': -diff})
         total_dr = total_cr
 
-    total_inc = (income['interest'] + income['processing_fee'] + income['insurance_fee'] +
-                 income['membership_fee'] + penalty +
+    total_inc = (income['membership_fee'] + penalty +
                  sum(row['total'] for row in voucher_groups if row['nature'] == 'Income'))
     total_exp = sum(row['total'] for row in voucher_groups if row['nature'] == 'Expense')
 
