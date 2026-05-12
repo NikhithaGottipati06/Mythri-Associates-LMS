@@ -4490,6 +4490,24 @@ def _tally_manual_income(db, from_iso, to_iso):
     return rows
 
 
+def _tally_all_voucher_groups(db, from_iso, to_iso):
+    """Return ALL manual vouchers grouped by group name+nature (for trial balance routing by actual nature)."""
+    def ic(col):
+        return f"substr({col},7,4)||'-'||substr({col},4,2)||'-'||substr({col},1,2)"
+    conds, p = [], []
+    if from_iso: conds.append(f"{ic('tv.voucher_date')} >= ?"); p.append(from_iso)
+    if to_iso:   conds.append(f"{ic('tv.voucher_date')} <= ?"); p.append(to_iso)
+    where = (' AND ' + ' AND '.join(conds)) if conds else ''
+    rows = db.execute(
+        f"SELECT tg.name, tg.nature, COALESCE(SUM(tv.amount),0) as total "
+        f"FROM tally_vouchers tv "
+        f"JOIN tally_ledgers tl ON tv.ledger_id=tl.id "
+        f"JOIN tally_groups tg ON tl.group_id=tg.id "
+        f"WHERE 1=1{where} GROUP BY tg.name, tg.nature ORDER BY tg.sort_order", p
+    ).fetchall()
+    return rows
+
+
 def _week_label(iso_date_str):
     """Given YYYY-MM-DD return DD/MM - DD/MM for the Mon-Sun week."""
     from datetime import datetime, timedelta
@@ -4966,14 +4984,12 @@ def tally_trial_balance():
         f"SELECT COALESCE(SUM(principal),0) FROM recovery_postings "
         f"WHERE installment_no>0 AND {ic('posting_date')} <= ?", (as_at_iso,))
 
-    # ── Manual vouchers ───────────────────────────────────────────────────────
-    _ensure_voucher_type_col(db)
-    expense_rows  = _tally_expenses(db, None, as_at_iso)       # Payment-type Expense-nature
-    manual_inc_rows = _tally_manual_income(db, None, as_at_iso) # Receipt-type (any group)
+    # ── Manual vouchers — routed by actual group nature ───────────────────────
+    voucher_groups = _tally_all_voucher_groups(db, None, as_at_iso)
 
     # ── Build DR / CR rows ────────────────────────────────────────────────────
-    debit = []
-    credit = []
+    debit = []   # Asset + Expense  → right "Assets" column
+    credit = []  # Liability + Income + Capital → left "Liabilities" column
 
     # Assets (DR)
     if loans_outstanding:
@@ -4997,19 +5013,14 @@ def tally_trial_balance():
     if penalty:
         credit.append({'name': 'Penalty / Fine Income', 'nature': 'Income', 'amount': penalty})
 
-    # Manual Receipt vouchers → Income (CR)
-    for r in manual_inc_rows:
-        if r['total']:
-            credit.append({'name': r['name'], 'nature': 'Income', 'amount': r['total']})
-
-    # Manual Payment vouchers → Expense (DR) or Asset/Liability by nature
-    for row in expense_rows:
+    # Manual vouchers → routed by the ledger group's actual nature
+    for row in voucher_groups:
         grp_name, nature, total = row['name'], row['nature'], row['total']
         if not total:
             continue
-        if nature in ('Expense', 'Asset'):
+        if nature in ('Asset', 'Expense'):
             debit.append({'name': grp_name, 'nature': nature, 'amount': total})
-        else:
+        else:  # Liability, Income, Capital
             credit.append({'name': grp_name, 'nature': nature, 'amount': total})
 
     total_dr = sum(r['amount'] for r in debit)
@@ -5026,8 +5037,8 @@ def tally_trial_balance():
 
     total_inc = (income['interest'] + income['processing_fee'] + income['insurance_fee'] +
                  income['membership_fee'] + penalty +
-                 sum(r['total'] for r in manual_inc_rows))
-    total_exp = sum(r['total'] for r in expense_rows)
+                 sum(row['total'] for row in voucher_groups if row['nature'] == 'Income'))
+    total_exp = sum(row['total'] for row in voucher_groups if row['nature'] == 'Expense')
 
     db.close()
     return render_template('tally/trial_balance.html',
