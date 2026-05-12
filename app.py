@@ -4603,97 +4603,104 @@ def tally_dashboard():
 @app.route('/tally/report')
 @admin_required
 def tally_report():
+    import traceback as _tb
     db = get_db()
-    # Ensure HO REMITTANCE is Liability (balance-sheet transfer, not a P&L expense)
-    _ensure_voucher_type_col(db)
-    db.execute("UPDATE tally_groups SET nature='Liability' WHERE name='HO REMITTANCE' AND nature='Expense'")
-    db.commit()
+    if not db:
+        return "Error: No branch database in session — please log out and log in again.", 500
+    try:
+        _ensure_voucher_type_col(db)
+        db.execute("UPDATE tally_groups SET nature='Liability' WHERE name='HO REMITTANCE' AND nature='Expense'")
+        db.commit()
 
-    from_date = request.args.get('from_date', '')
-    to_date   = request.args.get('to_date', '')
-    from_iso  = _to_iso(from_date) if from_date else ''
-    to_iso    = _to_iso(to_date)   if to_date   else ''
+        from_date = request.args.get('from_date', '')
+        to_date   = request.args.get('to_date', '')
+        from_iso  = _to_iso(from_date) if from_date else ''
+        to_iso    = _to_iso(to_date)   if to_date   else ''
 
-    income = _tally_income(db, from_iso, to_iso)
-    total_auto_income = sum(income.values())
+        income = _tally_income(db, from_iso, to_iso)
+        total_auto_income = sum(income.values())
 
-    manual_rec_rows = _tally_manual_income(db, from_iso, to_iso)
-    total_manual_income = sum(r['total'] for r in manual_rec_rows)
-    total_income = total_auto_income + total_manual_income
+        manual_rec_rows = _tally_manual_income(db, from_iso, to_iso)
+        total_manual_income = sum(r['total'] for r in manual_rec_rows)
+        total_income = total_auto_income + total_manual_income
 
-    exp_rows = _tally_expenses(db, from_iso, to_iso)
-    total_expenses = sum(r['total'] for r in exp_rows)
-    net_profit = total_income - total_expenses
+        exp_rows = _tally_expenses(db, from_iso, to_iso)
+        total_expenses = sum(r['total'] for r in exp_rows)
+        net_profit = total_income - total_expenses
 
-    # Weekly breakdown within range
-    ic = "substr(rp.posting_date,7,4)||'-'||substr(rp.posting_date,4,2)||'-'||substr(rp.posting_date,1,2)"
-    conds = ['rp.installment_no>0']
-    p = []
-    if from_iso: conds.append(f"{ic} >= ?"); p.append(from_iso)
-    if to_iso:   conds.append(f"{ic} <= ?"); p.append(to_iso)
-    where = ' AND '.join(conds)
-    weekly_int = db.execute(f"""
-        SELECT date({ic}, 'weekday 1', '-6 days') as week_start,
-               COALESCE(SUM(rp.interest),0) as interest
-        FROM recovery_postings rp WHERE {where}
-        GROUP BY week_start ORDER BY week_start
-    """, p).fetchall()
+        # ── Weekly breakdown ──────────────────────────────────────────────────
+        ic = "substr(rp.posting_date,7,4)||'-'||substr(rp.posting_date,4,2)||'-'||substr(rp.posting_date,1,2)"
+        conds = ['rp.installment_no>0']
+        p = []
+        if from_iso: conds.append(f"{ic} >= ?"); p.append(from_iso)
+        if to_iso:   conds.append(f"{ic} <= ?"); p.append(to_iso)
+        where = ' AND '.join(conds)
+        weekly_int = db.execute(f"""
+            SELECT date({ic}, 'weekday 1', '-6 days') as week_start,
+                   COALESCE(SUM(rp.interest),0) as interest
+            FROM recovery_postings rp WHERE {where}
+            GROUP BY week_start ORDER BY week_start
+        """, p).fetchall()
 
-    ic_ld = "substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2)"
-    conds2, p2 = [], []
-    if from_iso: conds2.append(f"{ic_ld} >= ?"); p2.append(from_iso)
-    if to_iso:   conds2.append(f"{ic_ld} <= ?"); p2.append(to_iso)
-    w2 = (' AND '.join(conds2)) if conds2 else '1=1'
-    weekly_fees = db.execute(f"""
-        SELECT date({ic_ld}, 'weekday 1', '-6 days') as week_start,
-               COALESCE(SUM(la.processing_fee),0) as proc,
-               COALESCE(SUM(la.insurance_fee+la.nominee_insurance_fee),0) as ins
-        FROM loan_disbursements ld
-        LEFT JOIN loan_applications la ON ld.application_id=la.id
-        WHERE {w2} GROUP BY week_start ORDER BY week_start
-    """, p2).fetchall()
+        ic_ld = "substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2)"
+        conds2, p2 = [], []
+        if from_iso: conds2.append(f"{ic_ld} >= ?"); p2.append(from_iso)
+        if to_iso:   conds2.append(f"{ic_ld} <= ?"); p2.append(to_iso)
+        w2 = (' AND '.join(conds2)) if conds2 else '1=1'
+        weekly_fees = db.execute(f"""
+            SELECT date({ic_ld}, 'weekday 1', '-6 days') as week_start,
+                   COALESCE(SUM(la.processing_fee),0) as proc,
+                   COALESCE(SUM(la.insurance_fee+la.nominee_insurance_fee),0) as ins
+            FROM loan_disbursements ld
+            LEFT JOIN loan_applications la ON ld.application_id=la.id
+            WHERE {w2} GROUP BY week_start ORDER BY week_start
+        """, p2).fetchall()
 
-    ic_tv = "substr(tv.voucher_date,7,4)||'-'||substr(tv.voucher_date,4,2)||'-'||substr(tv.voucher_date,1,2)"
-    conds3, p3 = ["tg.nature='Expense'"], []
-    if from_iso: conds3.append(f"{ic_tv} >= ?"); p3.append(from_iso)
-    if to_iso:   conds3.append(f"{ic_tv} <= ?"); p3.append(to_iso)
-    w3 = ' AND '.join(conds3)
-    weekly_exp_rows = db.execute(f"""
-        SELECT date({ic_tv}, 'weekday 1', '-6 days') as week_start,
-               COALESCE(SUM(tv.amount),0) as exp
-        FROM tally_vouchers tv
-        JOIN tally_ledgers tl ON tv.ledger_id=tl.id
-        JOIN tally_groups tg ON tl.group_id=tg.id
-        WHERE {w3}
-        GROUP BY week_start ORDER BY week_start
-    """, p3).fetchall()
+        ic_tv = "substr(tv.voucher_date,7,4)||'-'||substr(tv.voucher_date,4,2)||'-'||substr(tv.voucher_date,1,2)"
+        conds3, p3 = ["tg.nature='Expense'"], []
+        if from_iso: conds3.append(f"{ic_tv} >= ?"); p3.append(from_iso)
+        if to_iso:   conds3.append(f"{ic_tv} <= ?"); p3.append(to_iso)
+        w3 = ' AND '.join(conds3)
+        weekly_exp_rows = db.execute(f"""
+            SELECT date({ic_tv}, 'weekday 1', '-6 days') as week_start,
+                   COALESCE(SUM(tv.amount),0) as exp
+            FROM tally_vouchers tv
+            JOIN tally_ledgers tl ON tv.ledger_id=tl.id
+            JOIN tally_groups tg ON tl.group_id=tg.id
+            WHERE {w3}
+            GROUP BY week_start ORDER BY week_start
+        """, p3).fetchall()
 
-    fees_map = {r['week_start']: dict(r) for r in weekly_fees}
-    exp_map  = {r['week_start']: r['exp'] for r in weekly_exp_rows}
-    # Merge all weeks
-    all_weeks = sorted(set(
-        [r['week_start'] for r in weekly_int] +
-        list(fees_map.keys()) + list(exp_map.keys())
-    ))
-    weekly = []
-    for ws in all_weeks:
-        int_v  = next((r['interest'] for r in weekly_int if r['week_start']==ws), 0) or 0
-        proc   = (fees_map.get(ws) or {}).get('proc', 0) or 0
-        ins    = (fees_map.get(ws) or {}).get('ins', 0)  or 0
-        exp    = exp_map.get(ws, 0) or 0
-        ti     = int_v + proc + ins
-        weekly.append({'week_label': _week_label(ws), 'interest': int_v,
-                       'processing': proc, 'insurance': ins,
-                       'total_income': ti, 'expenses': exp, 'net': ti - exp})
+        fees_map = {r['week_start']: dict(r) for r in weekly_fees}
+        exp_map  = {r['week_start']: r['exp'] for r in weekly_exp_rows}
+        all_weeks = sorted(w for w in set(
+            [r['week_start'] for r in weekly_int] +
+            list(fees_map.keys()) + list(exp_map.keys())
+        ) if w is not None)
+        weekly = []
+        for ws in all_weeks:
+            int_v = next((r['interest'] for r in weekly_int if r['week_start']==ws), 0) or 0
+            proc  = (fees_map.get(ws) or {}).get('proc', 0) or 0
+            ins   = (fees_map.get(ws) or {}).get('ins', 0)  or 0
+            exp   = exp_map.get(ws, 0) or 0
+            ti    = int_v + proc + ins
+            weekly.append({'week_label': _week_label(ws), 'interest': int_v,
+                           'processing': proc, 'insurance': ins,
+                           'total_income': ti, 'expenses': exp, 'net': ti - exp})
 
-    db.close()
-    return render_template('tally/report.html',
-        income=income, total_auto_income=total_auto_income,
-        manual_rec_rows=manual_rec_rows, total_manual_income=total_manual_income,
-        total_income=total_income,
-        exp_rows=exp_rows, total_expenses=total_expenses,
-        net_profit=net_profit, weekly=weekly,
-        from_date=from_date, to_date=to_date)
+        db.close()
+        return render_template('tally/report.html',
+            income=income, total_auto_income=total_auto_income,
+            manual_rec_rows=manual_rec_rows, total_manual_income=total_manual_income,
+            total_income=total_income,
+            exp_rows=exp_rows, total_expenses=total_expenses,
+            net_profit=net_profit, weekly=weekly,
+            from_date=from_date, to_date=to_date)
+
+    except Exception:
+        return (f"<pre style='color:red;padding:20px'>"
+                f"<b>P&L Error — please share this with support:</b>\n\n"
+                f"{_tb.format_exc()}</pre>"), 500
 
 
 @app.route('/tally/vouchers', methods=['GET', 'POST'])
@@ -4959,28 +4966,50 @@ def tally_trial_balance():
         f"SELECT COALESCE(SUM(principal),0) FROM recovery_postings "
         f"WHERE installment_no>0 AND {ic('posting_date')} <= ?", (as_at_iso,))
 
-    # ── Manual vouchers — split by group nature ───────────────────────────────
-    voucher_rows = _tally_expenses(db, None, as_at_iso)
+    # ── Manual vouchers ───────────────────────────────────────────────────────
+    _ensure_voucher_type_col(db)
+    expense_rows  = _tally_expenses(db, None, as_at_iso)       # Payment-type Expense-nature
+    manual_inc_rows = _tally_manual_income(db, None, as_at_iso) # Receipt-type (any group)
 
-    # ── Build DR / CR rows (balance-sheet only — Income & Expense excluded) ─────
+    # ── Build DR / CR rows ────────────────────────────────────────────────────
     debit = []
-    if loans_outstanding:
-        debit.append({'name': 'Loans Outstanding to Members', 'nature': 'Asset',   'amount': loans_outstanding})
-
     credit = []
+
+    # Assets (DR)
+    if loans_outstanding:
+        debit.append({'name': 'Loans Outstanding to Members', 'nature': 'Asset', 'amount': loans_outstanding})
+
+    # Liabilities (CR)
     if member_savings:
-        credit.append({'name': 'Member Savings',       'nature': 'Liability', 'amount': member_savings})
+        credit.append({'name': 'Member Savings',                        'nature': 'Liability', 'amount': member_savings})
     if principal_recovered:
         credit.append({'name': 'Loan Repayments (Principal Recovered)', 'nature': 'Liability', 'amount': principal_recovered})
 
-    # Route Asset/Liability vouchers only; skip Income and Expense (P&L items)
-    for row in voucher_rows:
+    # Auto Income (CR)
+    if income['interest']:
+        credit.append({'name': 'Interest on Loans',  'nature': 'Income', 'amount': income['interest']})
+    if income['processing_fee']:
+        credit.append({'name': 'Processing Fee',     'nature': 'Income', 'amount': income['processing_fee']})
+    if income['insurance_fee']:
+        credit.append({'name': 'Insurance Fee',      'nature': 'Income', 'amount': income['insurance_fee']})
+    if income['membership_fee']:
+        credit.append({'name': 'Membership Fees',    'nature': 'Income', 'amount': income['membership_fee']})
+    if penalty:
+        credit.append({'name': 'Penalty / Fine Income', 'nature': 'Income', 'amount': penalty})
+
+    # Manual Receipt vouchers → Income (CR)
+    for r in manual_inc_rows:
+        if r['total']:
+            credit.append({'name': r['name'], 'nature': 'Income', 'amount': r['total']})
+
+    # Manual Payment vouchers → Expense (DR) or Asset/Liability by nature
+    for row in expense_rows:
         grp_name, nature, total = row['name'], row['nature'], row['total']
-        if not total or nature in ('Income', 'Expense'):
+        if not total:
             continue
-        if nature == 'Asset':
+        if nature in ('Expense', 'Asset'):
             debit.append({'name': grp_name, 'nature': nature, 'amount': total})
-        else:  # Liability
+        else:
             credit.append({'name': grp_name, 'nature': nature, 'amount': total})
 
     total_dr = sum(r['amount'] for r in debit)
