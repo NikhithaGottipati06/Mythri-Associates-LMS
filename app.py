@@ -4950,29 +4950,25 @@ def tally_trial_balance():
     # ── Manual vouchers — split by group nature ───────────────────────────────
     voucher_rows = _tally_expenses(db, None, as_at_iso)
 
-    # ── Build DR / CR rows ────────────────────────────────────────────────────
+    # ── Build DR / CR rows (balance-sheet only — Income & Expense excluded) ─────
     debit = []
     if loans_outstanding:
         debit.append({'name': 'Loans Outstanding to Members', 'nature': 'Asset',   'amount': loans_outstanding})
 
     credit = []
-    if income['membership_fee']:
-        credit.append({'name': 'Membership Fees',      'nature': 'Income',    'amount': income['membership_fee']})
-    if penalty:
-        credit.append({'name': 'Penalty / Fine Income','nature': 'Income',    'amount': penalty})
     if member_savings:
         credit.append({'name': 'Member Savings',       'nature': 'Liability', 'amount': member_savings})
     if principal_recovered:
         credit.append({'name': 'Loan Repayments (Principal Recovered)', 'nature': 'Liability', 'amount': principal_recovered})
 
-    # Route each voucher group to the correct side based on its nature
+    # Route Asset/Liability vouchers only; skip Income and Expense (P&L items)
     for row in voucher_rows:
         grp_name, nature, total = row['name'], row['nature'], row['total']
-        if not total:
+        if not total or nature in ('Income', 'Expense'):
             continue
-        if nature in ('Expense', 'Asset'):
+        if nature == 'Asset':
             debit.append({'name': grp_name, 'nature': nature, 'amount': total})
-        else:  # Income or Liability
+        else:  # Liability
             credit.append({'name': grp_name, 'nature': nature, 'amount': total})
 
     total_dr = sum(r['amount'] for r in debit)

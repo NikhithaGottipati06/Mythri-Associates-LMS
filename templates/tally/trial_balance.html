@@ -81,7 +81,7 @@
           {% if i < debit|length %}
             {% set dr = debit[i] %}
             <td>
-              <span class="badge rounded-pill me-1 {% if dr.nature == 'Asset' %}bg-primary{% elif dr.nature == 'Capital' %}bg-secondary{% else %}bg-warning text-dark{% endif %}"
+              <span class="badge rounded-pill me-1 {% if dr.nature == 'Asset' %}bg-primary{% else %}bg-secondary{% endif %}"
                 style="font-size:.6rem;">{{ dr.nature }}</span>
               {{ dr.name }}
             </td>
@@ -94,7 +94,7 @@
           {% if i < credit|length %}
             {% set cr = credit[i] %}
             <td>
-              <span class="badge rounded-pill me-1 {% if cr.nature == 'Income' %}bg-success{% elif cr.nature == 'Capital' %}bg-secondary{% else %}bg-danger{% endif %}"
+              <span class="badge rounded-pill me-1 {% if cr.nature == 'Capital' %}bg-secondary{% else %}bg-danger{% endif %}"
                 style="font-size:.6rem;">{{ cr.nature }}</span>
               {{ cr.name }}
             </td>
@@ -118,8 +118,6 @@
 
   <div class="mt-3 d-flex flex-wrap gap-2">
     <span><span class="badge bg-primary">Asset</span> Asset accounts (DR)</span>
-    <span><span class="badge bg-warning text-dark">Expense</span> Expense accounts (DR)</span>
-    <span><span class="badge bg-success">Income</span> Income accounts (CR)</span>
     <span><span class="badge bg-danger">Liability</span> Liability accounts (CR)</span>
     <span><span class="badge bg-secondary">Capital</span> Surplus / Deficit</span>
   </div>
