@@ -523,36 +523,6 @@ def device_status():
     master.close()
     return jsonify({'status': device['status'] if device else 'unknown'})
 
-@app.route('/admin/devices')
-@admin_required
-def admin_devices():
-    master = get_master_db()
-    devices = master.execute(
-        "SELECT * FROM device_approvals ORDER BY CASE status WHEN 'Pending' THEN 0 WHEN 'Approved' THEN 1 ELSE 2 END, created_at DESC"
-    ).fetchall()
-    master.close()
-    return render_template('admin/devices.html', devices=devices)
-
-@app.route('/admin/devices/<int:did>/action', methods=['POST'])
-@admin_required
-def admin_device_action(did):
-    action = request.form.get('action')
-    master = get_master_db()
-    if action == 'approve':
-        master.execute(
-            "UPDATE device_approvals SET status='Approved', approved_at=datetime('now','localtime'), approved_by_name=? WHERE id=?",
-            (session.get('full_name'), did)
-        )
-        flash('Device approved successfully.', 'success')
-    elif action == 'block':
-        master.execute("UPDATE device_approvals SET status='Blocked' WHERE id=?", (did,))
-        flash('Device blocked.', 'warning')
-    elif action == 'delete':
-        master.execute("DELETE FROM device_approvals WHERE id=?", (did,))
-        flash('Device record removed.', 'info')
-    master.commit()
-    master.close()
-    return redirect(url_for('admin_devices'))
 
 # ── Branch management (Admin only) ────────────────────────────────────────────
 

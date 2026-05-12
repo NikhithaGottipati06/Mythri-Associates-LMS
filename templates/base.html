@@ -51,9 +51,7 @@
      href="{{ url_for('users_list') }}"><i class="bi bi-people"></i> Users</a>
   <a class="nav-link {% if 'branch' in request.endpoint %}active{% endif %}"
      href="{{ url_for('branches_list') }}"><i class="bi bi-diagram-3"></i> Branches</a>
-  <a class="nav-link {% if 'device' in request.endpoint %}active{% endif %}"
-     href="{{ url_for('admin_devices') }}"><i class="bi bi-shield-lock"></i> Devices</a>
-  {% endif %}
+{% endif %}
 
   <!-- Masters -->
   <div class="nav-section">Masters</div>
