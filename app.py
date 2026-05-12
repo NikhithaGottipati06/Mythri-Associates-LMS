@@ -4998,8 +4998,6 @@ def tally_trial_balance():
     # Liabilities (CR)
     if member_savings:
         credit.append({'name': 'Member Savings',                        'nature': 'Liability', 'amount': member_savings})
-    if principal_recovered:
-        credit.append({'name': 'Loan Repayments (Principal Recovered)', 'nature': 'Liability', 'amount': principal_recovered})
 
     # Auto Income (CR) — membership fee and penalty only
     if income['membership_fee']:
