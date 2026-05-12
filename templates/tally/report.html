@@ -34,6 +34,7 @@
       <div class="section-title text-success"><i class="bi bi-arrow-up-circle me-1"></i>Income</div>
       <table class="table table-sm mb-0">
         <tbody>
+          <tr class="text-muted small"><td colspan="2" class="pb-0 pt-2"><em>Loan Operations (Auto)</em></td></tr>
           <tr>
             <td>Interest on Loans</td>
             <td class="text-end fw-semibold text-success">₹{{ "%.2f"|format(income.interest) }}</td>
@@ -50,6 +51,15 @@
             <td>Membership Fee</td>
             <td class="text-end">₹{{ "%.2f"|format(income.membership_fee) }}</td>
           </tr>
+          {% if manual_rec_rows %}
+          <tr class="text-muted small"><td colspan="2" class="pb-0 pt-2"><em>Manual Receipts</em></td></tr>
+          {% for r in manual_rec_rows %}
+          <tr>
+            <td>{{ r.name }}</td>
+            <td class="text-end text-success">₹{{ "%.2f"|format(r.total) }}</td>
+          </tr>
+          {% endfor %}
+          {% endif %}
           <tr class="table-success fw-bold border-top">
             <td>Total Income</td>
             <td class="text-end text-success">₹{{ "%.2f"|format(total_income) }}</td>

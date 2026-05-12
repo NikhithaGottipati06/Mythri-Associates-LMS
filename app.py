@@ -4446,15 +4446,33 @@ def _tally_income(db, from_iso, to_iso):
 
 
 def _tally_expenses(db, from_iso, to_iso):
-    """Return list of rows with (name, nature, total) for manual vouchers in the date range."""
+    """Return Expense-nature Payment-type manual vouchers grouped by group, for P&L."""
     def ic(col):
         return f"substr({col},7,4)||'-'||substr({col},4,2)||'-'||substr({col},1,2)"
-    conds, p = ["tg.nature='Expense'"], []
+    conds, p = ["tg.nature='Expense'", "(tv.type IS NULL OR tv.type='Payment')"], []
     if from_iso: conds.append(f"{ic('tv.voucher_date')} >= ?"); p.append(from_iso)
     if to_iso:   conds.append(f"{ic('tv.voucher_date')} <= ?"); p.append(to_iso)
     where = ' AND '.join(conds)
     rows = db.execute(
         f"SELECT tg.name, tg.nature, COALESCE(SUM(tv.amount),0) as total "
+        f"FROM tally_vouchers tv "
+        f"JOIN tally_ledgers tl ON tv.ledger_id=tl.id "
+        f"JOIN tally_groups tg ON tl.group_id=tg.id "
+        f"WHERE {where} GROUP BY tg.name ORDER BY tg.sort_order", p
+    ).fetchall()
+    return rows
+
+
+def _tally_manual_income(db, from_iso, to_iso):
+    """Return Receipt-type manual vouchers grouped by group, for P&L income section."""
+    def ic(col):
+        return f"substr({col},7,4)||'-'||substr({col},4,2)||'-'||substr({col},1,2)"
+    conds, p = ["tv.type='Receipt'"], []
+    if from_iso: conds.append(f"{ic('tv.voucher_date')} >= ?"); p.append(from_iso)
+    if to_iso:   conds.append(f"{ic('tv.voucher_date')} <= ?"); p.append(to_iso)
+    where = ' AND '.join(conds)
+    rows = db.execute(
+        f"SELECT tg.name, COALESCE(SUM(tv.amount),0) as total "
         f"FROM tally_vouchers tv "
         f"JOIN tally_ledgers tl ON tv.ledger_id=tl.id "
         f"JOIN tally_groups tg ON tl.group_id=tg.id "
@@ -4587,7 +4605,11 @@ def tally_report():
     to_iso    = _to_iso(to_date)   if to_date   else ''
 
     income = _tally_income(db, from_iso, to_iso)
-    total_income = sum(income.values())
+    total_auto_income = sum(income.values())
+
+    manual_rec_rows = _tally_manual_income(db, from_iso, to_iso)
+    total_manual_income = sum(r['total'] for r in manual_rec_rows)
+    total_income = total_auto_income + total_manual_income
 
     exp_rows = _tally_expenses(db, from_iso, to_iso)
     total_expenses = sum(r['total'] for r in exp_rows)
@@ -4656,7 +4678,9 @@ def tally_report():
 
     db.close()
     return render_template('tally/report.html',
-        income=income, total_income=total_income,
+        income=income, total_auto_income=total_auto_income,
+        manual_rec_rows=manual_rec_rows, total_manual_income=total_manual_income,
+        total_income=total_income,
         exp_rows=exp_rows, total_expenses=total_expenses,
         net_profit=net_profit, weekly=weekly,
         from_date=from_date, to_date=to_date)
