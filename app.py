@@ -4449,7 +4449,7 @@ def _tally_expenses(db, from_iso, to_iso):
     """Return list of rows with (name, nature, total) for manual vouchers in the date range."""
     def ic(col):
         return f"substr({col},7,4)||'-'||substr({col},4,2)||'-'||substr({col},1,2)"
-    conds, p = ["tg.nature='Expense'", "COALESCE(tv.type,'Payment')='Payment'"], []
+    conds, p = ["tg.nature='Expense'"], []
     if from_iso: conds.append(f"{ic('tv.voucher_date')} >= ?"); p.append(from_iso)
     if to_iso:   conds.append(f"{ic('tv.voucher_date')} <= ?"); p.append(to_iso)
     where = ' AND '.join(conds)
@@ -4523,7 +4523,7 @@ def tally_dashboard():
         GROUP BY week_start ORDER BY week_start
     """, (mo_s_iso, mo_e_iso)).fetchall()
 
-    # Build weekly expense per week_start (Expense-nature Payment-type vouchers only)
+    # Build weekly expense per week_start (Expense-nature vouchers only)
     ic_tv = "substr(tv.voucher_date,7,4)||'-'||substr(tv.voucher_date,4,2)||'-'||substr(tv.voucher_date,1,2)"
     weekly_exp_rows = db.execute(f"""
         SELECT date({ic_tv}, 'weekday 1', '-6 days') as week_start,
@@ -4531,7 +4531,7 @@ def tally_dashboard():
         FROM tally_vouchers tv
         JOIN tally_ledgers tl ON tv.ledger_id=tl.id
         JOIN tally_groups tg ON tl.group_id=tg.id
-        WHERE tg.nature='Expense' AND COALESCE(tv.type,'Payment')='Payment'
+        WHERE tg.nature='Expense'
           AND {ic_tv} >= ? AND {ic_tv} <= ?
         GROUP BY week_start ORDER BY week_start
     """, (mo_s_iso, mo_e_iso)).fetchall()
@@ -4577,6 +4577,10 @@ def tally_dashboard():
 @admin_required
 def tally_report():
     db = get_db()
+    # Ensure HO REMITTANCE is Liability (balance-sheet transfer, not a P&L expense)
+    db.execute("UPDATE tally_groups SET nature='Liability' WHERE name='HO REMITTANCE' AND nature='Expense'")
+    db.commit()
+
     from_date = request.args.get('from_date', '')
     to_date   = request.args.get('to_date', '')
     from_iso  = _to_iso(from_date) if from_date else ''
@@ -4618,7 +4622,7 @@ def tally_report():
     """, p2).fetchall()
 
     ic_tv = "substr(tv.voucher_date,7,4)||'-'||substr(tv.voucher_date,4,2)||'-'||substr(tv.voucher_date,1,2)"
-    conds3, p3 = ["tg.nature='Expense'", "COALESCE(tv.type,'Payment')='Payment'"], []
+    conds3, p3 = ["tg.nature='Expense'"], []
     if from_iso: conds3.append(f"{ic_tv} >= ?"); p3.append(from_iso)
     if to_iso:   conds3.append(f"{ic_tv} <= ?"); p3.append(to_iso)
     w3 = ' AND '.join(conds3)

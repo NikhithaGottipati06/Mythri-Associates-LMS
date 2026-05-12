@@ -37,7 +37,7 @@ EXPENSE_GROUPS = [
     ('GENERAL & OFFICE MAINTANANCE', 'Expense',  5),
     ('COMPUTER & ACCESSORIES',       'Expense',  6),
     ('FURNITURE AND FIXURES',        'Expense',  7),
-    ('HO REMITTANCE',                'Expense',  8),
+    ('HO REMITTANCE',                'Liability',  8),
     ('INTREST PAID ON REMITTANCE',   'Expense',  9),
     ('SPECIAL ALLOWANCES',           'Expense', 10),
     ('Insurance',                    'Expense', 11),
