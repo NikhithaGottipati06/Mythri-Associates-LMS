@@ -4449,7 +4449,7 @@ def _tally_expenses(db, from_iso, to_iso):
     """Return list of rows with (name, nature, total) for manual vouchers in the date range."""
     def ic(col):
         return f"substr({col},7,4)||'-'||substr({col},4,2)||'-'||substr({col},1,2)"
-    conds, p = ["1=1"], []
+    conds, p = ["tg.nature='Expense'", "COALESCE(tv.type,'Payment')='Payment'"], []
     if from_iso: conds.append(f"{ic('tv.voucher_date')} >= ?"); p.append(from_iso)
     if to_iso:   conds.append(f"{ic('tv.voucher_date')} <= ?"); p.append(to_iso)
     where = ' AND '.join(conds)
@@ -4523,13 +4523,16 @@ def tally_dashboard():
         GROUP BY week_start ORDER BY week_start
     """, (mo_s_iso, mo_e_iso)).fetchall()
 
-    # Build weekly expense per week_start
+    # Build weekly expense per week_start (Expense-nature Payment-type vouchers only)
     ic_tv = "substr(tv.voucher_date,7,4)||'-'||substr(tv.voucher_date,4,2)||'-'||substr(tv.voucher_date,1,2)"
     weekly_exp_rows = db.execute(f"""
         SELECT date({ic_tv}, 'weekday 1', '-6 days') as week_start,
                COALESCE(SUM(tv.amount),0) as exp
         FROM tally_vouchers tv
-        WHERE {ic_tv} >= ? AND {ic_tv} <= ?
+        JOIN tally_ledgers tl ON tv.ledger_id=tl.id
+        JOIN tally_groups tg ON tl.group_id=tg.id
+        WHERE tg.nature='Expense' AND COALESCE(tv.type,'Payment')='Payment'
+          AND {ic_tv} >= ? AND {ic_tv} <= ?
         GROUP BY week_start ORDER BY week_start
     """, (mo_s_iso, mo_e_iso)).fetchall()
 
@@ -4615,14 +4618,17 @@ def tally_report():
     """, p2).fetchall()
 
     ic_tv = "substr(tv.voucher_date,7,4)||'-'||substr(tv.voucher_date,4,2)||'-'||substr(tv.voucher_date,1,2)"
-    conds3, p3 = [], []
+    conds3, p3 = ["tg.nature='Expense'", "COALESCE(tv.type,'Payment')='Payment'"], []
     if from_iso: conds3.append(f"{ic_tv} >= ?"); p3.append(from_iso)
     if to_iso:   conds3.append(f"{ic_tv} <= ?"); p3.append(to_iso)
-    w3 = (' AND '.join(conds3)) if conds3 else '1=1'
+    w3 = ' AND '.join(conds3)
     weekly_exp_rows = db.execute(f"""
         SELECT date({ic_tv}, 'weekday 1', '-6 days') as week_start,
                COALESCE(SUM(tv.amount),0) as exp
-        FROM tally_vouchers tv WHERE {w3}
+        FROM tally_vouchers tv
+        JOIN tally_ledgers tl ON tv.ledger_id=tl.id
+        JOIN tally_groups tg ON tl.group_id=tg.id
+        WHERE {w3}
         GROUP BY week_start ORDER BY week_start
     """, p3).fetchall()
 
