@@ -4445,14 +4445,22 @@ def _tally_income(db, from_iso, to_iso):
         f"SELECT COALESCE(SUM(rp.interest),0) FROM recovery_postings rp WHERE rp.installment_no>0 AND {c_rp}", p_rp
     ).fetchone()[0]
 
-    c_ld, p_ld = between('ld.disbursement_date')
+    # Use disbursement_date when available, fall back to applied_date for NULL-dated loans
+    eff = "COALESCE(ld.disbursement_date, la.applied_date)"
+    eff_ic = f"substr({eff},7,4)||'-'||substr({eff},4,2)||'-'||substr({eff},1,2)"
+    fee_conds, p_fee = [], []
+    if from_iso: fee_conds.append(f"{eff_ic} >= ?"); p_fee.append(from_iso)
+    if to_iso:   fee_conds.append(f"{eff_ic} <= ?"); p_fee.append(to_iso)
+    c_fee = ' AND '.join(fee_conds) if fee_conds else '1=1'
+    p_fee = tuple(p_fee)
+
     proc = db.execute(
         f"SELECT COALESCE(SUM(la.processing_fee),0) FROM loan_disbursements ld "
-        f"LEFT JOIN loan_applications la ON ld.application_id=la.id WHERE {c_ld}", p_ld
+        f"LEFT JOIN loan_applications la ON ld.application_id=la.id WHERE {c_fee}", p_fee
     ).fetchone()[0]
     ins = db.execute(
         f"SELECT COALESCE(SUM(la.insurance_fee+la.nominee_insurance_fee),0) FROM loan_disbursements ld "
-        f"LEFT JOIN loan_applications la ON ld.application_id=la.id WHERE {c_ld}", p_ld
+        f"LEFT JOIN loan_applications la ON ld.application_id=la.id WHERE {c_fee}", p_fee
     ).fetchone()[0]
 
     c_m, p_m = between('m.date_of_join')
@@ -4574,7 +4582,8 @@ def tally_dashboard():
         GROUP BY week_start ORDER BY week_start
     """, (mo_s_iso, mo_e_iso)).fetchall()
 
-    ic_ld = "substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2)"
+    _eff_ld = "COALESCE(ld.disbursement_date, la.applied_date)"
+    ic_ld = f"substr({_eff_ld},7,4)||'-'||substr({_eff_ld},4,2)||'-'||substr({_eff_ld},1,2)"
     weekly_fees = db.execute(f"""
         SELECT
             date({ic_ld}, 'weekday 1', '-6 days') as week_start,
@@ -4678,7 +4687,8 @@ def tally_report():
             GROUP BY week_start ORDER BY week_start
         """, p).fetchall()
 
-        ic_ld = "substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2)"
+        _eff_ld2 = "COALESCE(ld.disbursement_date, la.applied_date)"
+        ic_ld = f"substr({_eff_ld2},7,4)||'-'||substr({_eff_ld2},4,2)||'-'||substr({_eff_ld2},1,2)"
         conds2, p2 = [], []
         if from_iso: conds2.append(f"{ic_ld} >= ?"); p2.append(from_iso)
         if to_iso:   conds2.append(f"{ic_ld} <= ?"); p2.append(to_iso)
