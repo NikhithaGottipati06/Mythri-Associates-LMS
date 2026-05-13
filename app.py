@@ -5035,110 +5035,92 @@ def tally_ledger_delete(lid):
 @admin_required
 def tally_trial_balance():
     import traceback as _tb
-    db  = get_db()
+    db = get_db()
     try:
-      _ensure_fee_paid_date_col(db)
-      raw = request.args.get('as_at', '').strip()
-      try:
-        as_at_iso = datetime.strptime(raw, '%d/%m/%Y').strftime('%Y-%m-%d')
-      except Exception:
-        as_at_iso = datetime.now().strftime('%Y-%m-%d')
-      as_at_display = datetime.strptime(as_at_iso, '%Y-%m-%d').strftime('%d/%m/%Y')
+        _ensure_fee_paid_date_col(db)
+        raw = request.args.get('as_at', '').strip()
+        try:
+            as_at_iso = datetime.strptime(raw, '%d/%m/%Y').strftime('%Y-%m-%d')
+        except Exception:
+            as_at_iso = datetime.now().strftime('%Y-%m-%d')
+        as_at_display = datetime.strptime(as_at_iso, '%Y-%m-%d').strftime('%d/%m/%Y')
 
-    # Date-column converter: stored as DD/MM/YYYY → compare as YYYY-MM-DD
-    def ic(col):
-        return f"substr({col},7,4)||'-'||substr({col},4,2)||'-'||substr({col},1,2)"
+        def ic(col):
+            return f"substr({col},7,4)||'-'||substr({col},4,2)||'-'||substr({col},1,2)"
 
-    def scalar(sql, p=()):
-        r = db.execute(sql, p).fetchone()
-        return (r[0] or 0) if r else 0
+        def scalar(sql, p=()):
+            r = db.execute(sql, p).fetchone()
+            return (r[0] or 0) if r else 0
 
-    # ── Balance-sheet items ───────────────────────────────────────────────────
-    # Loans Outstanding (Asset DR) = disbursed − principal recovered (inception → as_at)
-    disbursed  = scalar(
-        f"SELECT COALESCE(SUM(disbursed_amount),0) FROM loan_disbursements "
-        f"WHERE {ic('disbursement_date')} <= ?", (as_at_iso,))
-    recovered  = scalar(
-        f"SELECT COALESCE(SUM(principal),0) FROM recovery_postings "
-        f"WHERE installment_no>0 AND {ic('posting_date')} <= ?", (as_at_iso,))
-    loans_outstanding = max(disbursed - recovered, 0)
+        disbursed = scalar(
+            f"SELECT COALESCE(SUM(disbursed_amount),0) FROM loan_disbursements "
+            f"WHERE {ic('disbursement_date')} <= ?", (as_at_iso,))
+        recovered = scalar(
+            f"SELECT COALESCE(SUM(principal),0) FROM recovery_postings "
+            f"WHERE installment_no>0 AND {ic('posting_date')} <= ?", (as_at_iso,))
+        loans_outstanding = max(disbursed - recovered, 0)
 
-    # Member Savings (Liability CR) = total deposits − withdrawals
-    sav_dep = scalar(
-        f"SELECT COALESCE(SUM(deposit_amount),0)  FROM savings_transactions WHERE {ic('transaction_date')} <= ?",
-        (as_at_iso,))
-    sav_wit = scalar(
-        f"SELECT COALESCE(SUM(withdraw_amount),0) FROM savings_transactions WHERE {ic('transaction_date')} <= ?",
-        (as_at_iso,))
-    member_savings = max(sav_dep - sav_wit, 0)
+        sav_dep = scalar(
+            f"SELECT COALESCE(SUM(deposit_amount),0) FROM savings_transactions WHERE {ic('transaction_date')} <= ?",
+            (as_at_iso,))
+        sav_wit = scalar(
+            f"SELECT COALESCE(SUM(withdraw_amount),0) FROM savings_transactions WHERE {ic('transaction_date')} <= ?",
+            (as_at_iso,))
+        member_savings = max(sav_dep - sav_wit, 0)
 
-    # ── Income (Credit) — from inception to as_at ─────────────────────────────
-    income = _tally_income(db, None, as_at_iso)
+        income = _tally_income(db, None, as_at_iso)
 
-    penalty = scalar(
-        f"SELECT COALESCE(SUM(penalty),0) FROM recovery_postings "
-        f"WHERE installment_no>0 AND {ic('posting_date')} <= ?", (as_at_iso,))
+        penalty = scalar(
+            f"SELECT COALESCE(SUM(penalty),0) FROM recovery_postings "
+            f"WHERE installment_no>0 AND {ic('posting_date')} <= ?", (as_at_iso,))
 
-    principal_recovered = scalar(
-        f"SELECT COALESCE(SUM(principal),0) FROM recovery_postings "
-        f"WHERE installment_no>0 AND {ic('posting_date')} <= ?", (as_at_iso,))
+        voucher_groups = _tally_all_voucher_groups(db, None, as_at_iso)
 
-    # ── Manual vouchers — routed by actual group nature ───────────────────────
-    voucher_groups = _tally_all_voucher_groups(db, None, as_at_iso)
+        debit = []
+        credit = []
 
-    # ── Build DR / CR rows ────────────────────────────────────────────────────
-    debit = []   # Asset + Expense  → right "Assets" column
-    credit = []  # Liability + Income + Capital → left "Liabilities" column
+        if loans_outstanding:
+            debit.append({'name': 'Loans Outstanding to Members', 'nature': 'Asset', 'amount': loans_outstanding})
+        if member_savings:
+            credit.append({'name': 'Member Savings', 'nature': 'Liability', 'amount': member_savings})
+        if income['membership_fee']:
+            credit.append({'name': 'Membership Fees', 'nature': 'Income', 'amount': income['membership_fee']})
+        if penalty:
+            credit.append({'name': 'Penalty / Fine Income', 'nature': 'Income', 'amount': penalty})
 
-    # Assets (DR)
-    if loans_outstanding:
-        debit.append({'name': 'Loans Outstanding to Members', 'nature': 'Asset', 'amount': loans_outstanding})
+        for row in voucher_groups:
+            grp_name, nature, total = row['name'], row['nature'], row['total']
+            if not total:
+                continue
+            if nature in ('Asset', 'Expense'):
+                debit.append({'name': grp_name, 'nature': nature, 'amount': total})
+            else:
+                credit.append({'name': grp_name, 'nature': nature, 'amount': total})
 
-    # Liabilities (CR)
-    if member_savings:
-        credit.append({'name': 'Member Savings',                        'nature': 'Liability', 'amount': member_savings})
+        total_dr = sum(r['amount'] for r in debit)
+        total_cr = sum(r['amount'] for r in credit)
 
-    # Auto Income (CR) — membership fee and penalty only
-    if income['membership_fee']:
-        credit.append({'name': 'Membership Fees',    'nature': 'Income', 'amount': income['membership_fee']})
-    if penalty:
-        credit.append({'name': 'Penalty / Fine Income', 'nature': 'Income', 'amount': penalty})
+        diff = round(total_dr - total_cr, 2)
+        if diff > 0:
+            credit.append({'name': 'Surplus (Net Profit)', 'nature': 'Capital', 'amount': diff})
+            total_cr = total_dr
+        elif diff < 0:
+            debit.append({'name': 'Deficit (Net Loss)', 'nature': 'Capital', 'amount': -diff})
+            total_dr = total_cr
 
-    # Manual vouchers → routed by the ledger group's actual nature
-    for row in voucher_groups:
-        grp_name, nature, total = row['name'], row['nature'], row['total']
-        if not total:
-            continue
-        if nature in ('Asset', 'Expense'):
-            debit.append({'name': grp_name, 'nature': nature, 'amount': total})
-        else:  # Liability, Income, Capital
-            credit.append({'name': grp_name, 'nature': nature, 'amount': total})
+        total_inc = (income['membership_fee'] + penalty +
+                     sum(row['total'] for row in voucher_groups if row['nature'] == 'Income'))
+        total_exp = sum(row['total'] for row in voucher_groups if row['nature'] == 'Expense')
 
-    total_dr = sum(r['amount'] for r in debit)
-    total_cr = sum(r['amount'] for r in credit)
-
-    # Balancing figure
-    diff = round(total_dr - total_cr, 2)
-    if diff > 0:
-        credit.append({'name': 'Surplus (Net Profit)',  'nature': 'Capital', 'amount': diff})
-        total_cr = total_dr
-    elif diff < 0:
-        debit.append({'name':  'Deficit (Net Loss)',    'nature': 'Capital', 'amount': -diff})
-        total_dr = total_cr
-
-    total_inc = (income['membership_fee'] + penalty +
-                 sum(row['total'] for row in voucher_groups if row['nature'] == 'Income'))
-    total_exp = sum(row['total'] for row in voucher_groups if row['nature'] == 'Expense')
-
-      db.close()
-      return render_template('tally/trial_balance.html',
-          debit=debit, credit=credit,
-          total_dr=total_dr, total_cr=total_cr,
-          as_at=as_at_display,
-          disbursed=disbursed, recovered=recovered,
-          total_income=total_inc,
-          total_expenses=total_exp,
-      )
+        db.close()
+        return render_template('tally/trial_balance.html',
+            debit=debit, credit=credit,
+            total_dr=total_dr, total_cr=total_cr,
+            as_at=as_at_display,
+            disbursed=disbursed, recovered=recovered,
+            total_income=total_inc,
+            total_expenses=total_exp,
+        )
     except Exception:
         return (f"<pre style='color:red;padding:20px'>"
                 f"<b>Trial Balance Error — please share this with support:</b>\n\n"
