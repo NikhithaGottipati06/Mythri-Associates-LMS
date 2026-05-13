@@ -4500,10 +4500,10 @@ def _ensure_fee_paid_date_col(db):
 
 
 def _tally_expenses(db, from_iso, to_iso):
-    """Return Expense-nature Payment-type manual vouchers grouped by group, for P&L."""
+    """Return Expense-nature manual vouchers grouped by group, for P&L."""
     def ic(col):
         return f"substr({col},7,4)||'-'||substr({col},4,2)||'-'||substr({col},1,2)"
-    conds, p = ["tg.nature='Expense'", "(tv.type IS NULL OR tv.type='Payment')"], []
+    conds, p = ["tg.nature='Expense'"], []
     if from_iso: conds.append(f"{ic('tv.voucher_date')} >= ?"); p.append(from_iso)
     if to_iso:   conds.append(f"{ic('tv.voucher_date')} <= ?"); p.append(to_iso)
     where = ' AND '.join(conds)
@@ -4518,10 +4518,10 @@ def _tally_expenses(db, from_iso, to_iso):
 
 
 def _tally_manual_income(db, from_iso, to_iso):
-    """Return Receipt-type manual vouchers grouped by group, for P&L income section."""
+    """Return Income-nature manual vouchers grouped by group, for P&L income section."""
     def ic(col):
         return f"substr({col},7,4)||'-'||substr({col},4,2)||'-'||substr({col},1,2)"
-    conds, p = ["tv.type='Receipt'"], []
+    conds, p = ["tg.nature='Income'"], []
     if from_iso: conds.append(f"{ic('tv.voucher_date')} >= ?"); p.append(from_iso)
     if to_iso:   conds.append(f"{ic('tv.voucher_date')} <= ?"); p.append(to_iso)
     where = ' AND '.join(conds)

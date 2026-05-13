@@ -52,7 +52,7 @@
             <td class="text-end">₹{{ "%.2f"|format(income.membership_fee) }}</td>
           </tr>
           {% if manual_rec_rows %}
-          <tr class="text-muted small"><td colspan="2" class="pb-0 pt-2"><em>Manual Receipts</em></td></tr>
+          <tr class="text-muted small"><td colspan="2" class="pb-0 pt-2"><em>Other Income (Manual)</em></td></tr>
           {% for r in manual_rec_rows %}
           <tr>
             <td>{{ r.name }}</td>
