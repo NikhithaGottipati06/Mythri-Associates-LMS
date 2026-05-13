@@ -4674,6 +4674,7 @@ def tally_report():
         return "Error: No branch database in session — please log out and log in again.", 500
     try:
         _ensure_voucher_type_col(db)
+        _ensure_fee_paid_date_col(db)
         db.execute("UPDATE tally_groups SET nature='Liability' WHERE name='HO REMITTANCE' AND nature='Expense'")
         db.commit()
 
@@ -4990,6 +4991,7 @@ def tally_ledger_delete(lid):
 @admin_required
 def tally_trial_balance():
     db  = get_db()
+    _ensure_fee_paid_date_col(db)
     raw = request.args.get('as_at', '').strip()
     try:
         as_at_iso = datetime.strptime(raw, '%d/%m/%Y').strftime('%Y-%m-%d')
@@ -5091,6 +5093,8 @@ def tally_trial_balance():
         total_income=total_inc,
         total_expenses=total_exp,
     )
+
+
 
 
 if __name__ == '__main__':
