@@ -4,7 +4,9 @@
 <div class="page-header">
   <i class="bi bi-arrow-left-right" style="font-size:20px;color:#1a3c6e;"></i>
   <h5>Receipts &amp; Payments Statement
-    <small class="text-muted fw-normal fs-6">{{ from_date }} to {{ to_date }}</small>
+    <small class="text-muted fw-normal fs-6">
+      {% if all_time %}All Time{% else %}{{ from_date }} to {{ to_date }}{% endif %}
+    </small>
   </h5>
 </div>
 
@@ -24,6 +26,7 @@
     </div>
     <div class="col-auto">
       <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>Show</button>
+      <a href="{{ url_for('tally_rp_statement') }}" class="btn btn-outline-secondary btn-sm ms-1">All Time</a>
     </div>
     <div class="col-auto ms-auto d-flex gap-2 align-items-center">
       <!-- Consolidated / Detailed toggle -->

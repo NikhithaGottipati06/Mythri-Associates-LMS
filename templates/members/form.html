@@ -222,29 +222,27 @@
         </div>
       </div>
 
-      {% if not member %}
       <div class="form-card mt-3">
         <div class="section-title">Membership Fees</div>
         <div class="row g-3">
           <div class="col-12">
             <label class="form-label">Total Fees</label>
-            <input type="number" name="total_fees" class="form-control" step="0.01" value="0">
+            <input type="number" name="total_fees" class="form-control" step="0.01" value="{{ member.total_fees if member else 0 }}">
           </div>
           <div class="col-12">
             <label class="form-label">Mode</label>
             <select name="fee_mode" class="form-select">
-              <option value="Cash">Cash</option>
-              <option value="Bank Transfer">Bank Transfer</option>
-              <option value="Cheque">Cheque</option>
+              <option value="Cash" {{ 'selected' if not member or member.fee_mode == 'Cash' }}>Cash</option>
+              <option value="Bank Transfer" {{ 'selected' if member and member.fee_mode == 'Bank Transfer' }}>Bank Transfer</option>
+              <option value="Cheque" {{ 'selected' if member and member.fee_mode == 'Cheque' }}>Cheque</option>
             </select>
           </div>
           <div class="col-12">
             <label class="form-label">Narration</label>
-            <input type="text" name="fee_narration" class="form-control" value="Cash">
+            <input type="text" name="fee_narration" class="form-control" value="{{ member.fee_narration if member else 'Cash' }}">
           </div>
         </div>
       </div>
-      {% endif %}
     </div>
   </div>
 

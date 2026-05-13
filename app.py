@@ -1205,6 +1205,14 @@ def prepaid_types_delete(pid):
 @login_required
 def loan_applications_list():
     db = get_db()
+    # Fix any stale 'Approved' status where disbursement already exists
+    db.execute("""
+        UPDATE loan_applications SET status='Disbursed'
+        WHERE status='Approved'
+        AND id IN (SELECT application_id FROM loan_disbursements)
+    """)
+    db.commit()
+
     apps = db.execute("""
         SELECT la.*, m.full_name as member_name, m.member_code,
                c.center_name, c.center_code as c_code, c.meeting_type as center_type,
@@ -1367,7 +1375,7 @@ def loan_approvals_list():
         LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
         LEFT JOIN loan_approvals apr ON apr.application_id=la.id
         LEFT JOIN users u ON apr.approved_by=u.id
-        WHERE la.status IN ('Approved','Rejected') ORDER BY la.id DESC
+        WHERE la.status IN ('Approved','Rejected','Disbursed') ORDER BY la.id DESC
     """).fetchall()
     db.close()
     return render_template('loans/approvals/list.html', pending=pending, approved=approved)
@@ -4809,16 +4817,16 @@ def tally_rp_statement():
 
     from_iso = to_iso(raw_from)
     to_iso_  = to_iso(raw_to)
-    if not from_iso:
-        from_iso = datetime.now().replace(day=1).strftime('%Y-%m-%d')
-    if not to_iso_:
-        to_iso_  = datetime.now().strftime('%Y-%m-%d')
+    all_time = not from_iso and not to_iso_
 
     def ic(col):
         return f"substr({col},7,4)||'-'||substr({col},4,2)||'-'||substr({col},1,2)"
 
-    date_cond = f"{ic('tv.voucher_date')} BETWEEN ? AND ?"
-    params = [from_iso, to_iso_]
+    # Build dynamic date conditions for manual vouchers
+    v_conds, params = ["1=1"], []
+    if from_iso: v_conds.append(f"{ic('tv.voucher_date')} >= ?"); params.append(from_iso)
+    if to_iso_:  v_conds.append(f"{ic('tv.voucher_date')} <= ?"); params.append(to_iso_)
+    date_cond = ' AND '.join(v_conds)
 
     if consolidated:
         receipt_rows = db.execute(f"""
@@ -4863,12 +4871,15 @@ def tally_rp_statement():
             ORDER BY tg.sort_order, {ic('tv.voucher_date')}
         """, params).fetchall()
 
-    # Also include auto-income from LMS on the receipt side
-    lms_income = _tally_income(db, from_iso, to_iso_)
+    # LMS auto-income — pass empty strings for All Time (same as P&L)
+    lms_income = _tally_income(db, from_iso or '', to_iso_ or '')
+
+    pen_conds, pen_p = [f"rp.installment_no>0"], []
+    if from_iso: pen_conds.append(f"{ic('rp.posting_date')} >= ?"); pen_p.append(from_iso)
+    if to_iso_:  pen_conds.append(f"{ic('rp.posting_date')} <= ?"); pen_p.append(to_iso_)
     lms_penalty = db.execute(
-        f"SELECT COALESCE(SUM(penalty),0) FROM recovery_postings rp "
-        f"WHERE rp.installment_no>0 AND {ic('rp.posting_date')} BETWEEN ? AND ?",
-        (from_iso, to_iso_)
+        f"SELECT COALESCE(SUM(penalty),0) FROM recovery_postings rp WHERE {' AND '.join(pen_conds)}",
+        pen_p
     ).fetchone()[0] or 0
 
     from collections import defaultdict
@@ -4884,8 +4895,8 @@ def tally_rp_statement():
     total_receipts        = total_manual_receipts + total_lms_receipts
     total_payments        = sum(r[3] for r in payment_rows)
 
-    from_disp = datetime.strptime(from_iso,'%Y-%m-%d').strftime('%d/%m/%Y')
-    to_disp   = datetime.strptime(to_iso_,'%Y-%m-%d').strftime('%d/%m/%Y')
+    from_disp = datetime.strptime(from_iso,'%Y-%m-%d').strftime('%d/%m/%Y') if from_iso else ''
+    to_disp   = datetime.strptime(to_iso_,'%Y-%m-%d').strftime('%d/%m/%Y') if to_iso_ else ''
 
     db.close()
     return render_template('tally/receipts_payments.html',
@@ -4897,7 +4908,7 @@ def tally_rp_statement():
         total_payments=total_payments,
         net=total_receipts - total_payments,
         from_date=from_disp, to_date=to_disp,
-        consolidated=consolidated,
+        consolidated=consolidated, all_time=all_time,
     )
 
 
