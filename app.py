@@ -815,13 +815,14 @@ def members_new():
             num = 1
         code = f"M{num:04d}"
         try:
+            _ensure_fee_paid_date_col(db)
             db.execute("""
                 INSERT INTO members (member_code,center_id,grp,full_name,date_of_join,date_of_birth,
                 gender,marital_status,guardian_name,spouse_name,caste,religion,
                 address1,address2,city,mandal,pin_code,district,state,landmark,
                 phone1,phone2,email,notes,income,expenditure,total_fees,fee_mode,fee_narration,
-                kyc_type,kyc_number,status)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                fee_paid_date,kyc_type,kyc_number,status)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (code, request.form.get('center_id') or None,
                   request.form.get('grp', 1), request.form['full_name'],
                   request.form.get('date_of_join',''), request.form.get('date_of_birth',''),
@@ -837,6 +838,7 @@ def members_new():
                   request.form.get('income', 0), request.form.get('expenditure', 0),
                   request.form.get('total_fees', 0), request.form.get('fee_mode','Cash'),
                   request.form.get('fee_narration','Cash'),
+                  request.form.get('fee_paid_date', request.form.get('date_of_join','')),
                   request.form.get('kyc_type',''), request.form.get('kyc_number',''), 'ACTIVE'))
             db.commit()
             member_id = db.execute("SELECT id FROM members WHERE member_code=?", (code,)).fetchone()['id']
@@ -879,12 +881,13 @@ def members_edit(mid):
     member = db.execute("SELECT * FROM members WHERE id=?", (mid,)).fetchone()
     if request.method == 'POST':
         try:
+            _ensure_fee_paid_date_col(db)
             db.execute("""
                 UPDATE members SET center_id=?,grp=?,full_name=?,date_of_join=?,date_of_birth=?,
                 gender=?,marital_status=?,guardian_name=?,spouse_name=?,caste=?,religion=?,
                 address1=?,address2=?,city=?,mandal=?,pin_code=?,district=?,state=?,landmark=?,
                 phone1=?,phone2=?,email=?,notes=?,income=?,expenditure=?,total_fees=?,
-                fee_mode=?,fee_narration=?,kyc_type=?,kyc_number=? WHERE id=?
+                fee_mode=?,fee_narration=?,fee_paid_date=?,kyc_type=?,kyc_number=? WHERE id=?
             """, (request.form.get('center_id') or None, request.form.get('grp',1),
                   request.form['full_name'], request.form.get('date_of_join',''),
                   request.form.get('date_of_birth',''), request.form.get('gender',''),
@@ -899,6 +902,7 @@ def members_edit(mid):
                   request.form.get('notes',''), request.form.get('income',0),
                   request.form.get('expenditure',0), request.form.get('total_fees',0),
                   request.form.get('fee_mode','Cash'), request.form.get('fee_narration','Cash'),
+                  request.form.get('fee_paid_date', request.form.get('date_of_join','')),
                   request.form.get('kyc_type',''), request.form.get('kyc_number',''), mid))
             db.commit()
             code = db.execute("SELECT member_code FROM members WHERE id=?", (mid,)).fetchone()['member_code']
@@ -4463,7 +4467,7 @@ def _tally_income(db, from_iso, to_iso):
         f"LEFT JOIN loan_applications la ON ld.application_id=la.id WHERE {c_fee}", p_fee
     ).fetchone()[0]
 
-    c_m, p_m = between('m.date_of_join')
+    c_m, p_m = between('m.fee_paid_date')
     mem_fee = db.execute(
         f"SELECT COALESCE(SUM(m.total_fees),0) FROM members m WHERE {c_m}", p_m
     ).fetchone()[0]
@@ -4478,6 +4482,21 @@ def _ensure_voucher_type_col(db):
         db.commit()
     except Exception:
         pass  # column already exists
+
+
+def _ensure_fee_paid_date_col(db):
+    """Add fee_paid_date column to members if it doesn't exist yet."""
+    try:
+        db.execute("ALTER TABLE members ADD COLUMN fee_paid_date TEXT")
+        db.commit()
+    except Exception:
+        pass  # column already exists
+    # Back-fill: for members with a fee and no fee_paid_date, default to date_of_join
+    db.execute("""
+        UPDATE members SET fee_paid_date = date_of_join
+        WHERE fee_paid_date IS NULL AND (total_fees IS NOT NULL AND total_fees != 0)
+    """)
+    db.commit()
 
 
 def _tally_expenses(db, from_iso, to_iso):
@@ -4550,6 +4569,7 @@ def _week_label(iso_date_str):
 @admin_required
 def tally_dashboard():
     db = get_db()
+    _ensure_fee_paid_date_col(db)
     from datetime import datetime, timedelta
     today = datetime.now()
     # Current week (Mon-Sun)

@@ -230,6 +230,12 @@
             <input type="number" name="total_fees" class="form-control" step="0.01" value="{{ member.total_fees if member else 0 }}">
           </div>
           <div class="col-12">
+            <label class="form-label">Fee Collected On</label>
+            <input type="text" name="fee_paid_date" class="form-control fee-date-picker"
+                   placeholder="DD/MM/YYYY"
+                   value="{{ member.fee_paid_date if member and member.fee_paid_date else (member.date_of_join if member else '') }}">
+          </div>
+          <div class="col-12">
             <label class="form-label">Mode</label>
             <select name="fee_mode" class="form-select">
               <option value="Cash" {{ 'selected' if not member or member.fee_mode == 'Cash' }}>Cash</option>
@@ -312,6 +318,8 @@
 {% endif %}
 {% endblock %}
 {% block scripts %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
 function calcNet(){
   const inc = parseFloat(document.querySelector('[name=income]').value) || 0;
@@ -340,6 +348,13 @@ document.addEventListener('DOMContentLoaded', function() {
   dobInput.addEventListener('blur', function() { calcAge(this.value); });
   // Calculate on load for edit mode
   if (dobInput.value) calcAge(dobInput.value);
+
+  // Fee date pickers
+  flatpickr('.fee-date-picker', { dateFormat: 'd/m/Y', allowInput: true });
+  flatpickr('[name=date_of_join]', { dateFormat: 'd/m/Y', allowInput: true });
+  flatpickr('[name=date_of_birth]', { dateFormat: 'd/m/Y', allowInput: true,
+    onChange: function(dates, dateStr) { calcAge(dateStr); }
+  });
 });
 </script>
 {% endblock %}
