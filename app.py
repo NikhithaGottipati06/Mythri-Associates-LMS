@@ -286,6 +286,7 @@ def login():
                             session['branch_id']  = branch['id']
                             session['branch_name']= branch['name']
                             session['branch_db']  = branch['db_path']
+                            session['show_welcome'] = True
                             return redirect(url_for('dashboard'))
                         elif device['status'] == 'Blocked':
                             master2.close()
@@ -320,6 +321,7 @@ def login():
                                 session['branch_id']  = branch['id']
                                 session['branch_name']= branch['name']
                                 session['branch_db']  = branch['db_path']
+                                session['show_welcome'] = True
                                 resp = make_response(redirect(url_for('dashboard')))
                             elif device['status'] == 'Blocked':
                                 return render_template('login.html',
@@ -353,6 +355,7 @@ def login():
                             session['branch_id']  = branch['id']
                             session['branch_name']= branch['name']
                             session['branch_db']  = branch['db_path']
+                            session['show_welcome'] = True
                             resp = make_response(redirect(url_for('dashboard')))
                         else:
                             resp = make_response(redirect(url_for('device_pending')))
@@ -367,6 +370,14 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for('login'))
+
+@app.route('/_clear_flag', methods=['POST'])
+@login_required
+def clear_flag():
+    flag = request.json.get('flag', '') if request.is_json else request.form.get('flag', '')
+    if flag == 'welcome':
+        session.pop('show_welcome', None)
+    return '', 204
 
 @app.route('/developer')
 @developer_required
@@ -3160,9 +3171,8 @@ def day_end():
         db.execute("INSERT INTO day_end (day_date, closed_by, notes) VALUES (?,?,?)",
                    (day_date, session['user_id'], notes))
         db.commit()
-        flash(f'Day End completed for {day_date}. No further changes allowed for this date.', 'success')
         db.close()
-        return redirect(url_for('day_end'))
+        return redirect(url_for('day_end', celebrate=1))
 
     date_filter = request.args.get('date', datetime.now().strftime('%d/%m/%Y'))
     # Summary for selected date

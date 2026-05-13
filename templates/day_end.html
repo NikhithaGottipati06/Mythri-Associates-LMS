@@ -117,4 +117,77 @@ flatpickr("#dayDatePicker", {
   }
 });
 </script>
+
+{% if request.args.get('celebrate') %}
+<style>
+#balloonLayer { position:fixed; inset:0; pointer-events:none; z-index:99990; overflow:hidden; }
+.bl {
+  position:absolute; bottom:-120px; border-radius:50%;
+  animation: blFloat linear forwards;
+}
+.bl::after {
+  content:''; position:absolute; bottom:-14px; left:50%;
+  transform:translateX(-50%); width:1.5px; height:22px;
+  background:rgba(0,0,0,.25);
+}
+@keyframes blFloat {
+  0%   { transform: translateY(0)      rotate(-6deg); opacity:1; }
+  100% { transform: translateY(-115vh) rotate(6deg);  opacity:0; }
+}
+#celebrateBanner {
+  position:fixed; top:50%; left:50%;
+  transform: translate(-50%,-50%) scale(0);
+  background: linear-gradient(135deg,#f093fb,#f5576c);
+  color:#fff; padding:32px 52px; border-radius:22px;
+  font-size:26px; font-weight:700; text-align:center;
+  z-index:99995; box-shadow:0 20px 60px rgba(0,0,0,.3);
+  animation: cbBurst .55s .2s cubic-bezier(.34,1.56,.64,1) forwards;
+}
+@keyframes cbBurst {
+  to { transform: translate(-50%,-50%) scale(1); }
+}
+</style>
+
+<div id="balloonLayer"></div>
+<div id="celebrateBanner">
+  🎉 Hurray!<br>
+  <span style="font-size:17px;font-weight:400;opacity:.9;">Day has been ended successfully!</span>
+</div>
+
+<script>
+(function(){
+  var colors = ['#ff6b6b','#feca57','#48dbfb','#ff9ff3','#54a0ff','#5f27cd','#00d2d3','#ff9f43','#1dd1a1','#ee5a24'];
+  var layer  = document.getElementById('balloonLayer');
+  for (var i = 0; i < 22; i++) {
+    (function(idx){
+      setTimeout(function(){
+        var b = document.createElement('div');
+        b.className = 'bl';
+        var sz = 44 + Math.random() * 28;
+        b.style.cssText = [
+          'left:'  + (5 + Math.random() * 88) + '%',
+          'width:' + sz + 'px',
+          'height:'+ (sz * 1.2) + 'px',
+          'background:' + colors[Math.floor(Math.random() * colors.length)],
+          'animation-duration:' + (3.2 + Math.random() * 2.8) + 's'
+        ].join(';');
+        layer.appendChild(b);
+      }, idx * 130);
+    })(i);
+  }
+  /* dismiss banner after 3.5 s */
+  setTimeout(function(){
+    var banner = document.getElementById('celebrateBanner');
+    if (banner) {
+      banner.style.transition = 'all .45s';
+      banner.style.opacity = '0';
+      banner.style.transform = 'translate(-50%,-50%) scale(.7)';
+      setTimeout(function(){ banner.remove(); }, 450);
+    }
+  }, 3500);
+  /* clean URL */
+  history.replaceState({}, '', window.location.pathname);
+})();
+</script>
+{% endif %}
 {% endblock %}
