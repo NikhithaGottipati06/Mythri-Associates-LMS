@@ -11,6 +11,8 @@
 </div>
 
 <!-- Summary Cards -->
+{% set at_total = alltime_inc.interest + alltime_inc.processing_fee + alltime_inc.insurance_fee + alltime_inc.membership_fee %}
+{% set at_net   = at_total - alltime_exp %}
 <div class="row g-3 mb-4">
   <div class="col-6 col-md-3">
     <div class="card text-center border-0 shadow-sm h-100" style="border-left:4px solid #198754 !important;">
@@ -23,46 +25,44 @@
   <div class="col-6 col-md-3">
     <div class="card text-center border-0 shadow-sm h-100" style="border-left:4px solid #0d6efd !important;">
       <div class="card-body py-3">
-        <div class="text-muted small mb-1">This Month – Interest</div>
-        <div class="fw-bold fs-5 text-primary">₹{{ "%.2f"|format(month_inc.interest) }}</div>
+        <div class="text-muted small mb-1">All Time – Interest</div>
+        <div class="fw-bold fs-5 text-primary">₹{{ "%.2f"|format(alltime_inc.interest) }}</div>
       </div>
     </div>
   </div>
   <div class="col-6 col-md-3">
     <div class="card text-center border-0 shadow-sm h-100" style="border-left:4px solid #fd7e14 !important;">
       <div class="card-body py-3">
-        <div class="text-muted small mb-1">This Month – Total Income</div>
-        {% set m_total = month_inc.interest + month_inc.processing_fee + month_inc.insurance_fee + month_inc.membership_fee %}
-        <div class="fw-bold fs-5" style="color:#fd7e14;">₹{{ "%.2f"|format(m_total) }}</div>
+        <div class="text-muted small mb-1">All Time – Total Income</div>
+        <div class="fw-bold fs-5" style="color:#fd7e14;">₹{{ "%.2f"|format(at_total) }}</div>
       </div>
     </div>
   </div>
   <div class="col-6 col-md-3">
-    <div class="card text-center border-0 shadow-sm h-100" style="border-left:4px solid {% if (m_total - month_exp) >= 0 %}#198754{% else %}#dc3545{% endif %} !important;">
+    <div class="card text-center border-0 shadow-sm h-100" style="border-left:4px solid {% if at_net >= 0 %}#198754{% else %}#dc3545{% endif %} !important;">
       <div class="card-body py-3">
-        <div class="text-muted small mb-1">This Month – Net Profit</div>
-        {% set net = m_total - month_exp %}
-        <div class="fw-bold fs-5 {% if net >= 0 %}text-success{% else %}text-danger{% endif %}">₹{{ "%.2f"|format(net) }}</div>
+        <div class="text-muted small mb-1">All Time – Net Profit</div>
+        <div class="fw-bold fs-5 {% if at_net >= 0 %}text-success{% else %}text-danger{% endif %}">₹{{ "%.2f"|format(at_net) }}</div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Income breakdown this month -->
+<!-- Income breakdown -->
 <div class="row g-3 mb-4">
   <div class="col-md-6">
     <div class="form-card">
-      <div class="section-title">{{ month_label }} – Income Breakdown</div>
+      <div class="section-title">All Time – Income Breakdown</div>
       <table class="table table-sm mb-0">
         <tbody>
-          <tr><td>Interest on Loans</td><td class="text-end fw-semibold text-success">₹{{ "%.2f"|format(month_inc.interest) }}</td></tr>
-          <tr><td>Processing Fee</td><td class="text-end">₹{{ "%.2f"|format(month_inc.processing_fee) }}</td></tr>
-          <tr><td>Insurance Fee</td><td class="text-end">₹{{ "%.2f"|format(month_inc.insurance_fee) }}</td></tr>
-          <tr><td>Membership Fee</td><td class="text-end">₹{{ "%.2f"|format(month_inc.membership_fee) }}</td></tr>
-          <tr class="table-light fw-bold border-top"><td>Total Income</td><td class="text-end text-primary">₹{{ "%.2f"|format(m_total) }}</td></tr>
-          <tr><td>Total Expenses</td><td class="text-end text-danger">₹{{ "%.2f"|format(month_exp) }}</td></tr>
-          <tr class="fw-bold {% if (m_total-month_exp)>=0 %}table-success{% else %}table-danger{% endif %}">
-            <td>Net Profit</td><td class="text-end">₹{{ "%.2f"|format(m_total - month_exp) }}</td>
+          <tr><td>Interest on Loans</td><td class="text-end fw-semibold text-success">₹{{ "%.2f"|format(alltime_inc.interest) }}</td></tr>
+          <tr><td>Processing Fee</td><td class="text-end">₹{{ "%.2f"|format(alltime_inc.processing_fee) }}</td></tr>
+          <tr><td>Insurance Fee</td><td class="text-end">₹{{ "%.2f"|format(alltime_inc.insurance_fee) }}</td></tr>
+          <tr><td>Membership Fee</td><td class="text-end">₹{{ "%.2f"|format(alltime_inc.membership_fee) }}</td></tr>
+          <tr class="table-light fw-bold border-top"><td>Total Income</td><td class="text-end text-primary">₹{{ "%.2f"|format(at_total) }}</td></tr>
+          <tr><td>Total Expenses</td><td class="text-end text-danger">₹{{ "%.2f"|format(alltime_exp) }}</td></tr>
+          <tr class="fw-bold {% if at_net >= 0 %}table-success{% else %}table-danger{% endif %}">
+            <td>Net Profit</td><td class="text-end">₹{{ "%.2f"|format(at_net) }}</td>
           </tr>
         </tbody>
       </table>
@@ -91,7 +91,7 @@
 
 <!-- Weekly breakdown table -->
 <div class="form-card">
-  <div class="section-title">Week-wise Breakdown – {{ month_label }}</div>
+  <div class="section-title">Week-wise Interest Breakdown – {{ month_label }}</div>
   {% if weekly %}
   <div class="table-responsive">
     <table class="table table-sm table-hover align-middle mb-0">

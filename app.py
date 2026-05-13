@@ -4625,11 +4625,13 @@ def tally_dashboard():
     mo_s_iso = mo_start.strftime('%Y-%m-%d')
     mo_e_iso = mo_end.strftime('%Y-%m-%d')
 
-    week_inc  = _tally_income(db, wk_s_iso, wk_e_iso)
-    month_inc = _tally_income(db, mo_s_iso, mo_e_iso)
+    week_inc     = _tally_income(db, wk_s_iso, wk_e_iso)
+    month_inc    = _tally_income(db, mo_s_iso, mo_e_iso)
+    alltime_inc  = _tally_income(db, '', '')
 
-    week_exp  = sum(r['total'] for r in _tally_expenses(db, wk_s_iso, wk_e_iso))
-    month_exp = sum(r['total'] for r in _tally_expenses(db, mo_s_iso, mo_e_iso))
+    week_exp     = sum(r['total'] for r in _tally_expenses(db, wk_s_iso, wk_e_iso))
+    month_exp    = sum(r['total'] for r in _tally_expenses(db, mo_s_iso, mo_e_iso))
+    alltime_exp  = sum(r['total'] for r in _tally_expenses(db, '', ''))
 
     # Weekly breakdown for current month (group by ISO week Mon start)
     ic = "substr(rp.posting_date,7,4)||'-'||substr(rp.posting_date,4,2)||'-'||substr(rp.posting_date,1,2)"
@@ -4698,8 +4700,8 @@ def tally_dashboard():
 
     db.close()
     return render_template('tally/dashboard.html',
-        week_inc=week_inc, month_inc=month_inc,
-        week_exp=week_exp, month_exp=month_exp,
+        week_inc=week_inc, month_inc=month_inc, alltime_inc=alltime_inc,
+        week_exp=week_exp, month_exp=month_exp, alltime_exp=alltime_exp,
         weekly=weekly,
         month_label=today.strftime('%B %Y'),
         expense_ledgers=expense_ledgers)
