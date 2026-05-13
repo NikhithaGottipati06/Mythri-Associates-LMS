@@ -808,10 +808,10 @@ def _save_member_file(file, member_code, prefix):
 def members_new():
     db = get_db()
     if request.method == 'POST':
-        join_date = request.form.get('date_of_join', '')
-        if join_date and _is_day_locked(db, join_date):
+        blocked, ldate = _day_lock_check(db, request.form.get('date_of_join', ''))
+        if blocked:
             db.close()
-            flash(f'{join_date} is locked (Day End done). Undo Day End to make changes.', 'danger')
+            flash(f'{ldate} is locked (Day End done). Undo Day End to make changes.', 'danger')
             return redirect(url_for('members_list'))
         last = db.execute("SELECT member_code FROM members ORDER BY id DESC LIMIT 1").fetchone()
         if last:
@@ -885,9 +885,10 @@ def members_edit(mid):
     db = get_db()
     member = db.execute("SELECT * FROM members WHERE id=?", (mid,)).fetchone()
     if request.method == 'POST':
-        if _is_day_locked(db, member['date_of_join']):
+        blocked, ldate = _day_lock_check(db, member['date_of_join'])
+        if blocked:
             db.close()
-            flash(f"{member['date_of_join']} is locked (Day End done). Undo Day End to make changes.", 'danger')
+            flash(f'{ldate} is locked (Day End done). Undo Day End to make changes.', 'danger')
             return redirect(url_for('members_list'))
         try:
             _ensure_fee_paid_date_col(db)
@@ -1264,9 +1265,10 @@ def loan_applications_new():
     db = get_db()
     if request.method == 'POST':
         applied_date = request.form.get('applied_date', datetime.now().strftime('%d/%m/%Y'))
-        if _is_day_locked(db, applied_date):
+        blocked, ldate = _day_lock_check(db, applied_date)
+        if blocked:
             db.close()
-            flash(f'{applied_date} is locked (Day End done). Undo Day End to make changes.', 'danger')
+            flash(f'{ldate} is locked (Day End done). Undo Day End to make changes.', 'danger')
             return redirect(url_for('loan_applications_list'))
         last = db.execute("SELECT application_no FROM loan_applications ORDER BY id DESC LIMIT 1").fetchone()
         num = int(last['application_no'][3:]) + 1 if last else 1
@@ -1329,9 +1331,10 @@ def loan_applications_edit(aid):
     db = get_db()
     application = db.execute("SELECT * FROM loan_applications WHERE id=?", (aid,)).fetchone()
     if request.method == 'POST':
-        if _is_day_locked(db, application['applied_date']):
+        blocked, ldate = _day_lock_check(db, application['applied_date'])
+        if blocked:
             db.close()
-            flash(f"{application['applied_date']} is locked (Day End done). Undo Day End to make changes.", 'danger')
+            flash(f'{ldate} is locked (Day End done). Undo Day End to make changes.', 'danger')
             return redirect(url_for('loan_applications_list'))
         db.execute("""
             UPDATE loan_applications SET member_id=?,center_id=?,loan_type_id=?,
@@ -1382,9 +1385,10 @@ def loan_applications_edit(aid):
 def loan_applications_delete(aid):
     db = get_db()
     app = db.execute("SELECT applied_date FROM loan_applications WHERE id=?", (aid,)).fetchone()
-    if app and _is_day_locked(db, app['applied_date']):
+    blocked, ldate = _day_lock_check(db, app['applied_date'] if app else None)
+    if blocked:
         db.close()
-        flash(f"{app['applied_date']} is locked (Day End done). Undo Day End to make changes.", 'danger')
+        flash(f'{ldate} is locked (Day End done). Undo Day End to make changes.', 'danger')
         return redirect(url_for('loan_applications_list'))
     db.execute("DELETE FROM loan_applications WHERE id=?", (aid,))
     db.commit()
@@ -1423,9 +1427,10 @@ def loan_approvals_list():
 def loan_approve(aid):
     db = get_db()
     approved_date = request.form.get('approved_date', datetime.now().strftime('%d/%m/%Y'))
-    if _is_day_locked(db, approved_date):
+    blocked, ldate = _day_lock_check(db, approved_date)
+    if blocked:
         db.close()
-        flash(f'{approved_date} is locked (Day End done). Undo Day End to make changes.', 'danger')
+        flash(f'{ldate} is locked (Day End done). Undo Day End to make changes.', 'danger')
         return redirect(url_for('loan_approvals_list'))
     db.execute("""
         INSERT INTO loan_approvals (application_id, approved_amount, approved_date, approved_by, status, remarks)
@@ -1587,9 +1592,10 @@ def loan_disburse_new():
 def loan_disburse(aid):
     db = get_db()
     disbursement_date = request.form.get('disbursement_date', datetime.now().strftime('%d/%m/%Y'))
-    if _is_day_locked(db, disbursement_date):
+    blocked, ldate = _day_lock_check(db, disbursement_date)
+    if blocked:
         db.close()
-        flash(f'{disbursement_date} is locked (Day End done). Undo Day End to make changes.', 'danger')
+        flash(f'{ldate} is locked (Day End done). Undo Day End to make changes.', 'danger')
         return redirect(url_for('loan_disbursement_list'))
     last = db.execute("SELECT disbursement_no FROM loan_disbursements ORDER BY id DESC LIMIT 1").fetchone()
     num = int(last['disbursement_no'][3:]) + 1 if last else 1
@@ -1623,9 +1629,10 @@ def loan_bulk_disburse():
         db.close()
         return redirect(url_for('loan_disbursement_list'))
     disbursement_date = request.form.get('disbursement_date', datetime.now().strftime('%d/%m/%Y'))
-    if _is_day_locked(db, disbursement_date):
+    blocked, ldate = _day_lock_check(db, disbursement_date)
+    if blocked:
         db.close()
-        flash(f'{disbursement_date} is locked (Day End done). Undo Day End to make changes.', 'danger')
+        flash(f'{ldate} is locked (Day End done). Undo Day End to make changes.', 'danger')
         return redirect(url_for('loan_disbursement_list'))
     total_inst = int(request.form.get('total_installments', 50))
     mode = request.form.get('mode', 'Cash')
@@ -1672,9 +1679,10 @@ def loan_disbursement_delete(did):
         flash('Disbursement not found.', 'danger')
         db.close()
         return redirect(url_for('loan_disbursement_list'))
-    if _is_day_locked(db, dis['disbursement_date']):
+    blocked, ldate = _day_lock_check(db, dis['disbursement_date'])
+    if blocked:
         db.close()
-        flash(f"{dis['disbursement_date']} is locked (Day End done). Undo Day End to make changes.", 'danger')
+        flash(f'{ldate} is locked (Day End done). Undo Day End to make changes.', 'danger')
         return redirect(url_for('loan_disbursement_list'))
     app_id = dis['application_id']
     # Cascade delete: savings_transactions linked to recovery_postings of this disbursement
@@ -1901,6 +1909,15 @@ def recovery_posting_delete(rid):
 
 def _is_day_locked(db, date_str):
     return db.execute("SELECT id FROM day_end WHERE day_date=?", (date_str,)).fetchone() is not None
+
+def _day_lock_check(db, record_date=None):
+    """Return (blocked, locked_date_str) — True if today OR the record's date is locked."""
+    today = datetime.now().strftime('%d/%m/%Y')
+    if _is_day_locked(db, today):
+        return True, today
+    if record_date and record_date != today and _is_day_locked(db, record_date):
+        return True, record_date
+    return False, None
 
 def _to_iso(date_str):
     """Convert DD/MM/YYYY to YYYY-MM-DD for SQLite string comparison."""
@@ -4823,9 +4840,10 @@ def tally_vouchers():
         vdate       = request.form.get('voucher_date', '')
         amount      = request.form.get('amount', 0)
         narration   = request.form.get('narration', '')
-        if vdate and _is_day_locked(db, vdate):
+        blocked, ldate = _day_lock_check(db, vdate)
+        if blocked:
             db.close()
-            flash(f'{vdate} is locked (Day End done). Undo Day End to make changes.', 'danger')
+            flash(f'{ldate} is locked (Day End done). Undo Day End to make changes.', 'danger')
             return redirect(url_for('tally_vouchers'))
         if ledger_id and vdate and float(amount or 0) > 0:
             db.execute(
