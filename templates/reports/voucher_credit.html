@@ -87,6 +87,10 @@
         <td style="border:1px dashed #888;padding:5px 10px;">Interest on Loans A/c</td>
         <td style="border:1px dashed #888;padding:5px 10px;text-align:right;">{{ '{:,.2f}'.format(totals.interest_on_loans) }}</td>
       </tr>
+      <tr>
+        <td style="border:1px dashed #888;padding:5px 10px;">Savings Collected A/c</td>
+        <td style="border:1px dashed #888;padding:5px 10px;text-align:right;">{{ '{:,.2f}'.format(totals.savings) }}</td>
+      </tr>
       {% if totals.prepaid %}
       <tr>
         <td style="border:1px dashed #888;padding:5px 10px;">Prepaid / Preclosure A/c</td>

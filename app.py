@@ -1512,7 +1512,7 @@ def loan_disburse_new():
         lt = db.execute("SELECT * FROM loan_types WHERE id=?", (request.form.get('loan_type_id'),)).fetchone()
         amount = float(request.form.get('applied_amount', 0))
         tenure = int(lt['tenure_weeks']) if lt else int(request.form.get('tenure_weeks', 50))
-        app_date = request.form.get('applied_date', datetime.now().strftime('%d/%m/%Y'))
+        app_date = _to_ddmmyyyy(request.form.get('applied_date', ''))
 
         try:
             db.execute("""
@@ -1591,7 +1591,7 @@ def loan_disburse_new():
 @admin_required
 def loan_disburse(aid):
     db = get_db()
-    disbursement_date = request.form.get('disbursement_date', datetime.now().strftime('%d/%m/%Y'))
+    disbursement_date = _to_ddmmyyyy(request.form.get('disbursement_date', ''))
     blocked, ldate = _day_lock_check(db, disbursement_date)
     if blocked:
         db.close()
@@ -1628,7 +1628,7 @@ def loan_bulk_disburse():
         flash('No loans selected.', 'warning')
         db.close()
         return redirect(url_for('loan_disbursement_list'))
-    disbursement_date = request.form.get('disbursement_date', datetime.now().strftime('%d/%m/%Y'))
+    disbursement_date = _to_ddmmyyyy(request.form.get('disbursement_date', ''))
     blocked, ldate = _day_lock_check(db, disbursement_date)
     if blocked:
         db.close()
@@ -1926,6 +1926,19 @@ def _to_iso(date_str):
         return f"{p[2]}-{p[1]}-{p[0]}"
     except Exception:
         return date_str
+
+def _to_ddmmyyyy(s):
+    """Normalize any common date format to DD/MM/YYYY."""
+    s = (s or '').strip()
+    if not s:
+        return datetime.now().strftime('%d/%m/%Y')
+    if len(s) == 10 and s[2] == '/' and s[5] == '/':
+        return s  # already DD/MM/YYYY
+    if len(s) == 10 and s[4] == '-' and s[7] == '-':
+        return f'{s[8:10]}/{s[5:7]}/{s[0:4]}'  # YYYY-MM-DD
+    if len(s) == 10 and s[2] == '-' and s[5] == '-':
+        return f'{s[0:2]}/{s[3:5]}/{s[6:10]}'  # DD-MM-YYYY
+    return s
 
 def _days_since(date_str):
     """Days from DD/MM/YYYY date to today."""
@@ -3479,12 +3492,23 @@ def report_summary_sheet():
         WHERE ld.disbursement_date=?
     """ + (" AND la.center_id=?" if center_filter else ""), p2).fetchone()[0]
 
+    savings_collected = db.execute("""
+        SELECT COALESCE(SUM(st.deposit_amount),0) FROM savings_transactions st
+        WHERE st.transaction_date=? AND st.deposit_amount > 0
+    """ + (" AND st.center_id=?" if center_filter else ""), p2).fetchone()[0]
+
+    savings_withdrawn = db.execute("""
+        SELECT COALESCE(SUM(st.withdraw_amount),0) FROM savings_transactions st
+        WHERE st.transaction_date=? AND st.withdraw_amount > 0
+    """ + (" AND st.center_id=?" if center_filter else ""), p2).fetchone()[0]
+
     credit_data = {
         'joining_fee': joining_fee,
         'insurance_premium': disb_fees['insurance_premium'] if disb_fees else 0,
         'processing_fee': disb_fees['processing_fee'] if disb_fees else 0,
         'prin_recovery': recovery['prin_recovery'] if recovery else 0,
         'int_recovery': recovery['int_recovery'] if recovery else 0,
+        'savings_collected': savings_collected,
         'prepaid_amount': prepaid_amt,
         'preclosure_charges': 0,
         'advance_collected': advance_collected,
@@ -3492,6 +3516,7 @@ def report_summary_sheet():
     credit_data['credit_total'] = sum(credit_data.values())
     debit_data = {
         'disbursed_amount': disbursed_amt,
+        'savings_withdrawn': savings_withdrawn,
         'advance_withdraw': 0,
     }
     debit_data['debit_total'] = sum(debit_data.values())
@@ -3919,11 +3944,18 @@ def report_voucher_credit():
         member_fee_q += " AND m.center_id=?"; member_fee_p.append(center_filter)
     member_fee_total = db.execute(member_fee_q, member_fee_p).fetchone()[0] or 0
 
+    savings_q = "SELECT COALESCE(SUM(st.deposit_amount),0) FROM savings_transactions st WHERE st.deposit_amount > 0 AND substr(st.transaction_date,7,4)||'-'||substr(st.transaction_date,4,2)||'-'||substr(st.transaction_date,1,2) = ?"
+    savings_p = [report_date]
+    if center_filter:
+        savings_q += " AND st.center_id=?"; savings_p.append(center_filter)
+    savings_total = db.execute(savings_q, savings_p).fetchone()[0] or 0
+
     totals = {
         'loan_recovery': _rp_sum('principal'),
         'interest_on_loans': _rp_sum('interest'),
         'processing_fee': _disb_sum('processing_fee'),
         'insurance': _disb_sum('insurance_fee') + _disb_sum('nominee_insurance_fee'),
+        'savings': savings_total,
         'prepaid': prepaid_total,
         'member_fee': member_fee_total,
     }

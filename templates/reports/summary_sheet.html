@@ -46,6 +46,7 @@
           <tr><td>Processing Fee</td><td class="text-end">{{ '{:,.2f}'.format(credit_data.processing_fee) }}</td></tr>
           <tr><td>Prin Recovery</td><td class="text-end">{{ '{:,.2f}'.format(credit_data.prin_recovery) }}</td></tr>
           <tr><td>Int Recovery</td><td class="text-end">{{ '{:,.2f}'.format(credit_data.int_recovery) }}</td></tr>
+          <tr><td>Savings Collected</td><td class="text-end">{{ '{:,.2f}'.format(credit_data.savings_collected) }}</td></tr>
           <tr><td>Prepaid Amount</td><td class="text-end">{{ '{:,.2f}'.format(credit_data.prepaid_amount) }}</td></tr>
           <tr><td>PreClosure Charges</td><td class="text-end">{{ '{:,.2f}'.format(credit_data.preclosure_charges) }}</td></tr>
           <tr><td>Advance Recovery Collected</td><td class="text-end">{{ '{:,.2f}'.format(credit_data.advance_collected) }}</td></tr>
@@ -63,6 +64,7 @@
       <table class="table table-bordered mb-0" style="font-size:13px;">
         <tbody>
           <tr><td>Disbursed Amount</td><td class="text-end">{{ '{:,.2f}'.format(debit_data.disbursed_amount) }}</td></tr>
+          <tr><td>Savings Withdrawn</td><td class="text-end">{{ '{:,.2f}'.format(debit_data.savings_withdrawn) }}</td></tr>
           <tr><td>Advance Recovery Withdraw</td><td class="text-end">{{ '{:,.2f}'.format(debit_data.advance_withdraw) }}</td></tr>
           <tr class="table-danger fw-bold">
             <td><b>Debit Total:</b></td>
