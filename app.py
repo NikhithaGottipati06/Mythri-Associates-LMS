@@ -3430,55 +3430,61 @@ def report_summary_sheet():
     db = get_db()
     center_filter = request.args.get('center_id', '')
     report_date = request.args.get('report_date', datetime.now().strftime('%d/%m/%Y'))
-    date_param = [report_date]
-    cond = " AND rp.posting_date=?" if not center_filter else " AND rp.posting_date=? AND la.center_id=?"
-    cond_params = date_param if not center_filter else date_param + [center_filter]
+    p2 = [report_date, center_filter] if center_filter else [report_date]
 
-    credit = db.execute("""
+    # Recovery amounts (principal + interest) from recovery_postings on this date
+    recovery = db.execute("""
         SELECT
-          COALESCE(SUM(m.total_fees),0) as joining_fee,
-          COALESCE(SUM(la.insurance_fee + la.nominee_insurance_fee),0) as insurance_premium,
-          COALESCE(SUM(la.processing_fee),0) as processing_fee,
           COALESCE(SUM(rp.principal),0) as prin_recovery,
           COALESCE(SUM(rp.interest),0) as int_recovery
         FROM recovery_postings rp
         LEFT JOIN loan_disbursements ld ON rp.disbursement_id=ld.id
         LEFT JOIN loan_applications la ON ld.application_id=la.id
-        LEFT JOIN members m ON la.member_id=m.id
-        LEFT JOIN centers c ON la.center_id=c.id
         WHERE rp.posting_date=? AND rp.installment_no > 0
-    """ + (" AND la.center_id=?" if center_filter else ""),
-    cond_params).fetchone()
+    """ + (" AND la.center_id=?" if center_filter else ""), p2).fetchone()
+
+    # Insurance premium + processing fee: only from loans DISBURSED on this date
+    disb_fees = db.execute("""
+        SELECT
+          COALESCE(SUM(la.insurance_fee + la.nominee_insurance_fee),0) as insurance_premium,
+          COALESCE(SUM(la.processing_fee),0) as processing_fee
+        FROM loan_disbursements ld
+        LEFT JOIN loan_applications la ON ld.application_id=la.id
+        WHERE ld.disbursement_date=?
+    """ + (" AND la.center_id=?" if center_filter else ""), p2).fetchone()
+
+    # Member joining fee: members who joined on this date
+    joining_fee = db.execute("""
+        SELECT COALESCE(SUM(m.total_fees),0) FROM members m
+        WHERE m.date_of_join=?
+    """ + (" AND m.center_id=?" if center_filter else ""), p2).fetchone()[0]
 
     prepaid_amt = db.execute("""
         SELECT COALESCE(SUM(pt.amount),0) FROM prepaid_transactions pt
         LEFT JOIN loan_disbursements ld ON pt.disbursement_id=ld.id
         LEFT JOIN loan_applications la ON ld.application_id=la.id
         WHERE pt.transaction_date=? AND pt.is_undo=0
-    """ + (" AND la.center_id=?" if center_filter else ""),
-    cond_params).fetchone()[0]
+    """ + (" AND la.center_id=?" if center_filter else ""), p2).fetchone()[0]
 
     advance_collected = db.execute("""
         SELECT COALESCE(SUM(ar.amount),0) FROM advance_recoveries ar
         LEFT JOIN loan_disbursements ld ON ar.disbursement_id=ld.id
         LEFT JOIN loan_applications la ON ld.application_id=la.id
         WHERE ar.recovery_date=?
-    """ + (" AND la.center_id=?" if center_filter else ""),
-    cond_params).fetchone()[0]
+    """ + (" AND la.center_id=?" if center_filter else ""), p2).fetchone()[0]
 
     disbursed_amt = db.execute("""
         SELECT COALESCE(SUM(ld.disbursed_amount),0) FROM loan_disbursements ld
         LEFT JOIN loan_applications la ON ld.application_id=la.id
         WHERE ld.disbursement_date=?
-    """ + (" AND la.center_id=?" if center_filter else ""),
-    cond_params).fetchone()[0]
+    """ + (" AND la.center_id=?" if center_filter else ""), p2).fetchone()[0]
 
     credit_data = {
-        'joining_fee': credit['joining_fee'] if credit else 0,
-        'insurance_premium': credit['insurance_premium'] if credit else 0,
-        'processing_fee': credit['processing_fee'] if credit else 0,
-        'prin_recovery': credit['prin_recovery'] if credit else 0,
-        'int_recovery': credit['int_recovery'] if credit else 0,
+        'joining_fee': joining_fee,
+        'insurance_premium': disb_fees['insurance_premium'] if disb_fees else 0,
+        'processing_fee': disb_fees['processing_fee'] if disb_fees else 0,
+        'prin_recovery': recovery['prin_recovery'] if recovery else 0,
+        'int_recovery': recovery['int_recovery'] if recovery else 0,
         'prepaid_amount': prepaid_amt,
         'preclosure_charges': 0,
         'advance_collected': advance_collected,
