@@ -47,12 +47,54 @@ def _send_support_email(qid, branch_name, user_name, query_text):
         print(f"[Support Email ERROR] Query #{qid}: {err}", flush=True)
         return False, err
 
+_DATE_COLUMNS = [
+    ('loan_disbursements',   'disbursement_date'),
+    ('recovery_postings',    'posting_date'),
+    ('members',              'date_of_join'),
+    ('members',              'date_of_birth'),
+    ('loan_applications',    'applied_date'),
+    ('loan_approvals',       'approved_date'),
+    ('prepaid_transactions', 'transaction_date'),
+    ('advance_recoveries',   'recovery_date'),
+    ('savings_transactions', 'transaction_date'),
+    ('moratorium_postings',  'from_date'),
+    ('moratorium_postings',  'to_date'),
+    ('rd_accounts',          'start_date'),
+    ('secure_deposits',      'start_date'),
+    ('users',                'joining_date'),
+    ('day_end',              'day_date'),
+]
+
+def _normalize_db_dates(db):
+    """Fix non-zero-padded dates (e.g. 14/5/2026 → 14/05/2026) in the branch DB."""
+    changed = False
+    for table, col in _DATE_COLUMNS:
+        try:
+            rows = db.execute(
+                f"SELECT id, {col} FROM {table} "
+                f"WHERE {col} IS NOT NULL AND {col} != '' "
+                f"AND (length({col}) != 10 OR substr({col},3,1) != '/' OR substr({col},6,1) != '/')"
+            ).fetchall()
+            for r in rows:
+                norm = _to_ddmmyyyy(r[col])
+                if norm and norm != r[col] and len(norm) == 10:
+                    db.execute(f"UPDATE {table} SET {col}=? WHERE id=?", (norm, r['id']))
+                    changed = True
+        except Exception:
+            pass
+    if changed:
+        db.commit()
+
 def get_db():
     """Return a connection to the current branch database."""
     branch_db = session.get('branch_db')
     if not branch_db:
         return None
-    return get_branch_db(branch_db)
+    conn = get_branch_db(branch_db)
+    if not getattr(g, '_dates_normalized', False):
+        _normalize_db_dates(conn)
+        g._dates_normalized = True
+    return conn
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'mythri-lms-secret-2024')
@@ -830,7 +872,7 @@ def members_new():
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (code, request.form.get('center_id') or None,
                   request.form.get('grp', 1), request.form['full_name'],
-                  request.form.get('date_of_join',''), request.form.get('date_of_birth',''),
+                  _to_ddmmyyyy(request.form.get('date_of_join','')), _to_ddmmyyyy(request.form.get('date_of_birth','')),
                   request.form.get('gender',''), request.form.get('marital_status',''),
                   request.form.get('guardian_name',''), request.form.get('spouse_name',''),
                   request.form.get('caste',''), request.form.get('religion',''),
@@ -899,8 +941,8 @@ def members_edit(mid):
                 phone1=?,phone2=?,email=?,notes=?,income=?,expenditure=?,total_fees=?,
                 fee_mode=?,fee_narration=?,fee_paid_date=?,kyc_type=?,kyc_number=? WHERE id=?
             """, (request.form.get('center_id') or None, request.form.get('grp',1),
-                  request.form['full_name'], request.form.get('date_of_join',''),
-                  request.form.get('date_of_birth',''), request.form.get('gender',''),
+                  request.form['full_name'], _to_ddmmyyyy(request.form.get('date_of_join','')),
+                  _to_ddmmyyyy(request.form.get('date_of_birth','')), request.form.get('gender',''),
                   request.form.get('marital_status',''), request.form.get('guardian_name',''),
                   request.form.get('spouse_name',''), request.form.get('caste',''),
                   request.form.get('religion',''), request.form.get('address1',''),
@@ -1426,7 +1468,7 @@ def loan_approvals_list():
 @admin_required
 def loan_approve(aid):
     db = get_db()
-    approved_date = request.form.get('approved_date', datetime.now().strftime('%d/%m/%Y'))
+    approved_date = _to_ddmmyyyy(request.form.get('approved_date', datetime.now().strftime('%d/%m/%Y')))
     blocked, ldate = _day_lock_check(db, approved_date)
     if blocked:
         db.close()
@@ -1492,7 +1534,8 @@ def loan_disbursement_list():
         ORDER BY ld.id DESC
     """).fetchall()
     db.close()
-    return render_template('loans/disbursement/list.html', approved=approved, disbursed=disbursed)
+    today_str = datetime.now().strftime('%d/%m/%Y')
+    return render_template('loans/disbursement/list.html', approved=approved, disbursed=disbursed, today_str=today_str)
 
 @app.route('/loans/disbursement/new', methods=['GET', 'POST'])
 @admin_required
@@ -1582,10 +1625,12 @@ def loan_disburse_new():
     members_json = json.dumps([dict(m) for m in members])
     loan_types_json = json.dumps([dict(lt) for lt in loan_types])
     db.close()
+    today_str = datetime.now().strftime('%d/%m/%Y')
     return render_template('loans/disbursement/new_form.html',
                            members=members, loan_types=loan_types,
                            members_json=members_json, loan_types_json=loan_types_json,
-                           loan_purposes=LOAN_PURPOSES, kyc_types=KYC_TYPES)
+                           loan_purposes=LOAN_PURPOSES, kyc_types=KYC_TYPES,
+                           today_str=today_str)
 
 @app.route('/loans/disbursement/<int:aid>/disburse', methods=['POST'])
 @admin_required
@@ -1758,7 +1803,7 @@ def recovery_posting_list():
 def recovery_bulk_post():
     db = get_db()
     selected_ids = request.form.getlist('selected_loans')
-    posting_date = request.form.get('posting_date', datetime.now().strftime('%d/%m/%Y'))
+    posting_date = _to_ddmmyyyy(request.form.get('posting_date', datetime.now().strftime('%d/%m/%Y')))
     if _is_day_locked(db, posting_date):
         flash(f'Day {posting_date} is closed. Undo Day End first to make changes.', 'danger')
         db.close()
@@ -1838,7 +1883,7 @@ def recovery_post(did):
         WHERE ld.id=?
     """, (did,)).fetchone()
     if request.method == 'POST':
-        posting_date = request.form.get('posting_date', datetime.now().strftime('%d/%m/%Y'))
+        posting_date = _to_ddmmyyyy(request.form.get('posting_date', datetime.now().strftime('%d/%m/%Y')))
         if _is_day_locked(db, posting_date):
             flash(f'Day {posting_date} is closed. Undo Day End first to make changes.', 'danger')
             db.close()
@@ -1928,16 +1973,15 @@ def _to_iso(date_str):
         return date_str
 
 def _to_ddmmyyyy(s):
-    """Normalize any common date format to DD/MM/YYYY."""
+    """Normalize any common date format to DD/MM/YYYY (zero-padded)."""
     s = (s or '').strip()
     if not s:
         return datetime.now().strftime('%d/%m/%Y')
-    if len(s) == 10 and s[2] == '/' and s[5] == '/':
-        return s  # already DD/MM/YYYY
-    if len(s) == 10 and s[4] == '-' and s[7] == '-':
-        return f'{s[8:10]}/{s[5:7]}/{s[0:4]}'  # YYYY-MM-DD
-    if len(s) == 10 and s[2] == '-' and s[5] == '-':
-        return f'{s[0:2]}/{s[3:5]}/{s[6:10]}'  # DD-MM-YYYY
+    for fmt in ('%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%d/%m/%y', '%d-%m-%y'):
+        try:
+            return datetime.strptime(s, fmt).strftime('%d/%m/%Y')
+        except ValueError:
+            continue
     return s
 
 def _days_since(date_str):
@@ -2064,7 +2108,7 @@ def prepaid_post(did):
         LEFT JOIN members m ON la.member_id=m.id WHERE ld.id=?
     """, (did,)).fetchone()
     if request.method == 'POST':
-        txn_date = request.form.get('transaction_date', datetime.now().strftime('%d/%m/%Y'))
+        txn_date = _to_ddmmyyyy(request.form.get('transaction_date', datetime.now().strftime('%d/%m/%Y')))
         if _is_day_locked(db, txn_date):
             flash(f'Day {txn_date} is closed. Undo Day End first to make changes.', 'danger')
             db.close()
@@ -2117,7 +2161,7 @@ def advance_recovery_post(did):
         LEFT JOIN members m ON la.member_id=m.id WHERE ld.id=?
     """, (did,)).fetchone()
     if request.method == 'POST':
-        rec_date = request.form.get('recovery_date', datetime.now().strftime('%d/%m/%Y'))
+        rec_date = _to_ddmmyyyy(request.form.get('recovery_date', datetime.now().strftime('%d/%m/%Y')))
         if _is_day_locked(db, rec_date):
             flash(f'Day {rec_date} is closed. Undo Day End first to make changes.', 'danger')
             db.close()
@@ -2284,7 +2328,7 @@ def savings_member_info():
 def savings_deposit(mid):
     db = get_db()
     deposit_amount = float(request.form.get('deposit_amount', 0))
-    transaction_date = request.form.get('transaction_date', datetime.now().strftime('%d/%m/%Y'))
+    transaction_date = _to_ddmmyyyy(request.form.get('transaction_date', datetime.now().strftime('%d/%m/%Y')))
     if deposit_amount <= 0:
         flash('Invalid deposit amount.', 'danger')
         db.close()
@@ -2309,7 +2353,7 @@ def savings_deposit(mid):
 def savings_withdraw(mid):
     db = get_db()
     withdraw_amount = float(request.form.get('withdraw_amount', 0))
-    transaction_date = request.form.get('transaction_date', datetime.now().strftime('%d/%m/%Y'))
+    transaction_date = _to_ddmmyyyy(request.form.get('transaction_date', datetime.now().strftime('%d/%m/%Y')))
     # Check available balance
     row = db.execute(
         "SELECT COALESCE(SUM(deposit_amount),0) - COALESCE(SUM(withdraw_amount),0) as balance FROM savings_transactions WHERE member_id=?",
