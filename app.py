@@ -5069,6 +5069,24 @@ def tally_rp_statement():
         pen_p
     ).fetchone()[0] or 0
 
+    # Principal recovered from members (cash receipt)
+    pri_conds, pri_p = ["installment_no>0"], []
+    if from_iso: pri_conds.append(f"{ic('posting_date')} >= ?"); pri_p.append(from_iso)
+    if to_iso_:  pri_conds.append(f"{ic('posting_date')} <= ?"); pri_p.append(to_iso_)
+    lms_principal = db.execute(
+        f"SELECT COALESCE(SUM(principal),0) FROM recovery_postings WHERE {' AND '.join(pri_conds)}",
+        pri_p
+    ).fetchone()[0] or 0
+
+    # Loans disbursed to members (cash payment)
+    dis_conds, dis_p = ["1=1"], []
+    if from_iso: dis_conds.append(f"{ic('disbursement_date')} >= ?"); dis_p.append(from_iso)
+    if to_iso_:  dis_conds.append(f"{ic('disbursement_date')} <= ?"); dis_p.append(to_iso_)
+    lms_disbursed = db.execute(
+        f"SELECT COALESCE(SUM(disbursed_amount),0) FROM loan_disbursements WHERE {' AND '.join(dis_conds)}",
+        dis_p
+    ).fetchone()[0] or 0
+
     from collections import defaultdict
     rec_groups = defaultdict(list)
     for r in receipt_rows:
@@ -5078,9 +5096,9 @@ def tally_rp_statement():
         pay_groups[r[0]].append(r)
 
     total_manual_receipts = sum(r[3] for r in receipt_rows)
-    total_lms_receipts    = sum(lms_income.values()) + lms_penalty
+    total_lms_receipts    = sum(lms_income.values()) + lms_penalty + lms_principal
     total_receipts        = total_manual_receipts + total_lms_receipts
-    total_payments        = sum(r[3] for r in payment_rows)
+    total_payments        = sum(r[3] for r in payment_rows) + lms_disbursed
 
     from_disp = datetime.strptime(from_iso,'%Y-%m-%d').strftime('%d/%m/%Y') if from_iso else ''
     to_disp   = datetime.strptime(to_iso_,'%Y-%m-%d').strftime('%d/%m/%Y') if to_iso_ else ''
@@ -5089,6 +5107,7 @@ def tally_rp_statement():
     return render_template('tally/receipts_payments.html',
         rec_groups=rec_groups, pay_groups=pay_groups,
         lms_income=lms_income, lms_penalty=lms_penalty,
+        lms_principal=lms_principal, lms_disbursed=lms_disbursed,
         total_manual_receipts=total_manual_receipts,
         total_lms_receipts=total_lms_receipts,
         total_receipts=total_receipts,

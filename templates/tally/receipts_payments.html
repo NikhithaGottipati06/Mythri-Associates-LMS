@@ -73,6 +73,17 @@
         <i class="bi bi-arrow-down-circle-fill me-1"></i>Receipts (Dr)
       </div>
 
+      <!-- LMS Members (Auto) -->
+      {% if lms_principal %}
+      <div class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em;">Members (Auto)</div>
+      <table class="table table-sm mb-3">
+        <tbody>
+          <tr><td class="ps-3">Principal Recovered from Members</td>
+              <td class="text-end text-success fw-semibold">₹{{ "%.2f"|format(lms_principal) }}</td></tr>
+        </tbody>
+      </table>
+      {% endif %}
+
       <!-- LMS Auto-Receipts -->
       <div class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em;">Loan Operations (Auto)</div>
       <table class="table table-sm mb-3">
@@ -140,6 +151,17 @@
         <i class="bi bi-arrow-up-circle-fill me-1"></i>Payments (Cr)
       </div>
 
+      <!-- LMS Members (Auto) -->
+      {% if lms_disbursed %}
+      <div class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em;">Members (Auto)</div>
+      <table class="table table-sm mb-3">
+        <tbody>
+          <tr><td class="ps-3">Loans Disbursed to Members</td>
+              <td class="text-end text-danger fw-semibold">₹{{ "%.2f"|format(lms_disbursed) }}</td></tr>
+        </tbody>
+      </table>
+      {% endif %}
+
       {% if pay_groups %}
         {% for grp, rows in pay_groups.items() %}
         <div class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em;">{{ grp }}</div>
@@ -160,7 +182,7 @@
           </tbody>
         </table>
         {% endfor %}
-      {% else %}
+      {% elif not lms_disbursed %}
         <p class="text-muted small py-2">No payment entries for this period.</p>
       {% endif %}
 
