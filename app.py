@@ -5087,6 +5087,24 @@ def tally_rp_statement():
         dis_p
     ).fetchone()[0] or 0
 
+    # Member savings deposits (cash receipt) and withdrawals (cash payment)
+    sav_conds_d, sav_p_d = ["deposit_amount > 0"], []
+    sav_conds_w, sav_p_w = ["withdraw_amount > 0"], []
+    if from_iso:
+        sav_conds_d.append(f"{ic('transaction_date')} >= ?"); sav_p_d.append(from_iso)
+        sav_conds_w.append(f"{ic('transaction_date')} >= ?"); sav_p_w.append(from_iso)
+    if to_iso_:
+        sav_conds_d.append(f"{ic('transaction_date')} <= ?"); sav_p_d.append(to_iso_)
+        sav_conds_w.append(f"{ic('transaction_date')} <= ?"); sav_p_w.append(to_iso_)
+    lms_sav_deposit = db.execute(
+        f"SELECT COALESCE(SUM(deposit_amount),0) FROM savings_transactions WHERE {' AND '.join(sav_conds_d)}",
+        sav_p_d
+    ).fetchone()[0] or 0
+    lms_sav_withdraw = db.execute(
+        f"SELECT COALESCE(SUM(withdraw_amount),0) FROM savings_transactions WHERE {' AND '.join(sav_conds_w)}",
+        sav_p_w
+    ).fetchone()[0] or 0
+
     from collections import defaultdict
     rec_groups = defaultdict(list)
     for r in receipt_rows:
@@ -5096,9 +5114,9 @@ def tally_rp_statement():
         pay_groups[r[0]].append(r)
 
     total_manual_receipts = sum(r[3] for r in receipt_rows)
-    total_lms_receipts    = sum(lms_income.values()) + lms_penalty + lms_principal
+    total_lms_receipts    = sum(lms_income.values()) + lms_penalty + lms_principal + lms_sav_deposit
     total_receipts        = total_manual_receipts + total_lms_receipts
-    total_payments        = sum(r[3] for r in payment_rows) + lms_disbursed
+    total_payments        = sum(r[3] for r in payment_rows) + lms_disbursed + lms_sav_withdraw
 
     from_disp = datetime.strptime(from_iso,'%Y-%m-%d').strftime('%d/%m/%Y') if from_iso else ''
     to_disp   = datetime.strptime(to_iso_,'%Y-%m-%d').strftime('%d/%m/%Y') if to_iso_ else ''
@@ -5108,6 +5126,7 @@ def tally_rp_statement():
         rec_groups=rec_groups, pay_groups=pay_groups,
         lms_income=lms_income, lms_penalty=lms_penalty,
         lms_principal=lms_principal, lms_disbursed=lms_disbursed,
+        lms_sav_deposit=lms_sav_deposit, lms_sav_withdraw=lms_sav_withdraw,
         total_manual_receipts=total_manual_receipts,
         total_lms_receipts=total_lms_receipts,
         total_receipts=total_receipts,

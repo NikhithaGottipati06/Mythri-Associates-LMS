@@ -74,12 +74,18 @@
       </div>
 
       <!-- LMS Members (Auto) -->
-      {% if lms_principal %}
+      {% if lms_principal or lms_sav_deposit %}
       <div class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em;">Members (Auto)</div>
       <table class="table table-sm mb-3">
         <tbody>
+          {% if lms_principal %}
           <tr><td class="ps-3">Principal Recovered from Members</td>
               <td class="text-end text-success fw-semibold">₹{{ "%.2f"|format(lms_principal) }}</td></tr>
+          {% endif %}
+          {% if lms_sav_deposit %}
+          <tr><td class="ps-3">Member Savings Collected</td>
+              <td class="text-end text-success fw-semibold">₹{{ "%.2f"|format(lms_sav_deposit) }}</td></tr>
+          {% endif %}
         </tbody>
       </table>
       {% endif %}
@@ -152,12 +158,18 @@
       </div>
 
       <!-- LMS Members (Auto) -->
-      {% if lms_disbursed %}
+      {% if lms_disbursed or lms_sav_withdraw %}
       <div class="text-muted small fw-semibold text-uppercase mb-1" style="letter-spacing:.05em;">Members (Auto)</div>
       <table class="table table-sm mb-3">
         <tbody>
+          {% if lms_disbursed %}
           <tr><td class="ps-3">Loans Disbursed to Members</td>
               <td class="text-end text-danger fw-semibold">₹{{ "%.2f"|format(lms_disbursed) }}</td></tr>
+          {% endif %}
+          {% if lms_sav_withdraw %}
+          <tr><td class="ps-3">Member Savings Withdrawn</td>
+              <td class="text-end text-danger fw-semibold">₹{{ "%.2f"|format(lms_sav_withdraw) }}</td></tr>
+          {% endif %}
         </tbody>
       </table>
       {% endif %}
