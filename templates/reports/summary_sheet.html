@@ -4,7 +4,7 @@
 
 <div class="print-header">
   <h4>MAITRI ASSOCIATES – Vijayawada</h4>
-  <h5>Summary Sheet – {{ report_date }}</h5>
+  <h5>Summary Sheet – {{ report_date_display }}</h5>
 </div>
 
 <div class="page-header no-print">
@@ -29,7 +29,7 @@
     </div>
     <div class="col-md-2">
       <label class="form-label">Date</label>
-      <input type="text" name="report_date" class="form-control form-control-sm" value="{{ report_date }}" placeholder="DD/MM/YYYY">
+      <input type="date" name="report_date" class="form-control form-control-sm" value="{{ report_date }}">
     </div>
     <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
   </div>

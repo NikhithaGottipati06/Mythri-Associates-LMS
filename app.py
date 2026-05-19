@@ -3486,65 +3486,72 @@ def report_collection_sheet():
 def report_summary_sheet():
     db = get_db()
     center_filter = request.args.get('center_id', '')
-    report_date = request.args.get('report_date', datetime.now().strftime('%d/%m/%Y'))
-    p2 = [report_date, center_filter] if center_filter else [report_date]
+    report_date = request.args.get('report_date', datetime.now().strftime('%Y-%m-%d'))
+    try:
+        p = report_date.split('-')
+        report_date_display = f"{p[2]}/{p[1]}/{p[0]}"
+    except Exception:
+        report_date_display = report_date
 
-    # Recovery amounts (principal + interest) from recovery_postings on this date
-    recovery = db.execute("""
+    def _ic(col):
+        return f"substr({col},7,4)||'-'||substr({col},4,2)||'-'||substr({col},1,2)"
+
+    p1 = [report_date]
+    p1c = [report_date, center_filter] if center_filter else [report_date]
+
+    recovery = db.execute(f"""
         SELECT
           COALESCE(SUM(rp.principal),0) as prin_recovery,
           COALESCE(SUM(rp.interest),0) as int_recovery
         FROM recovery_postings rp
         LEFT JOIN loan_disbursements ld ON rp.disbursement_id=ld.id
         LEFT JOIN loan_applications la ON ld.application_id=la.id
-        WHERE rp.posting_date=? AND rp.installment_no > 0
-    """ + (" AND la.center_id=?" if center_filter else ""), p2).fetchone()
+        WHERE {_ic('rp.posting_date')}=? AND rp.installment_no > 0
+    """ + (" AND la.center_id=?" if center_filter else ""), p1c).fetchone()
 
-    # Insurance premium + processing fee: only from loans DISBURSED on this date
-    disb_fees = db.execute("""
+    disb_fees = db.execute(f"""
         SELECT
           COALESCE(SUM(la.insurance_fee + la.nominee_insurance_fee),0) as insurance_premium,
           COALESCE(SUM(la.processing_fee),0) as processing_fee
         FROM loan_disbursements ld
         LEFT JOIN loan_applications la ON ld.application_id=la.id
-        WHERE ld.disbursement_date=?
-    """ + (" AND la.center_id=?" if center_filter else ""), p2).fetchone()
+        WHERE {_ic('ld.disbursement_date')}=?
+    """ + (" AND la.center_id=?" if center_filter else ""), p1c).fetchone()
 
-    # Member joining fee: members who joined on this date
-    joining_fee = db.execute("""
+    joining_fee = db.execute(f"""
         SELECT COALESCE(SUM(m.total_fees),0) FROM members m
-        WHERE m.date_of_join=?
-    """ + (" AND m.center_id=?" if center_filter else ""), p2).fetchone()[0]
+        WHERE {_ic('m.date_of_join')}=?
+    """ + (" AND m.center_id=?" if center_filter else ""), p1c).fetchone()[0]
 
-    prepaid_amt = db.execute("""
+    prepaid_amt = db.execute(f"""
         SELECT COALESCE(SUM(pt.amount),0) FROM prepaid_transactions pt
         LEFT JOIN loan_disbursements ld ON pt.disbursement_id=ld.id
         LEFT JOIN loan_applications la ON ld.application_id=la.id
-        WHERE pt.transaction_date=? AND pt.is_undo=0
-    """ + (" AND la.center_id=?" if center_filter else ""), p2).fetchone()[0]
+        WHERE {_ic('pt.transaction_date')}=? AND pt.is_undo=0
+    """ + (" AND la.center_id=?" if center_filter else ""), p1c).fetchone()[0]
 
-    advance_collected = db.execute("""
+    advance_collected = db.execute(f"""
         SELECT COALESCE(SUM(ar.amount),0) FROM advance_recoveries ar
         LEFT JOIN loan_disbursements ld ON ar.disbursement_id=ld.id
         LEFT JOIN loan_applications la ON ld.application_id=la.id
-        WHERE ar.recovery_date=?
-    """ + (" AND la.center_id=?" if center_filter else ""), p2).fetchone()[0]
+        WHERE {_ic('ar.recovery_date')}=?
+    """ + (" AND la.center_id=?" if center_filter else ""), p1c).fetchone()[0]
 
-    disbursed_amt = db.execute("""
+    disbursed_amt = db.execute(f"""
         SELECT COALESCE(SUM(ld.disbursed_amount),0) FROM loan_disbursements ld
         LEFT JOIN loan_applications la ON ld.application_id=la.id
-        WHERE ld.disbursement_date=?
-    """ + (" AND la.center_id=?" if center_filter else ""), p2).fetchone()[0]
+        WHERE {_ic('ld.disbursement_date')}=?
+    """ + (" AND la.center_id=?" if center_filter else ""), p1c).fetchone()[0]
 
-    savings_collected = db.execute("""
+    savings_collected = db.execute(f"""
         SELECT COALESCE(SUM(st.deposit_amount),0) FROM savings_transactions st
-        WHERE st.transaction_date=? AND st.deposit_amount > 0
-    """ + (" AND st.center_id=?" if center_filter else ""), p2).fetchone()[0]
+        WHERE {_ic('st.transaction_date')}=? AND st.deposit_amount > 0
+    """ + (" AND st.center_id=?" if center_filter else ""), p1c).fetchone()[0]
 
-    savings_withdrawn = db.execute("""
+    savings_withdrawn = db.execute(f"""
         SELECT COALESCE(SUM(st.withdraw_amount),0) FROM savings_transactions st
-        WHERE st.transaction_date=? AND st.withdraw_amount > 0
-    """ + (" AND st.center_id=?" if center_filter else ""), p2).fetchone()[0]
+        WHERE {_ic('st.transaction_date')}=? AND st.withdraw_amount > 0
+    """ + (" AND st.center_id=?" if center_filter else ""), p1c).fetchone()[0]
 
     credit_data = {
         'joining_fee': joining_fee,
@@ -3569,7 +3576,8 @@ def report_summary_sheet():
     db.close()
     return render_template('reports/summary_sheet.html',
                            credit_data=credit_data, debit_data=debit_data,
-                           centers=centers, center_filter=center_filter, report_date=report_date)
+                           centers=centers, center_filter=center_filter,
+                           report_date=report_date, report_date_display=report_date_display)
 
 @app.route('/reports/member-wise-summary')
 @login_required
@@ -3924,7 +3932,11 @@ def report_voucher_debit():
         report_date_display = f"{p[2]}/{p[1]}/{p[0]}"
     except Exception:
         report_date_display = report_date
-    query = """
+
+    def _ic(col):
+        return f"substr({col},7,4)||'-'||substr({col},4,2)||'-'||substr({col},1,2)"
+
+    disb_query = f"""
         SELECT ld.loan_id, ld.disbursement_no, ld.disbursement_date, ld.disbursed_amount, ld.mode,
                la.processing_fee, la.insurance_fee, la.nominee_insurance_fee, la.other_charges,
                m.full_name as member_name, m.member_code,
@@ -3937,18 +3949,41 @@ def report_voucher_debit():
         LEFT JOIN centers c ON la.center_id=c.id
         LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
         LEFT JOIN users u ON ld.disbursed_by=u.id
-        WHERE substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2) = ?
+        WHERE {_ic('ld.disbursement_date')} = ?
     """
-    params = [report_date]
+    disb_params = [report_date]
     if center_filter:
-        query += " AND la.center_id=?"
-        params.append(center_filter)
-    query += " ORDER BY c.center_code, m.member_code"
-    records = db.execute(query, params).fetchall()
+        disb_query += " AND la.center_id=?"
+        disb_params.append(center_filter)
+    disb_query += " ORDER BY c.center_code, m.member_code"
+    records = db.execute(disb_query, disb_params).fetchall()
+
+    sav_query = f"""
+        SELECT st.withdraw_amount, st.transaction_date,
+               m.full_name as member_name, m.member_code,
+               c.center_code, c.center_name
+        FROM savings_transactions st
+        LEFT JOIN members m ON st.member_id=m.id
+        LEFT JOIN centers c ON st.center_id=c.id
+        WHERE {_ic('st.transaction_date')} = ? AND st.withdraw_amount > 0
+    """
+    sav_params = [report_date]
+    if center_filter:
+        sav_query += " AND st.center_id=?"
+        sav_params.append(center_filter)
+    sav_query += " ORDER BY c.center_code, m.member_code"
+    savings_withdrawals = db.execute(sav_query, sav_params).fetchall()
+
+    advance_withdrawals = []
+
     centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
     db.close()
-    return render_template('reports/voucher_debit.html', records=records, centers=centers,
-                           center_filter=center_filter, report_date=report_date, report_date_display=report_date_display)
+    return render_template('reports/voucher_debit.html', records=records,
+                           savings_withdrawals=savings_withdrawals,
+                           advance_withdrawals=advance_withdrawals,
+                           centers=centers,
+                           center_filter=center_filter, report_date=report_date,
+                           report_date_display=report_date_display)
 
 @app.route('/reports/voucher/credit')
 @login_required

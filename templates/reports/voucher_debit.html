@@ -47,10 +47,17 @@
   </button>
 </div>
 
-{% set ns = namespace(t_disb=0) %}
+{% set ns = namespace(t_disb=0, t_sav=0, t_adv=0) %}
 {% for r in records %}
   {% set ns.t_disb = ns.t_disb + (r.disbursed_amount or 0) %}
 {% endfor %}
+{% for r in savings_withdrawals %}
+  {% set ns.t_sav = ns.t_sav + (r.withdraw_amount or 0) %}
+{% endfor %}
+{% for r in advance_withdrawals %}
+  {% set ns.t_adv = ns.t_adv + (r.amount or 0) %}
+{% endfor %}
+{% set ns_grand = namespace(total=ns.t_disb + ns.t_sav + ns.t_adv) %}
 
 <!-- VOUCHER DOCUMENT -->
 <div class="form-card" style="max-width:640px;">
@@ -80,18 +87,30 @@
         <td style="border:1px dashed #888;padding:5px 10px;">Loan Disbursement Amount A/c</td>
         <td style="border:1px dashed #888;padding:5px 10px;text-align:right;">{{ '{:,.2f}'.format(ns.t_disb) }}</td>
       </tr>
+      {% if ns.t_sav > 0 %}
+      <tr>
+        <td style="border:1px dashed #888;padding:5px 10px;">Savings Withdrawal A/c</td>
+        <td style="border:1px dashed #888;padding:5px 10px;text-align:right;">{{ '{:,.2f}'.format(ns.t_sav) }}</td>
+      </tr>
+      {% endif %}
+      {% if ns.t_adv > 0 %}
+      <tr>
+        <td style="border:1px dashed #888;padding:5px 10px;">Advance Recovery Withdraw A/c</td>
+        <td style="border:1px dashed #888;padding:5px 10px;text-align:right;">{{ '{:,.2f}'.format(ns.t_adv) }}</td>
+      </tr>
+      {% endif %}
       <!-- Custom rows printed here by JS -->
     </tbody>
     <tfoot>
       <tr>
         <td style="border:1px solid #333;padding:5px 10px;text-align:right;font-weight:700;color:#0d6efd;">Total:</td>
-        <td style="border:1px solid #333;padding:5px 10px;text-align:right;font-weight:700;color:#0d6efd;" id="grandTotal">{{ '{:,.2f}'.format(ns.t_disb) }}</td>
+        <td style="border:1px solid #333;padding:5px 10px;text-align:right;font-weight:700;color:#0d6efd;" id="grandTotal">{{ '{:,.2f}'.format(ns_grand.total) }}</td>
       </tr>
     </tfoot>
   </table>
 
   <div class="mt-2" style="font-size:12px;" id="amountWords">
-    <strong>Rupees in words:</strong> {{ _number_to_words(ns.t_disb) }}
+    <strong>Rupees in words:</strong> {{ _number_to_words(ns_grand.total) }}
   </div>
 
   <div class="mt-4 row" style="font-size:12px;">
@@ -113,7 +132,7 @@
 <!-- Disbursement detail list (no-print) -->
 {% if records %}
 <div class="form-card mt-3 no-print">
-  <div class="section-title">Disbursement Details – {{ report_date_display }}</div>
+  <div class="section-title">Loan Disbursements – {{ report_date_display }}</div>
   <div style="overflow-x:auto;">
   <table class="table table-bordered table-sm mb-0" style="font-size:11px;">
     <thead>
@@ -145,8 +164,69 @@
 <div class="form-card mt-3 no-print text-center text-muted py-3">No disbursements found for {{ report_date_display }}.</div>
 {% endif %}
 
+{% if savings_withdrawals %}
+<div class="form-card mt-3 no-print">
+  <div class="section-title">Savings Withdrawals – {{ report_date_display }}</div>
+  <div style="overflow-x:auto;">
+  <table class="table table-bordered table-sm mb-0" style="font-size:11px;">
+    <thead>
+      <tr style="background:#fff3cd;">
+        <th>S.No</th><th>Date</th><th>Mem Code</th><th>Member Name</th>
+        <th>Center</th><th class="text-end">Amount Withdrawn</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% set ns3 = namespace(sno=0) %}
+    {% for r in savings_withdrawals %}
+      {% set ns3.sno = ns3.sno + 1 %}
+      <tr>
+        <td>{{ ns3.sno }}</td>
+        <td>{{ r.transaction_date }}</td>
+        <td>{{ r.member_code }}</td>
+        <td>{{ r.member_name }}</td>
+        <td>{{ r.center_code }}</td>
+        <td class="text-end text-danger fw-semibold">{{ '{:,.2f}'.format(r.withdraw_amount or 0) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+
+{% if advance_withdrawals %}
+<div class="form-card mt-3 no-print">
+  <div class="section-title">Advance Withdrawals – {{ report_date_display }}</div>
+  <div style="overflow-x:auto;">
+  <table class="table table-bordered table-sm mb-0" style="font-size:11px;">
+    <thead>
+      <tr style="background:#f8d7da;">
+        <th>S.No</th><th>Date</th><th>Mem Code</th><th>Member Name</th>
+        <th>Center</th><th>Narration</th><th class="text-end">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% set ns4 = namespace(sno=0) %}
+    {% for r in advance_withdrawals %}
+      {% set ns4.sno = ns4.sno + 1 %}
+      <tr>
+        <td>{{ ns4.sno }}</td>
+        <td>{{ r.withdraw_date }}</td>
+        <td>{{ r.member_code }}</td>
+        <td>{{ r.member_name }}</td>
+        <td>{{ r.center_code }}</td>
+        <td>{{ r.narration or '—' }}</td>
+        <td class="text-end text-danger fw-semibold">{{ '{:,.2f}'.format(r.amount or 0) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+
 <script>
-const BASE_TOTAL = {{ ns.t_disb }};
+const BASE_TOTAL = {{ ns_grand.total }};
 let customTotal = 0;
 
 function addCustomRow() {
