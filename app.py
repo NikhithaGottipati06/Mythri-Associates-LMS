@@ -3612,9 +3612,18 @@ def report_member_wise_summary():
                          LEFT JOIN loan_disbursements ld3 ON ar.disbursement_id=ld3.id
                          LEFT JOIN loan_applications la3 ON ld3.application_id=la3.id
                          WHERE la3.member_id=m.id),0) as advance_collected,
-               COALESCE(SUM(la.insurance_fee + la.nominee_insurance_fee),0) as insurance_collected,
-               COALESCE(SUM(la.processing_fee),0) as process_fee,
-               COALESCE(SUM(ld.disbursed_amount),0) as disb_amount
+               COALESCE((SELECT SUM(la2.insurance_fee + la2.nominee_insurance_fee)
+                         FROM loan_applications la2
+                         JOIN loan_disbursements ld2 ON ld2.application_id=la2.id AND ld2.status='Disbursed'
+                         WHERE la2.member_id=m.id),0) as insurance_collected,
+               COALESCE((SELECT SUM(la2.processing_fee)
+                         FROM loan_applications la2
+                         JOIN loan_disbursements ld2 ON ld2.application_id=la2.id AND ld2.status='Disbursed'
+                         WHERE la2.member_id=m.id),0) as process_fee,
+               COALESCE((SELECT SUM(ld2.disbursed_amount)
+                         FROM loan_disbursements ld2
+                         JOIN loan_applications la2 ON ld2.application_id=la2.id
+                         WHERE la2.member_id=m.id AND ld2.status='Disbursed'),0) as disb_amount
         FROM members m
         LEFT JOIN centers c ON m.center_id=c.id
         LEFT JOIN loan_applications la ON la.member_id=m.id
