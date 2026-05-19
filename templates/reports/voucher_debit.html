@@ -47,7 +47,7 @@
   </button>
 </div>
 
-{% set ns = namespace(t_disb=0, t_sav=0, t_adv=0) %}
+{% set ns = namespace(t_disb=0, t_sav=0, t_adv=0, t_tally=0) %}
 {% for r in records %}
   {% set ns.t_disb = ns.t_disb + (r.disbursed_amount or 0) %}
 {% endfor %}
@@ -57,7 +57,10 @@
 {% for r in advance_withdrawals %}
   {% set ns.t_adv = ns.t_adv + (r.amount or 0) %}
 {% endfor %}
-{% set ns_grand = namespace(total=ns.t_disb + ns.t_sav + ns.t_adv) %}
+{% for r in tally_payments %}
+  {% set ns.t_tally = ns.t_tally + (r.amount or 0) %}
+{% endfor %}
+{% set ns_grand = namespace(total=ns.t_disb + ns.t_sav + ns.t_adv + ns.t_tally) %}
 
 <!-- VOUCHER DOCUMENT -->
 <div class="form-card" style="max-width:640px;">
@@ -99,6 +102,12 @@
         <td style="border:1px dashed #888;padding:5px 10px;text-align:right;">{{ '{:,.2f}'.format(ns.t_adv) }}</td>
       </tr>
       {% endif %}
+      {% for r in tally_payments %}
+      <tr>
+        <td style="border:1px dashed #888;padding:5px 10px;">{{ r.ledger_name }} A/c{% if r.narration %} <span style="color:#666;font-size:10px;">({{ r.narration }})</span>{% endif %}</td>
+        <td style="border:1px dashed #888;padding:5px 10px;text-align:right;">{{ '{:,.2f}'.format(r.amount or 0) }}</td>
+      </tr>
+      {% endfor %}
       <!-- Custom rows printed here by JS -->
     </tbody>
     <tfoot>
@@ -189,6 +198,42 @@
       </tr>
     {% endfor %}
     </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+
+{% if tally_payments %}
+<div class="form-card mt-3 no-print">
+  <div class="section-title">Manual Payments (Tally Vouchers) – {{ report_date_display }}</div>
+  <div style="overflow-x:auto;">
+  <table class="table table-bordered table-sm mb-0" style="font-size:11px;">
+    <thead>
+      <tr style="background:#f8d7da;">
+        <th>S.No</th><th>Date</th><th>Group</th><th>Ledger / Account</th><th>Narration</th><th class="text-end">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% set ns_tp = namespace(sno=0, total=0) %}
+    {% for r in tally_payments %}
+      {% set ns_tp.sno = ns_tp.sno + 1 %}
+      {% set ns_tp.total = ns_tp.total + (r.amount or 0) %}
+      <tr>
+        <td>{{ ns_tp.sno }}</td>
+        <td>{{ r.voucher_date }}</td>
+        <td>{{ r.group_name }}</td>
+        <td>{{ r.ledger_name }}</td>
+        <td>{{ r.narration or '—' }}</td>
+        <td class="text-end text-danger fw-semibold">{{ '{:,.2f}'.format(r.amount or 0) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+    <tfoot class="table-secondary fw-bold">
+      <tr>
+        <td colspan="5" class="text-end">Total:</td>
+        <td class="text-end text-danger">{{ '{:,.2f}'.format(ns_tp.total) }}</td>
+      </tr>
+    </tfoot>
   </table>
   </div>
 </div>

@@ -3553,6 +3553,18 @@ def report_summary_sheet():
         WHERE {_ic('st.transaction_date')}=? AND st.withdraw_amount > 0
     """ + (" AND st.center_id=?" if center_filter else ""), p1c).fetchone()[0]
 
+    tally_payments_total = db.execute(f"""
+        SELECT COALESCE(SUM(tv.amount),0) FROM tally_vouchers tv
+        WHERE COALESCE(tv.type,'Payment')='Payment'
+          AND {_ic('tv.voucher_date')}=?
+    """, p1).fetchone()[0] or 0
+
+    tally_receipts_total = db.execute(f"""
+        SELECT COALESCE(SUM(tv.amount),0) FROM tally_vouchers tv
+        WHERE COALESCE(tv.type,'Payment')='Receipt'
+          AND {_ic('tv.voucher_date')}=?
+    """, p1).fetchone()[0] or 0
+
     credit_data = {
         'joining_fee': joining_fee,
         'insurance_premium': disb_fees['insurance_premium'] if disb_fees else 0,
@@ -3563,12 +3575,14 @@ def report_summary_sheet():
         'prepaid_amount': prepaid_amt,
         'preclosure_charges': 0,
         'advance_collected': advance_collected,
+        'tally_receipts': tally_receipts_total,
     }
     credit_data['credit_total'] = sum(credit_data.values())
     debit_data = {
         'disbursed_amount': disbursed_amt,
         'savings_withdrawn': savings_withdrawn,
         'advance_withdraw': 0,
+        'tally_payments': tally_payments_total,
     }
     debit_data['debit_total'] = sum(debit_data.values())
 
@@ -3976,11 +3990,23 @@ def report_voucher_debit():
 
     advance_withdrawals = []
 
+    tally_payments = db.execute(f"""
+        SELECT tg.name as group_name, tl.name as ledger_name,
+               tv.voucher_date, tv.amount, tv.narration
+        FROM tally_vouchers tv
+        JOIN tally_ledgers tl ON tv.ledger_id=tl.id
+        JOIN tally_groups  tg ON tl.group_id=tg.id
+        WHERE COALESCE(tv.type,'Payment')='Payment'
+          AND {_ic('tv.voucher_date')}=?
+        ORDER BY tg.sort_order, tl.name
+    """, [report_date]).fetchall()
+
     centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
     db.close()
     return render_template('reports/voucher_debit.html', records=records,
                            savings_withdrawals=savings_withdrawals,
                            advance_withdrawals=advance_withdrawals,
+                           tally_payments=tally_payments,
                            centers=centers,
                            center_filter=center_filter, report_date=report_date,
                            report_date_display=report_date_display)
@@ -4076,11 +4102,30 @@ def report_voucher_credit():
     sav_dep_q += " ORDER BY c.center_code, m.member_code"
     savings_deposits = db.execute(sav_dep_q, sav_dep_params).fetchall()
 
+    def _ic2(col):
+        return f"substr({col},7,4)||'-'||substr({col},4,2)||'-'||substr({col},1,2)"
+
+    tally_receipts = db.execute(f"""
+        SELECT tg.name as group_name, tl.name as ledger_name,
+               tv.voucher_date, tv.amount, tv.narration
+        FROM tally_vouchers tv
+        JOIN tally_ledgers tl ON tv.ledger_id=tl.id
+        JOIN tally_groups  tg ON tl.group_id=tg.id
+        WHERE COALESCE(tv.type,'Payment')='Receipt'
+          AND {_ic2('tv.voucher_date')}=?
+        ORDER BY tg.sort_order, tl.name
+    """, [report_date]).fetchall()
+
+    tally_receipts_total = sum(r['amount'] or 0 for r in tally_receipts)
+    totals['tally_receipts'] = tally_receipts_total
+    totals['grand_total'] = totals['grand_total'] + tally_receipts_total
+
     centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
     db.close()
     return render_template('reports/voucher_credit.html', totals=totals,
                            recovery_records=recovery_records,
                            savings_deposits=savings_deposits,
+                           tally_receipts=tally_receipts,
                            centers=centers,
                            center_filter=center_filter, report_date=report_date,
                            report_date_display=report_date_display)

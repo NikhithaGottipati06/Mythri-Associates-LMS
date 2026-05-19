@@ -50,6 +50,9 @@
           <tr><td>Prepaid Amount</td><td class="text-end">{{ '{:,.2f}'.format(credit_data.prepaid_amount) }}</td></tr>
           <tr><td>PreClosure Charges</td><td class="text-end">{{ '{:,.2f}'.format(credit_data.preclosure_charges) }}</td></tr>
           <tr><td>Advance Recovery Collected</td><td class="text-end">{{ '{:,.2f}'.format(credit_data.advance_collected) }}</td></tr>
+          {% if credit_data.tally_receipts %}
+          <tr><td>Other Receipts (Manual)</td><td class="text-end">{{ '{:,.2f}'.format(credit_data.tally_receipts) }}</td></tr>
+          {% endif %}
           <tr class="table-success fw-bold">
             <td><b>Credit Total:</b></td>
             <td class="text-end text-success" style="font-size:14px;">{{ '{:,.2f}'.format(credit_data.credit_total) }}</td>
@@ -66,6 +69,9 @@
           <tr><td>Disbursed Amount</td><td class="text-end">{{ '{:,.2f}'.format(debit_data.disbursed_amount) }}</td></tr>
           <tr><td>Savings Withdrawn</td><td class="text-end">{{ '{:,.2f}'.format(debit_data.savings_withdrawn) }}</td></tr>
           <tr><td>Advance Recovery Withdraw</td><td class="text-end">{{ '{:,.2f}'.format(debit_data.advance_withdraw) }}</td></tr>
+          {% if debit_data.tally_payments %}
+          <tr><td>Other Payments (Manual)</td><td class="text-end">{{ '{:,.2f}'.format(debit_data.tally_payments) }}</td></tr>
+          {% endif %}
           <tr class="table-danger fw-bold">
             <td><b>Debit Total:</b></td>
             <td class="text-end text-danger" style="font-size:14px;">{{ '{:,.2f}'.format(debit_data.debit_total) }}</td>
