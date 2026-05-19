@@ -46,7 +46,7 @@
   {% set proc_fee = d.process_fee or 0 %}
   {% set credit_total = join_fee + prin_rec + int_rec + prepaid + adv_col + ins_col + proc_fee %}
   {% set disb_amt = d.disb_amount or 0 %}
-  {% set debit_total = disb_amt %}
+  {% set debit_total = disb_amt - prin_rec %}
 
   {% if d.center_code != ns.cur_center %}
     {% if ns.cur_center != '' %}
