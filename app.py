@@ -4039,10 +4039,51 @@ def report_voucher_credit():
         'member_fee': member_fee_total,
     }
     totals['grand_total'] = sum(totals.values())
+
+    def _ic(col):
+        return f"substr({col},7,4)||'-'||substr({col},4,2)||'-'||substr({col},1,2)"
+
+    rp_q = f"""
+        SELECT rp.posting_date, rp.principal, rp.interest, rp.paid_amount,
+               rp.installment_no, ld.loan_id,
+               m.full_name as member_name, m.member_code,
+               c.center_code, c.center_name
+        FROM recovery_postings rp
+        LEFT JOIN loan_disbursements ld ON rp.disbursement_id=ld.id
+        LEFT JOIN loan_applications la ON ld.application_id=la.id
+        LEFT JOIN members m ON la.member_id=m.id
+        LEFT JOIN centers c ON la.center_id=c.id
+        WHERE rp.installment_no > 0 AND {_ic('rp.posting_date')}=?
+    """
+    rp_params = [report_date]
+    if center_filter:
+        rp_q += " AND la.center_id=?"; rp_params.append(center_filter)
+    rp_q += " ORDER BY c.center_code, m.member_code"
+    recovery_records = db.execute(rp_q, rp_params).fetchall()
+
+    sav_dep_q = f"""
+        SELECT st.transaction_date, st.deposit_amount,
+               m.full_name as member_name, m.member_code,
+               c.center_code, c.center_name
+        FROM savings_transactions st
+        LEFT JOIN members m ON st.member_id=m.id
+        LEFT JOIN centers c ON st.center_id=c.id
+        WHERE st.deposit_amount > 0 AND {_ic('st.transaction_date')}=?
+    """
+    sav_dep_params = [report_date]
+    if center_filter:
+        sav_dep_q += " AND st.center_id=?"; sav_dep_params.append(center_filter)
+    sav_dep_q += " ORDER BY c.center_code, m.member_code"
+    savings_deposits = db.execute(sav_dep_q, sav_dep_params).fetchall()
+
     centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
     db.close()
-    return render_template('reports/voucher_credit.html', totals=totals, centers=centers,
-                           center_filter=center_filter, report_date=report_date, report_date_display=report_date_display)
+    return render_template('reports/voucher_credit.html', totals=totals,
+                           recovery_records=recovery_records,
+                           savings_deposits=savings_deposits,
+                           centers=centers,
+                           center_filter=center_filter, report_date=report_date,
+                           report_date_display=report_date_display)
 
 @app.route('/reports/glance')
 @login_required

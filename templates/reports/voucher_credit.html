@@ -133,6 +133,90 @@
   </div>
 </div>
 
+<!-- Recovery detail (no-print) -->
+{% if recovery_records %}
+<div class="form-card mt-3 no-print">
+  <div class="section-title">Recovery Collections – {{ report_date_display }}</div>
+  <div style="overflow-x:auto;">
+  <table class="table table-bordered table-sm mb-0" style="font-size:11px;">
+    <thead>
+      <tr style="background:#d1e7dd;">
+        <th>S.No</th><th>Date</th><th>Loan ID</th><th>Inst#</th><th>Mem Code</th><th>Member Name</th>
+        <th>Center</th><th class="text-end">Principal</th><th class="text-end">Interest</th><th class="text-end">Total Paid</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% set ns_rp = namespace(sno=0, t_prin=0, t_int=0, t_paid=0) %}
+    {% for r in recovery_records %}
+      {% set ns_rp.sno = ns_rp.sno + 1 %}
+      {% set ns_rp.t_prin = ns_rp.t_prin + (r.principal or 0) %}
+      {% set ns_rp.t_int = ns_rp.t_int + (r.interest or 0) %}
+      {% set ns_rp.t_paid = ns_rp.t_paid + (r.paid_amount or 0) %}
+      <tr>
+        <td>{{ ns_rp.sno }}</td>
+        <td>{{ r.posting_date }}</td>
+        <td class="text-primary fw-semibold">{{ r.loan_id or '—' }}</td>
+        <td>{{ r.installment_no }}</td>
+        <td>{{ r.member_code }}</td>
+        <td>{{ r.member_name }}</td>
+        <td>{{ r.center_code }}</td>
+        <td class="text-end">{{ '{:,.2f}'.format(r.principal or 0) }}</td>
+        <td class="text-end text-danger">{{ '{:,.2f}'.format(r.interest or 0) }}</td>
+        <td class="text-end fw-semibold text-success">{{ '{:,.2f}'.format(r.paid_amount or 0) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+    <tfoot class="table-secondary fw-bold">
+      <tr>
+        <td colspan="7" class="text-end">Total:</td>
+        <td class="text-end">{{ '{:,.2f}'.format(ns_rp.t_prin) }}</td>
+        <td class="text-end text-danger">{{ '{:,.2f}'.format(ns_rp.t_int) }}</td>
+        <td class="text-end text-success">{{ '{:,.2f}'.format(ns_rp.t_paid) }}</td>
+      </tr>
+    </tfoot>
+  </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- Savings deposits detail (no-print) -->
+{% if savings_deposits %}
+<div class="form-card mt-3 no-print">
+  <div class="section-title">Savings Deposits – {{ report_date_display }}</div>
+  <div style="overflow-x:auto;">
+  <table class="table table-bordered table-sm mb-0" style="font-size:11px;">
+    <thead>
+      <tr style="background:#d1e7dd;">
+        <th>S.No</th><th>Date</th><th>Mem Code</th><th>Member Name</th>
+        <th>Center</th><th class="text-end">Deposit Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% set ns_sd = namespace(sno=0, total=0) %}
+    {% for r in savings_deposits %}
+      {% set ns_sd.sno = ns_sd.sno + 1 %}
+      {% set ns_sd.total = ns_sd.total + (r.deposit_amount or 0) %}
+      <tr>
+        <td>{{ ns_sd.sno }}</td>
+        <td>{{ r.transaction_date }}</td>
+        <td>{{ r.member_code }}</td>
+        <td>{{ r.member_name }}</td>
+        <td>{{ r.center_code }}</td>
+        <td class="text-end text-success fw-semibold">{{ '{:,.2f}'.format(r.deposit_amount or 0) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+    <tfoot class="table-secondary fw-bold">
+      <tr>
+        <td colspan="5" class="text-end">Total:</td>
+        <td class="text-end text-success">{{ '{:,.2f}'.format(ns_sd.total) }}</td>
+      </tr>
+    </tfoot>
+  </table>
+  </div>
+</div>
+{% endif %}
+
 <script>
 const BASE_TOTAL = {{ totals.grand_total }};
 let customTotal = 0;
