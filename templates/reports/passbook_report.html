@@ -113,11 +113,11 @@
     {% set total_week = prin_week + int_week %}
     {% for inst in range(1, loan.total_installments + 1) %}
       {% set bal.v = bal.v - prin_week %}
-      {% set rec_date = '' %}
-      {% for p in postings %}{% if p.installment_no == inst %}{% set rec_date = p.posting_date %}{% endif %}{% endfor %}
+      {% set rec_ns = namespace(date='') %}
+      {% for p in postings %}{% if p.installment_no == inst %}{% set rec_ns.date = p.posting_date %}{% endif %}{% endfor %}
       <tr {% if loop.index % 2 == 0 %}style="background:#f5f8ff;"{% endif %}>
         <td>{{ inst }}</td>
-        <td>{{ rec_date }}</td>
+        <td>{{ rec_ns.date }}</td>
         <td>{{ '{:,.2f}'.format(prin_week) }}</td>
         <td class="text-danger">{{ '{:,.2f}'.format(int_week) }}</td>
         <td class="fw-semibold">{{ '{:,.2f}'.format(total_week) }}</td>
