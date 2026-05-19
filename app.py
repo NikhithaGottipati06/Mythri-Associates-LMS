@@ -5304,14 +5304,21 @@ def tally_trial_balance():
         if penalty:
             credit.append({'name': 'Penalty / Fine Income', 'nature': 'Income', 'amount': penalty})
 
+        expense_entries = []
         for row in voucher_groups:
             grp_name, nature, total = row['name'], row['nature'], row['total']
             if not total:
                 continue
-            if nature in ('Asset', 'Expense'):
+            if nature == 'Asset':
                 debit.append({'name': grp_name, 'nature': nature, 'amount': total})
+            elif nature == 'Expense':
+                expense_entries.append({'name': grp_name, 'amount': total})
             else:
                 credit.append({'name': grp_name, 'nature': nature, 'amount': total})
+
+        expense_total_vouch = sum(e['amount'] for e in expense_entries)
+        if expense_total_vouch:
+            debit.append({'name': 'Total Expenses (P&L)', 'nature': 'Expense', 'amount': expense_total_vouch})
 
         total_dr = sum(r['amount'] for r in debit)
         total_cr = sum(r['amount'] for r in credit)
@@ -5332,6 +5339,7 @@ def tally_trial_balance():
         return render_template('tally/trial_balance.html',
             debit=debit, credit=credit,
             total_dr=total_dr, total_cr=total_cr,
+            expense_entries=expense_entries,
             as_at=as_at_display,
             disbursed=disbursed, recovered=recovered,
             total_income=total_inc,
