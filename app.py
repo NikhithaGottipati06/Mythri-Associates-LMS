@@ -3451,20 +3451,21 @@ def report_collection_sheet():
     except Exception:
         day_of_week = None
     where_extra = ""
-    params = []
+    # params: first entry is report_date for the total_paid subquery, then optional WHERE filter
+    params = [report_date]
     if center_filter:
         where_extra = " AND la.center_id=?"
-        params = [center_filter]
+        params.append(center_filter)
     elif day_of_week:
         where_extra = " AND c.meeting_week=?"
-        params = [day_of_week]
+        params.append(day_of_week)
     rows = db.execute("""
         SELECT ld.*, la.application_no, la.purpose, la.loan_cycle,
                m.full_name as member_name, m.member_code, m.grp, m.phone1,
                c.center_name, c.center_code, c.meeting_week,
                lt.loan_type_name, lt.interest_rate, lt.interest_type,
                u.full_name as staff_name,
-               (SELECT COALESCE(SUM(rp.paid_amount),0) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0) as total_paid,
+               (SELECT COALESCE(SUM(rp.paid_amount),0) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0 AND rp.posting_date=?) as total_paid,
                (SELECT COALESCE(SUM(rp.principal),0) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0) as principal_paid,
                (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0) as paid_count,
                (SELECT COALESCE(SUM(ar.amount),0) FROM advance_recoveries ar WHERE ar.disbursement_id=ld.id) as advance_total
