@@ -3445,6 +3445,19 @@ def report_collection_sheet():
     db = get_db()
     center_filter = request.args.get('center_id', '')
     report_date = request.args.get('report_date', datetime.now().strftime('%d/%m/%Y'))
+    try:
+        date_obj = datetime.strptime(report_date, '%d/%m/%Y')
+        day_of_week = date_obj.strftime('%A')
+    except Exception:
+        day_of_week = None
+    where_extra = ""
+    params = []
+    if center_filter:
+        where_extra = " AND la.center_id=?"
+        params = [center_filter]
+    elif day_of_week:
+        where_extra = " AND c.meeting_week=?"
+        params = [day_of_week]
     rows = db.execute("""
         SELECT ld.*, la.application_no, la.purpose, la.loan_cycle,
                m.full_name as member_name, m.member_code, m.grp, m.phone1,
@@ -3462,9 +3475,9 @@ def report_collection_sheet():
         LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
         LEFT JOIN users u ON c.staff_id=u.id
         WHERE ld.status='Disbursed'
-        """ + (" AND la.center_id=?" if center_filter else "") + """
+        """ + where_extra + """
         ORDER BY c.center_code, m.grp, m.member_code
-    """, ([center_filter] if center_filter else [])).fetchall()
+    """, params).fetchall()
     # compute interest per installment for each loan
     loans = []
     for r in rows:
