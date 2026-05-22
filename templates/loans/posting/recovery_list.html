@@ -161,6 +161,8 @@
 flatpickr("#datePicker", {
   dateFormat: "d/m/Y",
   allowInput: true,
+  disableMobile: true,
+  defaultDate: document.getElementById('datePicker').value || 'today',
   onChange: function(selectedDates, dateStr) {
     document.querySelector('form[method=GET]').submit();
   }

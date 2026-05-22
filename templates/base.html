@@ -318,8 +318,8 @@ document.querySelectorAll('.sidebar .nav-link:not(.collapse-toggle)').forEach(li
           dateFormat: 'd/m/Y',
           allowInput: true,
           disableMobile: true,
+          defaultDate: el.value || 'today',
           onReady: function(_, __, fp) {
-            // If field already has a value, parse it
             if (el.value) {
               try { fp.setDate(el.value, false, 'd/m/Y'); } catch(e) {}
             }
