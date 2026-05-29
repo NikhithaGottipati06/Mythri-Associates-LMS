@@ -5384,10 +5384,6 @@ def tally_trial_balance():
             else:
                 credit.append({'name': grp_name, 'nature': nature, 'amount': total})
 
-        expense_total_vouch = sum(e['amount'] for e in expense_entries)
-        if expense_total_vouch:
-            debit.append({'name': 'Total Expenses (P&L)', 'nature': 'Expense', 'amount': expense_total_vouch})
-
         total_dr = sum(r['amount'] for r in debit)
         total_cr = sum(r['amount'] for r in credit)
 
