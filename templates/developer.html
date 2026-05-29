@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Developer Panel – Maitri LMS</title>
+<title>Developer Panel – SHARP LMS</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
@@ -36,7 +36,7 @@
   <div>
     <i class="bi bi-shield-lock me-2"></i>
     <strong>Developer Panel</strong>
-    <span class="ms-3 opacity-75" style="font-size:13px;">Maitri LMS · Device Management</span>
+    <span class="ms-3 opacity-75" style="font-size:13px;">SHARP LMS · Device Management</span>
   </div>
   <div class="d-flex align-items-center gap-3">
     <span style="font-size:13px;"><i class="bi bi-person-circle me-1"></i>{{ session.dev_name }}</span>
@@ -111,6 +111,65 @@
         </tbody>
       </table>
     </div>
+  </div>
+
+  <!-- ── Branch Management ─────────────────────────────────────────── -->
+  <div class="form-card mb-4" style="background:#fff;border-radius:10px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #1a3c6e;">
+    <div style="font-weight:700;font-size:13px;letter-spacing:.06em;color:#1a3c6e;text-transform:uppercase;border-bottom:2px solid #e2e8f0;padding-bottom:8px;margin-bottom:14px;">
+      <i class="bi bi-building me-1"></i>Branch Management
+    </div>
+    <div class="table-responsive mb-3">
+      <table class="table table-sm table-hover align-middle mb-0">
+        <thead style="background:#1a3c6e;color:#fff;">
+          <tr>
+            <th>Branch Name</th>
+            <th class="text-center">Status</th>
+            <th class="text-center">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in branches_list %}
+          <tr>
+            <td><strong>{{ b.name }}</strong></td>
+            <td class="text-center">
+              {% if b.active %}
+              <span class="badge bg-success">Active</span>
+              {% else %}
+              <span class="badge bg-secondary">Inactive</span>
+              {% endif %}
+            </td>
+            <td class="text-center">
+              <div class="d-flex gap-1 justify-content-center">
+                <form method="POST" action="{{ url_for('developer_branch_toggle', bid=b.id) }}">
+                  <button type="submit" class="btn btn-sm {{ 'btn-outline-secondary' if b.active else 'btn-outline-success' }}"
+                          title="{{ 'Deactivate' if b.active else 'Activate' }}">
+                    <i class="bi {{ 'bi-toggle-off' if b.active else 'bi-toggle-on' }}"></i>
+                    {{ 'Deactivate' if b.active else 'Activate' }}
+                  </button>
+                </form>
+                <form method="POST" action="{{ url_for('developer_branch_delete', bid=b.id) }}"
+                      onsubmit="return confirm('Delete branch &quot;{{ b.name }}&quot;? This cannot be undone.')">
+                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete Branch">
+                    <i class="bi bi-trash"></i> Delete
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="3" class="text-center text-muted py-3">No branches yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <!-- Add New Branch -->
+    <form method="POST" action="{{ url_for('developer_branch_add') }}" class="d-flex gap-2 align-items-center">
+      <input type="text" name="name" class="form-control form-control-sm" placeholder="New branch name…"
+             style="max-width:240px;" required>
+      <button type="submit" class="btn btn-primary btn-sm text-nowrap">
+        <i class="bi bi-plus-circle me-1"></i>Add Branch
+      </button>
+    </form>
   </div>
 
   <!-- ── Subscription Settings ───────────────────────────────────────── -->
@@ -482,6 +541,37 @@
     {% endif %}
   </div>
 
+  <!-- ── Change Developer Credentials ─────────────────────────────────── -->
+  <div class="form-card mb-4" style="background:#fff;border-radius:10px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-left:4px solid #6366f1;">
+    <div style="font-weight:700;font-size:13px;letter-spacing:.06em;color:#4338ca;text-transform:uppercase;border-bottom:2px solid #e0e7ff;padding-bottom:8px;margin-bottom:14px;">
+      <i class="bi bi-key-fill me-1"></i>Change Developer Credentials
+    </div>
+    <form method="POST" action="{{ url_for('developer_change_credentials') }}" class="row g-3" style="max-width:500px;">
+      <div class="col-12">
+        <label class="form-label small fw-semibold">Current Password <span class="text-danger">*</span></label>
+        <input type="password" name="current_password" class="form-control form-control-sm" required autocomplete="current-password">
+      </div>
+      <div class="col-12">
+        <label class="form-label small fw-semibold">New Username</label>
+        <input type="text" name="new_username" class="form-control form-control-sm"
+               placeholder="Leave blank to keep current ({{ session.dev_login }})" autocomplete="username">
+      </div>
+      <div class="col-12">
+        <label class="form-label small fw-semibold">New Password</label>
+        <input type="password" name="new_password" class="form-control form-control-sm" placeholder="Leave blank to keep current" autocomplete="new-password">
+      </div>
+      <div class="col-12">
+        <label class="form-label small fw-semibold">Confirm New Password</label>
+        <input type="password" name="confirm_password" class="form-control form-control-sm" placeholder="Repeat new password" autocomplete="new-password">
+      </div>
+      <div class="col-12">
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="bi bi-save me-1"></i>Save Credentials
+        </button>
+      </div>
+    </form>
+  </div>
+
   {% if blocked %}
   <div class="form-card">
     <div class="section-title" style="color:#dc2626;">
@@ -564,3 +654,4 @@ function sqDelete(id) {
 </script>
 </body>
 </html>
+

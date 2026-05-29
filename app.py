@@ -3,10 +3,12 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from database import get_master_db, get_branch_db, init_db, init_branch_db, BRANCHES_DIR
 from functools import wraps
 import os
+import sys
 import json
 import sqlite3
 import secrets
 import smtplib
+import traceback
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
@@ -24,11 +26,11 @@ def _send_support_email(qid, branch_name, user_name, query_text):
         import uuid
         now_str = datetime.now().strftime('%d %b %Y %I:%M %p')
         msg = MIMEMultipart()
-        msg['Subject'] = f'[Maitri LMS] New Query #{qid} from {user_name} – {now_str}'
+        msg['Subject'] = f'[SHARP LMS] New Query #{qid} from {user_name} – {now_str}'
         msg['From'] = smtp_user
         msg['To'] = SUPPORT_EMAIL
         msg['Date'] = formatdate(localtime=True)
-        msg['Message-ID'] = f'<lms-query-{qid}-{uuid.uuid4().hex}@maitrilms>'
+        msg['Message-ID'] = f'<lms-query-{qid}-{uuid.uuid4().hex}@Sharplms>'
         body = (f"New support query received.\n\n"
                 f"Query ID : #{qid}\n"
                 f"Branch   : {branch_name}\n"
@@ -96,10 +98,23 @@ def get_db():
         g._dates_normalized = True
     return conn
 
-app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'mythri-lms-secret-2024')
-app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'static', 'uploads')
+def _bundle_dir():
+    if getattr(sys, 'frozen', False):
+        return sys._MEIPASS
+    return os.path.dirname(os.path.abspath(__file__))
+
+_BUNDLE = _bundle_dir()
+app = Flask(__name__,
+    template_folder=os.path.join(_BUNDLE, 'templates'),
+    static_folder=os.path.join(_BUNDLE, 'static'))
+app.secret_key = os.environ.get('SECRET_KEY', 'sharp-lms-secret-2024')
+app.config['UPLOAD_FOLDER'] = os.path.join(_BUNDLE, 'static', 'uploads')
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+@app.errorhandler(500)
+def handle_500(e):
+    tb = traceback.format_exc()
+    return f"<pre style='padding:20px;color:red;'><b>500 Internal Server Error</b>\n\n{tb}</pre>", 500
 
 @app.context_processor
 def inject_helpers():
@@ -122,6 +137,8 @@ _SUBSCRIPTION_EXEMPT = frozenset([
     'developer_subscription_settings', 'developer_subscription_approve',
     'developer_subscription_undo', 'developer_subscription_delete',
     'developer_scanner_upload', 'developer_support_respond', 'developer_support_delete',
+    'developer_branch_add', 'developer_branch_delete', 'developer_branch_toggle',
+    'developer_change_credentials',
     'subscription_blocked', 'subscription_submit_payment',
     'support_send', 'support_history', 'support_unread_count', 'support_mark_seen',
 ])
@@ -547,6 +564,60 @@ def developer_purge_duplicates():
     return redirect(url_for('developer_panel'))
 
 
+@app.route('/developer/change-credentials', methods=['POST'])
+@developer_required
+def developer_change_credentials():
+    current_password = request.form.get('current_password', '').strip()
+    new_username     = request.form.get('new_username', '').strip()
+    new_password     = request.form.get('new_password', '').strip()
+    confirm_password = request.form.get('confirm_password', '').strip()
+
+    master = get_master_db()
+    dev_user = master.execute(
+        "SELECT * FROM master_users WHERE login_name=?", (session['dev_login'],)
+    ).fetchone()
+
+    if not dev_user or not check_password_hash(dev_user['password_hash'], current_password):
+        flash('Current password is incorrect.', 'danger')
+        master.close()
+        return redirect(url_for('developer_panel'))
+
+    if new_password and new_password != confirm_password:
+        flash('New passwords do not match.', 'danger')
+        master.close()
+        return redirect(url_for('developer_panel'))
+
+    if not new_username and not new_password:
+        flash('No changes provided.', 'warning')
+        master.close()
+        return redirect(url_for('developer_panel'))
+
+    updates, params = [], []
+    if new_username and new_username != dev_user['login_name']:
+        existing = master.execute(
+            "SELECT id FROM master_users WHERE login_name=? AND id!=?", (new_username, dev_user['id'])
+        ).fetchone()
+        if existing:
+            flash('That username is already taken.', 'danger')
+            master.close()
+            return redirect(url_for('developer_panel'))
+        updates.append('login_name=?')
+        params.append(new_username)
+    if new_password:
+        updates.append('password_hash=?')
+        params.append(generate_password_hash(new_password))
+
+    if updates:
+        params.append(dev_user['id'])
+        master.execute(f"UPDATE master_users SET {', '.join(updates)} WHERE id=?", params)
+        master.commit()
+        if new_username and new_username != dev_user['login_name']:
+            session['dev_login'] = new_username
+        flash('Credentials updated successfully.', 'success')
+    master.close()
+    return redirect(url_for('developer_panel'))
+
+
 @app.route('/developer/logout')
 def developer_logout():
     session.clear()
@@ -577,10 +648,10 @@ def device_status():
     return jsonify({'status': device['status'] if device else 'unknown'})
 
 
-# ── Branch management (Admin only) ────────────────────────────────────────────
+# ── Branch management (Developer only) ────────────────────────────────────────────
 
 @app.route('/branches')
-@admin_required
+@developer_required
 def branches_list():
     master = get_master_db()
     branches = master.execute("SELECT * FROM branches ORDER BY name").fetchall()
@@ -588,7 +659,7 @@ def branches_list():
     return render_template('branches/list.html', branches=branches)
 
 @app.route('/branches/new', methods=['GET', 'POST'])
-@admin_required
+@developer_required
 def branch_new():
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
@@ -611,7 +682,7 @@ def branch_new():
     return render_template('branches/form.html', branch=None)
 
 @app.route('/branches/<int:bid>/edit', methods=['GET', 'POST'])
-@admin_required
+@developer_required
 def branch_edit(bid):
     master = get_master_db()
     branch = master.execute("SELECT * FROM branches WHERE id=?", (bid,)).fetchone()
@@ -631,7 +702,7 @@ def branch_edit(bid):
     return render_template('branches/form.html', branch=branch)
 
 @app.route('/branches/<int:bid>/delete', methods=['POST'])
-@admin_required
+@developer_required
 def branch_delete(bid):
     master = get_master_db()
     master.execute("DELETE FROM branches WHERE id=?", (bid,))
@@ -639,6 +710,53 @@ def branch_delete(bid):
     master.close()
     flash('Branch deleted.', 'success')
     return redirect(url_for('branches_list'))
+
+@app.route('/developer/branch/add', methods=['POST'])
+@developer_required
+def developer_branch_add():
+    name = request.form.get('name', '').strip()
+    if not name:
+        flash('Branch name is required.', 'danger')
+        return redirect(url_for('developer_panel'))
+    db_path = os.path.join(BRANCHES_DIR, f"{name.lower().replace(' ', '_')}.db")
+    master = get_master_db()
+    try:
+        master.execute("INSERT INTO branches (name, db_path) VALUES (?, ?)", (name, db_path))
+        master.commit()
+        if not os.path.exists(db_path):
+            init_branch_db(db_path)
+        flash(f'Branch "{name}" created successfully.', 'success')
+    except Exception as e:
+        flash(f'Error creating branch: {e}', 'danger')
+    finally:
+        master.close()
+    return redirect(url_for('developer_panel'))
+
+@app.route('/developer/branch/<int:bid>/delete', methods=['POST'])
+@developer_required
+def developer_branch_delete(bid):
+    master = get_master_db()
+    branch = master.execute("SELECT name FROM branches WHERE id=?", (bid,)).fetchone()
+    if branch:
+        master.execute("DELETE FROM branches WHERE id=?", (bid,))
+        master.commit()
+        flash(f'Branch "{branch["name"]}" deleted.', 'success')
+    master.close()
+    return redirect(url_for('developer_panel'))
+
+@app.route('/developer/branch/<int:bid>/toggle', methods=['POST'])
+@developer_required
+def developer_branch_toggle(bid):
+    master = get_master_db()
+    branch = master.execute("SELECT name, active FROM branches WHERE id=?", (bid,)).fetchone()
+    if branch:
+        new_state = 0 if branch['active'] else 1
+        master.execute("UPDATE branches SET active=? WHERE id=?", (new_state, bid))
+        master.commit()
+        status = 'activated' if new_state else 'deactivated'
+        flash(f'Branch "{branch["name"]}" {status}.', 'success')
+    master.close()
+    return redirect(url_for('developer_panel'))
 
 @app.route('/dashboard')
 @login_required
@@ -5419,3 +5537,4 @@ def tally_trial_balance():
 if __name__ == '__main__':
     init_db()
     app.run(debug=True, host='0.0.0.0', port=5000)
+
