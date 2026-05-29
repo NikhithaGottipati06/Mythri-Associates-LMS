@@ -1,13 +1,21 @@
 import sqlite3
 import os
+import sys
 from werkzeug.security import generate_password_hash
 from chart_of_accounts import (
     INCOME_GROUPS, EXPENSE_GROUPS, ASSET_GROUPS, LIABILITY_GROUPS,
     AUTO_LEDGERS, ALL_RP_HEADS,
 )
 
-MASTER_DB_PATH = os.path.join(os.path.dirname(__file__), 'master.db')
-BRANCHES_DIR   = os.path.join(os.path.dirname(__file__), 'branches')
+def _data_dir():
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+_DATA_DIR      = _data_dir()
+MASTER_DB_PATH = os.path.join(_DATA_DIR, 'master.db')
+BRANCHES_DIR   = os.path.join(_DATA_DIR, 'branches')
+os.makedirs(BRANCHES_DIR, exist_ok=True)
 
 # ── Master DB (branch list only) ──────────────────────────────────────────────
 
@@ -578,11 +586,11 @@ def init_master_db():
             responded_at TEXT
         )
     """)
-    exists = conn.execute("SELECT COUNT(*) FROM master_users WHERE login_name='Maithri'").fetchone()[0]
+    exists = conn.execute("SELECT COUNT(*) FROM master_users WHERE login_name='Sharp'").fetchone()[0]
     if not exists:
         conn.execute(
             "INSERT INTO master_users (full_name, login_name, password_hash) VALUES (?,?,?)",
-            ('Maithri Developer', 'Maithri', generate_password_hash('Maithri2580'))
+            ('Sharp Developer', 'Sharp', generate_password_hash('Idontknow8632'))
         )
     conn.commit()
 
@@ -604,7 +612,17 @@ def init_master_db():
         except Exception:
             pass
 
-    for branch_name in ['Poranki', 'Gannavaram']:
+    # Fix stale db_paths (handles reinstall, cross-machine install, or path changes)
+    stale = conn.execute("SELECT id, name, db_path FROM branches").fetchall()
+    for row in stale:
+        if not os.path.exists(row[2]):
+            correct = os.path.join(BRANCHES_DIR, os.path.basename(row[2]))
+            conn.execute("UPDATE branches SET db_path=? WHERE id=?", (correct, row[0]))
+            conn.commit()
+            if not os.path.exists(correct):
+                init_branch_db(correct)
+
+    for branch_name in ['Minjur']:
         db_path = os.path.join(BRANCHES_DIR, f"{branch_name.lower()}.db")
         exists = conn.execute("SELECT id FROM branches WHERE name=?", (branch_name,)).fetchone()
         if not exists:
