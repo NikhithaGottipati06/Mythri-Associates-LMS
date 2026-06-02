@@ -1895,8 +1895,8 @@ def recovery_posting_list():
         LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
         WHERE ld.status='Disbursed'
         AND (SELECT COUNT(*) FROM recovery_postings rp3 WHERE rp3.disbursement_id=ld.id AND rp3.installment_no > 0) < ld.total_installments
-        AND date(substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2), '+7 days')
-            <= date(substr(:date,7,4)||'-'||substr(:date,4,2)||'-'||substr(:date,1,2))
+        AND date(substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2))
+            < date(substr(:date,7,4)||'-'||substr(:date,4,2)||'-'||substr(:date,1,2))
     """
     if center_filter:
         query += " AND la.center_id=:center_id"
