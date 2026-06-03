@@ -612,6 +612,10 @@ def init_master_db():
         except Exception:
             pass
 
+    # Remove branches that should not exist
+    conn.execute("DELETE FROM branches WHERE name=?", ("Minjur",))
+    conn.commit()
+
     # Fix stale db_paths (handles reinstall, cross-machine install, or path changes)
     stale = conn.execute("SELECT id, name, db_path FROM branches").fetchall()
     for row in stale:
