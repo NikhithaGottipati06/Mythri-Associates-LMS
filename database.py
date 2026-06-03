@@ -622,15 +622,6 @@ def init_master_db():
             if not os.path.exists(correct):
                 init_branch_db(correct)
 
-    for branch_name in ['Minjur']:
-        db_path = os.path.join(BRANCHES_DIR, f"{branch_name.lower()}.db")
-        exists = conn.execute("SELECT id FROM branches WHERE name=?", (branch_name,)).fetchone()
-        if not exists:
-            conn.execute("INSERT INTO branches (name, db_path) VALUES (?, ?)", (branch_name, db_path))
-            conn.commit()
-        if not os.path.exists(db_path):
-            init_branch_db(db_path)
-
     conn.close()
 
 
