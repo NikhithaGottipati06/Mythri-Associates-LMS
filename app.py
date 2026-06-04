@@ -5536,14 +5536,30 @@ def tally_trial_balance():
 
 # ── Cashbook ──────────────────────────────────────────────────────────────────
 
+def _cb_yyyymmdd(ddmmyyyy):
+    """Convert DD/MM/YYYY to YYYYMMDD for safe SQLite string comparison."""
+    try:
+        p = ddmmyyyy.strip().split('/')
+        return f"{p[2]}{p[1]}{p[0]}"
+    except Exception:
+        return ''
+
+
 def _cashbook_query(db, from_date='', to_date=''):
+    # Always compare using YYYYMMDD so cross-month ranges work correctly
     where_parts, params = [], []
     if from_date:
-        where_parts.append("entry_date >= ?")
-        params.append(_to_ddmmyyyy(from_date))
+        ym = _cb_yyyymmdd(_to_ddmmyyyy(from_date))
+        if ym:
+            where_parts.append(
+                "substr(ce.entry_date,7,4)||substr(ce.entry_date,4,2)||substr(ce.entry_date,1,2) >= ?")
+            params.append(ym)
     if to_date:
-        where_parts.append("entry_date <= ?")
-        params.append(_to_ddmmyyyy(to_date))
+        ym = _cb_yyyymmdd(_to_ddmmyyyy(to_date))
+        if ym:
+            where_parts.append(
+                "substr(ce.entry_date,7,4)||substr(ce.entry_date,4,2)||substr(ce.entry_date,1,2) <= ?")
+            params.append(ym)
     where_sql = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
     return db.execute(
         f"""SELECT ce.*, u.full_name as created_by_name
@@ -5621,6 +5637,94 @@ def cashbook():
         closing_cash=closing_cash, closing_bank=closing_bank,
         closing_on_cr=closing_on_cr,
         grand_cash=grand_cash, grand_bank=grand_bank)
+
+
+@app.route('/cashbook/import-maithri', methods=['POST'])
+@admin_required
+def cashbook_import_maithri():
+    SEED = [
+        ('04/05/2026','DR','Opening Balance',0,51000),
+        ('04/05/2026','DR','Ho Remittance',120000,0),
+        ('04/05/2026','DR','pf & insurance',5400,0),
+        ('04/05/2026','DR','To bank',0,0),
+        ('04/05/2026','CR','By loan to Members',120000,51000),
+        ('04/05/2026','CR','printing and stationary',1850,0),
+        ('04/05/2026','CR','By bank',0,0),
+        ('07/05/2026','DR','Opening Balance',3550,51000),
+        ('07/05/2026','DR','Ho Remittance',120000,0),
+        ('07/05/2026','DR','pf & insurance',5400,0),
+        ('07/05/2026','DR','To bank',0,0),
+        ('07/05/2026','CR','By loan to Members',120000,51000),
+        ('07/05/2026','CR','printing and stationary',135,0),
+        ('07/05/2026','CR','By bank',0,0),
+        ('09/05/2026','DR','Opening Balance',8815,11000),
+        ('09/05/2026','DR','Ho Remittance(gv)',20000,0),
+        ('09/05/2026','DR','pf & insurance',900,0),
+        ('09/05/2026','DR','To bank',0,0),
+        ('09/05/2026','CR','By loan to Members',20000,11000),
+        ('09/05/2026','CR','printing and stationary',1320,0),
+        ('11/05/2026','DR','Opening Balance',8395,11000),
+        ('11/05/2026','DR','Ho Remittance(gv)',101000,0),
+        ('11/05/2026','DR','HO Remittance(vijay)',21000,0),
+        ('11/05/2026','DR','pf & insurance',4500,0),
+        ('11/05/2026','DR','Loan to Members',3971,0),
+        ('11/05/2026','DR','interest on loans',629,0),
+        ('11/05/2026','DR','Savings',600,0),
+        ('11/05/2026','DR','To bank',0,0),
+        ('11/05/2026','CR','By loan to Members',100000,11000),
+        ('11/05/2026','CR','Rent Advance for office (Mrs.Padma)',22000,0),
+        ('11/05/2026','CR','Furniture & Fixtures',8600,0),
+        ('11/05/2026','CR','General & office maintenance (Furniture transport)',500,0),
+        ('12/05/2026','DR','Opening Balance',8995,11000),
+        ('12/05/2026','DR','To bank',0,50000),
+        ('13/05/2026','DR','Opening Balance',8995,61000),
+        ('13/05/2026','DR','Ho Remittance(MVK)',100000,0),
+        ('13/05/2026','DR','pf & insurance',4500,0),
+        ('13/05/2026','DR','HO remittance (Rs.15000 MVK and Rs.15000 GV)',30000,0),
+        ('13/05/2026','CR','By loan to Members',100000,61000),
+        ('13/05/2026','CR','General & office maintenance (wifi)',3654,0),
+        ('13/05/2026','CR','Software expenses (computer & accessories)',30000,0),
+        ('14/05/2026','DR','Opening Balance',9841,61000),
+        ('14/05/2026','DR','Ho Remittance(MVK)',100000,0),
+        ('14/05/2026','DR','pf & insurance',4500,0),
+        ('14/05/2026','DR','Loan to Members',0,0),
+        ('14/05/2026','DR','interest on loans',0,0),
+        ('14/05/2026','DR','Savings',700,0),
+        ('14/05/2026','DR','To bank',0,0),
+        ('14/05/2026','CR','By loan to Members',100000,61000),
+        ('14/05/2026','CR','General & office maintenance (Ac installation)',2000,0),
+        ('18/05/2026','DR','Opening Balance',18291,61000),
+        ('18/05/2026','DR','pf & insurance',0,0),
+        ('18/05/2026','DR','Loan to Members',0,0),
+        ('18/05/2026','DR','interest on loans',0,0),
+        ('18/05/2026','DR','Savings',1100,0),
+        ('18/05/2026','DR','To bank',0,50000),
+        ('18/05/2026','CR','By loan to Members',0,61000),
+        ('18/05/2026','CR','General & office maintenance (cash books)',1250,0),
+        ('20/05/2026','DR','Opening Balance',26391,61000),
+        ('20/05/2026','DR','Ho Remittance(GV)',120000,0),
+        ('20/05/2026','DR','pf & insurance',5400,0),
+        ('20/05/2026','DR','Loan to Members',0,0),
+        ('20/05/2026','DR','interest on loans',0,0),
+        ('20/05/2026','DR','Savings',0,0),
+        ('20/05/2026','CR','By loan to Members',120000,61000),
+    ]
+    db = get_db()
+    existing = db.execute("SELECT COUNT(*) FROM cashbook_entries").fetchone()[0]
+    if existing > 0:
+        db.close()
+        flash(f'Import skipped — {existing} entries already exist in the cashbook.', 'warning')
+        return redirect(url_for('cashbook'))
+    uid = session['user_id']
+    for (d, s, p, ca, ba) in SEED:
+        db.execute(
+            "INSERT INTO cashbook_entries (entry_date,side,particulars,cash_amount,bank_amount,created_by) "
+            "VALUES (?,?,?,?,?,?)", (d, s, p, float(ca), float(ba), uid)
+        )
+    db.commit()
+    db.close()
+    flash(f'{len(SEED)} entries imported successfully.', 'success')
+    return redirect(url_for('cashbook'))
 
 
 @app.route('/cashbook/<int:eid>/delete', methods=['POST'])
