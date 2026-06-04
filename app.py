@@ -5587,7 +5587,7 @@ def cashbook():
 
     # SQLite stores DD/MM/YYYY so we sort via substr conversion
     entries = db.execute(
-        f"""SELECT ce.*, u.name as created_by_name
+        f"""SELECT ce.*, u.full_name as created_by_name
             FROM cashbook_entries ce
             LEFT JOIN users u ON ce.created_by=u.id
             {where_sql}
