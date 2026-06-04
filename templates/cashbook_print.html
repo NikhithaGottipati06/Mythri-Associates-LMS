@@ -63,36 +63,45 @@
       </tr>
     </thead>
     <tbody>
-      {% set max_rows = [dr_list|length, cr_list|length + 1]|max %}
+      {% if closing_on_cr %}
+        {% set max_rows = [dr_list|length, cr_list|length + 1]|max %}
+      {% else %}
+        {% set max_rows = [dr_list|length + 1, cr_list|length]|max %}
+      {% endif %}
       {% for i in range(max_rows) %}
       <tr>
         {# DR side #}
         {% if i < dr_list|length %}
-        {% set de = dr_list[i] %}
-        <td>{{ de.entry_date }}</td>
-        <td>{{ de.particulars }}</td>
-        <td class="num">{% if de.cash_amount %}{{ "%.2f"|format(de.cash_amount) }}{% endif %}</td>
-        <td class="num">{% if de.bank_amount %}{{ "%.2f"|format(de.bank_amount) }}{% endif %}</td>
+          {% set de = dr_list[i] %}
+          <td>{{ de.entry_date }}</td>
+          <td>{{ de.particulars }}</td>
+          <td class="num">{% if de.cash_amount %}{{ "%.2f"|format(de.cash_amount) }}{% endif %}</td>
+          <td class="num">{% if de.bank_amount %}{{ "%.2f"|format(de.bank_amount) }}{% endif %}</td>
+        {% elif not closing_on_cr and i == dr_list|length %}
+          <td>&nbsp;</td>
+          <td class="closing">To Closing Balance</td>
+          <td class="num closing">{% if closing_cash %}{{ "%.2f"|format(closing_cash) }}{% endif %}</td>
+          <td class="num closing">{% if closing_bank %}{{ "%.2f"|format(closing_bank) }}{% endif %}</td>
         {% else %}
-        <td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>
+          <td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>
         {% endif %}
 
         <td class="sep"></td>
 
         {# CR side #}
         {% if i < cr_list|length %}
-        {% set ce = cr_list[i] %}
-        <td>{{ ce.entry_date }}</td>
-        <td>{{ ce.particulars }}</td>
-        <td class="num">{% if ce.cash_amount %}{{ "%.2f"|format(ce.cash_amount) }}{% endif %}</td>
-        <td class="num">{% if ce.bank_amount %}{{ "%.2f"|format(ce.bank_amount) }}{% endif %}</td>
-        {% elif i == cr_list|length %}
-        <td>&nbsp;</td>
-        <td class="closing">By Closing Balance</td>
-        <td class="num closing">{% if closing_cash > 0 %}{{ "%.2f"|format(closing_cash) }}{% endif %}</td>
-        <td class="num closing">{% if closing_bank > 0 %}{{ "%.2f"|format(closing_bank) }}{% endif %}</td>
+          {% set ce = cr_list[i] %}
+          <td>{{ ce.entry_date }}</td>
+          <td>{{ ce.particulars }}</td>
+          <td class="num">{% if ce.cash_amount %}{{ "%.2f"|format(ce.cash_amount) }}{% endif %}</td>
+          <td class="num">{% if ce.bank_amount %}{{ "%.2f"|format(ce.bank_amount) }}{% endif %}</td>
+        {% elif closing_on_cr and i == cr_list|length %}
+          <td>&nbsp;</td>
+          <td class="closing">By Closing Balance</td>
+          <td class="num closing">{% if closing_cash %}{{ "%.2f"|format(closing_cash) }}{% endif %}</td>
+          <td class="num closing">{% if closing_bank %}{{ "%.2f"|format(closing_bank) }}{% endif %}</td>
         {% else %}
-        <td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>
+          <td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>
         {% endif %}
       </tr>
       {% endfor %}
@@ -101,13 +110,13 @@
       <tr>
         <td></td>
         <td style="text-align:right;font-weight:700;">Totals</td>
-        <td class="num">{{ "%.2f"|format(dr_cash) }}</td>
-        <td class="num">{{ "%.2f"|format(dr_bank) }}</td>
+        <td class="num">{{ "%.2f"|format(grand_cash) }}</td>
+        <td class="num">{{ "%.2f"|format(grand_bank) }}</td>
         <td class="sep"></td>
         <td></td>
         <td style="text-align:right;font-weight:700;">Totals</td>
-        <td class="num">{{ "%.2f"|format(cr_cash + [closing_cash, 0]|max) }}</td>
-        <td class="num">{{ "%.2f"|format(cr_bank + [closing_bank, 0]|max) }}</td>
+        <td class="num">{{ "%.2f"|format(grand_cash) }}</td>
+        <td class="num">{{ "%.2f"|format(grand_bank) }}</td>
       </tr>
     </tfoot>
   </table>

@@ -5606,15 +5606,21 @@ def cashbook():
     dr_bank  = sum(e['bank_amount']  or 0 for e in dr_entries)
     cr_cash  = sum(e['cash_amount']  or 0 for e in cr_entries)
     cr_bank  = sum(e['bank_amount']  or 0 for e in cr_entries)
-    closing_cash = dr_cash - cr_cash
-    closing_bank = dr_bank - cr_bank
+    # Closing balance goes on the smaller side to make totals equal
+    closing_cash    = abs(dr_cash - cr_cash)
+    closing_bank    = abs(dr_bank - cr_bank)
+    closing_on_cr   = (dr_cash + dr_bank) >= (cr_cash + cr_bank)
+    grand_cash      = max(dr_cash, cr_cash)
+    grand_bank      = max(dr_bank, cr_bank)
 
     return render_template('cashbook.html',
         entries=entries, dr_entries=dr_entries, cr_entries=cr_entries,
         today=today, from_date=from_date, to_date=to_date,
         dr_cash=dr_cash, dr_bank=dr_bank,
         cr_cash=cr_cash, cr_bank=cr_bank,
-        closing_cash=closing_cash, closing_bank=closing_bank)
+        closing_cash=closing_cash, closing_bank=closing_bank,
+        closing_on_cr=closing_on_cr,
+        grand_cash=grand_cash, grand_bank=grand_bank)
 
 
 @app.route('/cashbook/<int:eid>/delete', methods=['POST'])
@@ -5649,8 +5655,11 @@ def cashbook_export_excel():
     dr_bank = sum(e['bank_amount'] or 0 for e in dr_list)
     cr_cash = sum(e['cash_amount'] or 0 for e in cr_list)
     cr_bank = sum(e['bank_amount'] or 0 for e in cr_list)
-    closing_cash = dr_cash - cr_cash
-    closing_bank = dr_bank - cr_bank
+    closing_cash  = abs(dr_cash - cr_cash)
+    closing_bank  = abs(dr_bank - cr_bank)
+    closing_on_cr = (dr_cash + dr_bank) >= (cr_cash + cr_bank)
+    grand_cash    = max(dr_cash, cr_cash)
+    grand_bank    = max(dr_bank, cr_bank)
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -5712,7 +5721,8 @@ def cashbook_export_excel():
     ws.row_dimensions[1].height = 22
     ws.row_dimensions[3].height = 16
 
-    max_rows = max(len(dr_list), len(cr_list) + 1)  # +1 for closing balance
+    max_rows = max(len(dr_list) + (0 if closing_on_cr else 1),
+                   len(cr_list) + (1 if closing_on_cr else 0))
     for i in range(max_rows):
         r = 5 + i
         ws.row_dimensions[r].height = 15
@@ -5723,6 +5733,11 @@ def cashbook_export_excel():
             cell(r, 2, e['particulars'], align='left')
             cell(r, 3, e['cash_amount'] or 0, num_fmt='#,##0.00', align='right')
             cell(r, 4, e['bank_amount'] or 0, num_fmt='#,##0.00', align='right')
+        elif not closing_on_cr and i == len(dr_list):
+            cell(r, 1, '', align='center')
+            cell(r, 2, 'To Closing Balance', bold=True, align='left')
+            cell(r, 3, closing_cash, num_fmt='#,##0.00', align='right', bold=True)
+            cell(r, 4, closing_bank, num_fmt='#,##0.00', align='right', bold=True)
         else:
             for c in range(1, 5):
                 cell(r, c, '')
@@ -5735,30 +5750,27 @@ def cashbook_export_excel():
             cell(r, 7, e['particulars'], align='left')
             cell(r, 8, e['cash_amount'] or 0, num_fmt='#,##0.00', align='right')
             cell(r, 9, e['bank_amount'] or 0, num_fmt='#,##0.00', align='right')
-        elif i == len(cr_list):
-            # closing balance row
+        elif closing_on_cr and i == len(cr_list):
             cell(r, 6, '', align='center')
             cell(r, 7, 'By Closing Balance', bold=True, align='left')
-            cell(r, 8, closing_cash if closing_cash >= 0 else 0, num_fmt='#,##0.00', align='right', bold=True)
-            cell(r, 9, closing_bank if closing_bank >= 0 else 0, num_fmt='#,##0.00', align='right', bold=True)
+            cell(r, 8, closing_cash, num_fmt='#,##0.00', align='right', bold=True)
+            cell(r, 9, closing_bank, num_fmt='#,##0.00', align='right', bold=True)
         else:
             for c in range(6, 10):
                 cell(r, c, '')
 
-    # Totals row
+    # Totals row — both sides equal after closing balance
     tr = 5 + max_rows
     ws.row_dimensions[tr].height = 16
     cell(tr, 1, '', fill_hex='D9E1F2')
     cell(tr, 2, 'Totals', bold=True, fill_hex='D9E1F2', align='right')
-    cell(tr, 3, dr_cash, bold=True, num_fmt='#,##0.00', align='right', fill_hex='D9E1F2')
-    cell(tr, 4, dr_bank, bold=True, num_fmt='#,##0.00', align='right', fill_hex='D9E1F2')
+    cell(tr, 3, grand_cash, bold=True, num_fmt='#,##0.00', align='right', fill_hex='D9E1F2')
+    cell(tr, 4, grand_bank, bold=True, num_fmt='#,##0.00', align='right', fill_hex='D9E1F2')
     ws.cell(row=tr, column=5).fill = PatternFill('solid', fgColor='D9D9D9')
     cell(tr, 6, '', fill_hex='D9E1F2')
     cell(tr, 7, 'Totals', bold=True, fill_hex='D9E1F2', align='right')
-    total_cr_cash = cr_cash + (closing_cash if closing_cash >= 0 else 0)
-    total_cr_bank = cr_bank + (closing_bank if closing_bank >= 0 else 0)
-    cell(tr, 8, total_cr_cash, bold=True, num_fmt='#,##0.00', align='right', fill_hex='D9E1F2')
-    cell(tr, 9, total_cr_bank, bold=True, num_fmt='#,##0.00', align='right', fill_hex='D9E1F2')
+    cell(tr, 8, grand_cash, bold=True, num_fmt='#,##0.00', align='right', fill_hex='D9E1F2')
+    cell(tr, 9, grand_bank, bold=True, num_fmt='#,##0.00', align='right', fill_hex='D9E1F2')
 
     buf = BytesIO()
     wb.save(buf)
@@ -5784,14 +5796,19 @@ def cashbook_export_print():
     dr_bank = sum(e['bank_amount'] or 0 for e in dr_list)
     cr_cash = sum(e['cash_amount'] or 0 for e in cr_list)
     cr_bank = sum(e['bank_amount'] or 0 for e in cr_list)
-    closing_cash = dr_cash - cr_cash
-    closing_bank = dr_bank - cr_bank
+    closing_cash  = abs(dr_cash - cr_cash)
+    closing_bank  = abs(dr_bank - cr_bank)
+    closing_on_cr = (dr_cash + dr_bank) >= (cr_cash + cr_bank)
+    grand_cash    = max(dr_cash, cr_cash)
+    grand_bank    = max(dr_bank, cr_bank)
 
     return render_template('cashbook_print.html',
         dr_list=dr_list, cr_list=cr_list,
         dr_cash=dr_cash, dr_bank=dr_bank,
         cr_cash=cr_cash, cr_bank=cr_bank,
         closing_cash=closing_cash, closing_bank=closing_bank,
+        closing_on_cr=closing_on_cr,
+        grand_cash=grand_cash, grand_bank=grand_bank,
         from_date=from_date, to_date=to_date)
 
 
