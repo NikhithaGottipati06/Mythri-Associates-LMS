@@ -5536,57 +5536,16 @@ def tally_trial_balance():
 
 # ── Cashbook ──────────────────────────────────────────────────────────────────
 
-@app.route('/cashbook', methods=['GET', 'POST'])
-@admin_required
-def cashbook():
-    db = get_db()
-    today = datetime.now().strftime('%d/%m/%Y')
-
-    if request.method == 'POST':
-        entry_date  = _to_ddmmyyyy(request.form.get('entry_date', today))
-        side        = request.form.get('side', 'DR')
-        particulars = request.form.get('particulars', '').strip()
-        cash_amount = float(request.form.get('cash_amount') or 0)
-        bank_amount = float(request.form.get('bank_amount') or 0)
-
-        blocked, ldate = _day_lock_check(db, entry_date)
-        if blocked:
-            db.close()
-            flash(f'{ldate} is locked (Day End done). Undo Day End to make changes.', 'danger')
-            return redirect(url_for('cashbook'))
-
-        if not particulars or (cash_amount <= 0 and bank_amount <= 0):
-            flash('Particulars and at least one amount (Cash or Bank) are required.', 'danger')
-            db.close()
-            return redirect(url_for('cashbook'))
-
-        db.execute(
-            "INSERT INTO cashbook_entries (entry_date, side, particulars, cash_amount, bank_amount, created_by) "
-            "VALUES (?,?,?,?,?,?)",
-            (entry_date, side, particulars, cash_amount, bank_amount, session['user_id'])
-        )
-        db.commit()
-        flash(f'{"DR" if side=="DR" else "CR"} entry saved.', 'success')
-        db.close()
-        return redirect(url_for('cashbook'))
-
-    # Date range filter
-    from_date = request.args.get('from', '')
-    to_date   = request.args.get('to', '')
-
-    where_parts = []
-    params = []
+def _cashbook_query(db, from_date='', to_date=''):
+    where_parts, params = [], []
     if from_date:
         where_parts.append("entry_date >= ?")
         params.append(_to_ddmmyyyy(from_date))
     if to_date:
         where_parts.append("entry_date <= ?")
         params.append(_to_ddmmyyyy(to_date))
-
     where_sql = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
-
-    # SQLite stores DD/MM/YYYY so we sort via substr conversion
-    entries = db.execute(
+    return db.execute(
         f"""SELECT ce.*, u.full_name as created_by_name
             FROM cashbook_entries ce
             LEFT JOIN users u ON ce.created_by=u.id
@@ -5596,19 +5555,72 @@ def cashbook():
               ce.id ASC""",
         params
     ).fetchall()
+
+
+@app.route('/cashbook', methods=['GET', 'POST'])
+@admin_required
+def cashbook():
+    db = get_db()
+    today = datetime.now().strftime('%d/%m/%Y')
+
+    if request.method == 'POST':
+        dates        = request.form.getlist('entry_date[]')
+        sides        = request.form.getlist('side[]')
+        parts_list   = request.form.getlist('particulars[]')
+        cash_amounts = request.form.getlist('cash_amount[]')
+        bank_amounts = request.form.getlist('bank_amount[]')
+
+        saved, errors = 0, []
+        for i in range(len(dates)):
+            p  = parts_list[i].strip() if i < len(parts_list) else ''
+            if not p:
+                continue
+            d  = _to_ddmmyyyy(dates[i]) if i < len(dates) else today
+            s  = sides[i] if i < len(sides) else 'DR'
+            ca = float(cash_amounts[i] or 0) if i < len(cash_amounts) else 0
+            ba = float(bank_amounts[i] or 0) if i < len(bank_amounts) else 0
+            blocked, ldate = _day_lock_check(db, d)
+            if blocked:
+                errors.append(f'{ldate} is locked (Day End done).')
+                continue
+            db.execute(
+                "INSERT INTO cashbook_entries (entry_date,side,particulars,cash_amount,bank_amount,created_by) "
+                "VALUES (?,?,?,?,?,?)",
+                (d, s, p, ca, ba, session['user_id'])
+            )
+            saved += 1
+
+        if saved:
+            db.commit()
+            flash(f'{saved} entr{"ies" if saved > 1 else "y"} saved.', 'success')
+        for e in errors:
+            flash(e, 'danger')
+        if not saved and not errors:
+            flash('No valid entries to save. Fill in Particulars for each row.', 'warning')
+        db.close()
+        return redirect(url_for('cashbook',
+                                **{k: v for k, v in request.args.items()}))
+
+    from_date = request.args.get('from', '')
+    to_date   = request.args.get('to', '')
+    entries   = _cashbook_query(db, from_date, to_date)
     db.close()
 
-    # Totals
-    dr_cash  = sum(e['cash_amount']  or 0 for e in entries if e['side'] == 'DR')
-    dr_bank  = sum(e['bank_amount']  or 0 for e in entries if e['side'] == 'DR')
-    cr_cash  = sum(e['cash_amount']  or 0 for e in entries if e['side'] == 'CR')
-    cr_bank  = sum(e['bank_amount']  or 0 for e in entries if e['side'] == 'CR')
+    dr_entries = [e for e in entries if e['side'] == 'DR']
+    cr_entries = [e for e in entries if e['side'] == 'CR']
+    dr_cash  = sum(e['cash_amount']  or 0 for e in dr_entries)
+    dr_bank  = sum(e['bank_amount']  or 0 for e in dr_entries)
+    cr_cash  = sum(e['cash_amount']  or 0 for e in cr_entries)
+    cr_bank  = sum(e['bank_amount']  or 0 for e in cr_entries)
+    closing_cash = dr_cash - cr_cash
+    closing_bank = dr_bank - cr_bank
 
     return render_template('cashbook.html',
-        entries=entries, today=today,
-        from_date=from_date, to_date=to_date,
+        entries=entries, dr_entries=dr_entries, cr_entries=cr_entries,
+        today=today, from_date=from_date, to_date=to_date,
         dr_cash=dr_cash, dr_bank=dr_bank,
-        cr_cash=cr_cash, cr_bank=cr_bank)
+        cr_cash=cr_cash, cr_bank=cr_bank,
+        closing_cash=closing_cash, closing_bank=closing_bank)
 
 
 @app.route('/cashbook/<int:eid>/delete', methods=['POST'])
@@ -5620,13 +5632,179 @@ def cashbook_delete(eid):
         blocked, ldate = _day_lock_check(db, entry['entry_date'])
         if blocked:
             db.close()
-            flash(f'{ldate} is locked (Day End done). Undo Day End to delete entries.', 'danger')
+            flash(f'{ldate} is locked. Undo Day End to delete entries.', 'danger')
             return redirect(url_for('cashbook'))
         db.execute("DELETE FROM cashbook_entries WHERE id=?", (eid,))
         db.commit()
         flash('Entry deleted.', 'success')
     db.close()
-    return redirect(url_for('cashbook'))
+    return redirect(url_for('cashbook',
+                            **{k: v for k, v in request.args.items()}))
+
+
+@app.route('/cashbook/export/excel')
+@admin_required
+def cashbook_export_excel():
+    from io import BytesIO
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, Border, Side as XlSide, PatternFill
+
+    db = get_db()
+    from_date = request.args.get('from', '')
+    to_date   = request.args.get('to', '')
+    entries   = _cashbook_query(db, from_date, to_date)
+    db.close()
+
+    dr_list = [e for e in entries if e['side'] == 'DR']
+    cr_list = [e for e in entries if e['side'] == 'CR']
+    dr_cash = sum(e['cash_amount'] or 0 for e in dr_list)
+    dr_bank = sum(e['bank_amount'] or 0 for e in dr_list)
+    cr_cash = sum(e['cash_amount'] or 0 for e in cr_list)
+    cr_bank = sum(e['bank_amount'] or 0 for e in cr_list)
+    closing_cash = dr_cash - cr_cash
+    closing_bank = dr_bank - cr_bank
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Cashbook"
+
+    thin = XlSide(style='thin')
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    def cell(row, col, value='', bold=False, align='center', fill_hex=None, num_fmt=None):
+        c = ws.cell(row=row, column=col, value=value)
+        c.font = Font(bold=bold, name='Arial', size=10)
+        c.alignment = Alignment(horizontal=align, vertical='center', wrap_text=True)
+        c.border = border
+        if fill_hex:
+            c.fill = PatternFill('solid', fgColor=fill_hex)
+        if num_fmt:
+            c.number_format = num_fmt
+        return c
+
+    # Title
+    ws.merge_cells('A1:I1')
+    cell(1, 1, 'CASH BOOK', bold=True, fill_hex='1F3864').font = Font(bold=True, color='FFFFFF', size=13, name='Arial')
+    ws['A1'].fill = PatternFill('solid', fgColor='1F3864')
+
+    # Period
+    period = ''
+    if from_date or to_date:
+        period = f"Period: {from_date or 'All'} to {to_date or 'All'}"
+    ws.merge_cells('A2:I2')
+    cell(2, 1, period, align='center')
+
+    # Sub-headers DR / CR
+    ws.merge_cells('A3:D3')
+    cell(3, 1, 'Dr', bold=True, fill_hex='E2EFDA').font = Font(bold=True, size=11, name='Arial')
+    ws['A3'].fill = PatternFill('solid', fgColor='E2EFDA')
+    ws.merge_cells('F3:I3')
+    cell(3, 6, 'Cr', bold=True, fill_hex='FCE4D6').font = Font(bold=True, size=11, name='Arial')
+    ws['F3'].fill = PatternFill('solid', fgColor='FCE4D6')
+    # blank separator
+    ws.merge_cells('E3:E4')
+    ws['E3'].fill = PatternFill('solid', fgColor='D9D9D9')
+
+    # Column headers
+    hdr_fill = 'BDD7EE'
+    for col, txt in [(1,'Date'),(2,'Particulars'),(3,'Cash (₹)'),(4,'Bank (₹)')]:
+        cell(4, col, txt, bold=True, fill_hex=hdr_fill)
+    for col, txt in [(6,'Date'),(7,'Particulars'),(8,'Cash (₹)'),(9,'Bank (₹)')]:
+        cell(4, col, txt, bold=True, fill_hex=hdr_fill)
+
+    ws.column_dimensions['A'].width = 13
+    ws.column_dimensions['B'].width = 28
+    ws.column_dimensions['C'].width = 14
+    ws.column_dimensions['D'].width = 14
+    ws.column_dimensions['E'].width = 3
+    ws.column_dimensions['F'].width = 13
+    ws.column_dimensions['G'].width = 28
+    ws.column_dimensions['H'].width = 14
+    ws.column_dimensions['I'].width = 14
+    ws.row_dimensions[1].height = 22
+    ws.row_dimensions[3].height = 16
+
+    max_rows = max(len(dr_list), len(cr_list) + 1)  # +1 for closing balance
+    for i in range(max_rows):
+        r = 5 + i
+        ws.row_dimensions[r].height = 15
+        # DR side
+        if i < len(dr_list):
+            e = dr_list[i]
+            cell(r, 1, e['entry_date'], align='center')
+            cell(r, 2, e['particulars'], align='left')
+            cell(r, 3, e['cash_amount'] or 0, num_fmt='#,##0.00', align='right')
+            cell(r, 4, e['bank_amount'] or 0, num_fmt='#,##0.00', align='right')
+        else:
+            for c in range(1, 5):
+                cell(r, c, '')
+        # separator
+        ws.cell(row=r, column=5).fill = PatternFill('solid', fgColor='D9D9D9')
+        # CR side
+        if i < len(cr_list):
+            e = cr_list[i]
+            cell(r, 6, e['entry_date'], align='center')
+            cell(r, 7, e['particulars'], align='left')
+            cell(r, 8, e['cash_amount'] or 0, num_fmt='#,##0.00', align='right')
+            cell(r, 9, e['bank_amount'] or 0, num_fmt='#,##0.00', align='right')
+        elif i == len(cr_list):
+            # closing balance row
+            cell(r, 6, '', align='center')
+            cell(r, 7, 'By Closing Balance', bold=True, align='left')
+            cell(r, 8, closing_cash if closing_cash >= 0 else 0, num_fmt='#,##0.00', align='right', bold=True)
+            cell(r, 9, closing_bank if closing_bank >= 0 else 0, num_fmt='#,##0.00', align='right', bold=True)
+        else:
+            for c in range(6, 10):
+                cell(r, c, '')
+
+    # Totals row
+    tr = 5 + max_rows
+    ws.row_dimensions[tr].height = 16
+    cell(tr, 1, '', fill_hex='D9E1F2')
+    cell(tr, 2, 'Totals', bold=True, fill_hex='D9E1F2', align='right')
+    cell(tr, 3, dr_cash, bold=True, num_fmt='#,##0.00', align='right', fill_hex='D9E1F2')
+    cell(tr, 4, dr_bank, bold=True, num_fmt='#,##0.00', align='right', fill_hex='D9E1F2')
+    ws.cell(row=tr, column=5).fill = PatternFill('solid', fgColor='D9D9D9')
+    cell(tr, 6, '', fill_hex='D9E1F2')
+    cell(tr, 7, 'Totals', bold=True, fill_hex='D9E1F2', align='right')
+    total_cr_cash = cr_cash + (closing_cash if closing_cash >= 0 else 0)
+    total_cr_bank = cr_bank + (closing_bank if closing_bank >= 0 else 0)
+    cell(tr, 8, total_cr_cash, bold=True, num_fmt='#,##0.00', align='right', fill_hex='D9E1F2')
+    cell(tr, 9, total_cr_bank, bold=True, num_fmt='#,##0.00', align='right', fill_hex='D9E1F2')
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    filename = f"cashbook_{(from_date or 'all').replace('/','')}-{(to_date or 'all').replace('/','')}.xlsx"
+    from flask import send_file
+    return send_file(buf, as_attachment=True, download_name=filename,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+@app.route('/cashbook/export/print')
+@admin_required
+def cashbook_export_print():
+    db = get_db()
+    from_date = request.args.get('from', '')
+    to_date   = request.args.get('to', '')
+    entries   = _cashbook_query(db, from_date, to_date)
+    db.close()
+
+    dr_list = [e for e in entries if e['side'] == 'DR']
+    cr_list = [e for e in entries if e['side'] == 'CR']
+    dr_cash = sum(e['cash_amount'] or 0 for e in dr_list)
+    dr_bank = sum(e['bank_amount'] or 0 for e in dr_list)
+    cr_cash = sum(e['cash_amount'] or 0 for e in cr_list)
+    cr_bank = sum(e['bank_amount'] or 0 for e in cr_list)
+    closing_cash = dr_cash - cr_cash
+    closing_bank = dr_bank - cr_bank
+
+    return render_template('cashbook_print.html',
+        dr_list=dr_list, cr_list=cr_list,
+        dr_cash=dr_cash, dr_bank=dr_bank,
+        cr_cash=cr_cash, cr_bank=cr_bank,
+        closing_cash=closing_cash, closing_bank=closing_bank,
+        from_date=from_date, to_date=to_date)
 
 
 if __name__ == '__main__':

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cash Book</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; font-size: 12px; color: #000; background: #fff; }
+  .page { padding: 20px 24px; }
+  h2 { text-align: center; font-size: 16px; letter-spacing: 2px; margin-bottom: 4px; }
+  .subtitle { text-align: center; font-size: 11px; color: #555; margin-bottom: 12px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #888; padding: 4px 7px; }
+  .side-hdr { text-align: center; font-weight: 700; font-size: 13px; }
+  .dr-hdr { background: #d4edda; }
+  .cr-hdr { background: #f8d7da; }
+  .col-hdr { background: #dbe5f1; text-align: center; font-weight: 700; }
+  .sep { width: 6px; background: #ddd; border: none; padding: 0; }
+  .num { text-align: right; }
+  tfoot td { background: #e9ecef; font-weight: 700; }
+  .closing { font-style: italic; color: #555; }
+  .no-print { background: #f0f0f0; padding: 10px 20px; text-align: center; border-bottom: 1px solid #ccc; }
+  @media print {
+    .no-print { display: none; }
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+<div class="no-print">
+  <button onclick="window.print()" style="padding:6px 20px;background:#1a3c6e;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px;">
+    &#128438; Print / Save as PDF
+  </button>
+  &nbsp;
+  <button onclick="window.close()" style="padding:6px 16px;background:#6c757d;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px;">
+    Close
+  </button>
+</div>
+
+<div class="page">
+  <h2>CASH BOOK</h2>
+  {% if from_date or to_date %}
+  <div class="subtitle">Period: {{ from_date or '—' }} &nbsp;to&nbsp; {{ to_date or '—' }}</div>
+  {% endif %}
+
+  <table>
+    <thead>
+      <tr>
+        <th colspan="4" class="side-hdr dr-hdr">Dr</th>
+        <th class="sep"></th>
+        <th colspan="4" class="side-hdr cr-hdr">Cr</th>
+      </tr>
+      <tr>
+        <th class="col-hdr" style="width:90px">Date</th>
+        <th class="col-hdr">Particulars</th>
+        <th class="col-hdr num" style="width:100px">Cash (₹)</th>
+        <th class="col-hdr num" style="width:100px">Bank (₹)</th>
+        <th class="sep"></th>
+        <th class="col-hdr" style="width:90px">Date</th>
+        <th class="col-hdr">Particulars</th>
+        <th class="col-hdr num" style="width:100px">Cash (₹)</th>
+        <th class="col-hdr num" style="width:100px">Bank (₹)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set max_rows = [dr_list|length, cr_list|length + 1]|max %}
+      {% for i in range(max_rows) %}
+      <tr>
+        {# DR side #}
+        {% if i < dr_list|length %}
+        {% set de = dr_list[i] %}
+        <td>{{ de.entry_date }}</td>
+        <td>{{ de.particulars }}</td>
+        <td class="num">{% if de.cash_amount %}{{ "%.2f"|format(de.cash_amount) }}{% endif %}</td>
+        <td class="num">{% if de.bank_amount %}{{ "%.2f"|format(de.bank_amount) }}{% endif %}</td>
+        {% else %}
+        <td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>
+        {% endif %}
+
+        <td class="sep"></td>
+
+        {# CR side #}
+        {% if i < cr_list|length %}
+        {% set ce = cr_list[i] %}
+        <td>{{ ce.entry_date }}</td>
+        <td>{{ ce.particulars }}</td>
+        <td class="num">{% if ce.cash_amount %}{{ "%.2f"|format(ce.cash_amount) }}{% endif %}</td>
+        <td class="num">{% if ce.bank_amount %}{{ "%.2f"|format(ce.bank_amount) }}{% endif %}</td>
+        {% elif i == cr_list|length %}
+        <td>&nbsp;</td>
+        <td class="closing">By Closing Balance</td>
+        <td class="num closing">{% if closing_cash > 0 %}{{ "%.2f"|format(closing_cash) }}{% endif %}</td>
+        <td class="num closing">{% if closing_bank > 0 %}{{ "%.2f"|format(closing_bank) }}{% endif %}</td>
+        {% else %}
+        <td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td></td>
+        <td style="text-align:right;font-weight:700;">Totals</td>
+        <td class="num">{{ "%.2f"|format(dr_cash) }}</td>
+        <td class="num">{{ "%.2f"|format(dr_bank) }}</td>
+        <td class="sep"></td>
+        <td></td>
+        <td style="text-align:right;font-weight:700;">Totals</td>
+        <td class="num">{{ "%.2f"|format(cr_cash + [closing_cash, 0]|max) }}</td>
+        <td class="num">{{ "%.2f"|format(cr_bank + [closing_bank, 0]|max) }}</td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+</body>
+</html>

@@ -1,78 +1,39 @@
 {% extends 'base.html' %}
 {% block title %}Cashbook{% endblock %}
+{% block head %}
+<style>
+.cb-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.cb-table th, .cb-table td { border: 1px solid #aaa; padding: 5px 8px; }
+.cb-table thead th { background: #1a3c6e; color: #fff; text-align: center; }
+.cb-table .side-hdr-dr { background: #d4edda; font-weight: 700; text-align: center; }
+.cb-table .side-hdr-cr { background: #f8d7da; font-weight: 700; text-align: center; }
+.cb-table .sep-col { background: #dee2e6; width: 8px; padding: 0; border: none; }
+.cb-table tfoot td { background: #e9ecef; font-weight: 700; }
+.cb-table .num { text-align: right; }
+.row-form input { font-size: 13px; }
+.row-form select { font-size: 13px; }
+</style>
+{% endblock %}
 {% block content %}
 <div class="page-header">
   <i class="bi bi-journal-text" style="font-size:20px;color:#1a3c6e;"></i>
   <h5>Cashbook</h5>
 </div>
 
-<!-- ── Entry Form ─────────────────────────────────────────────────────────── -->
-<div class="form-card mb-4">
-  <div class="section-title mb-3">Add Entry</div>
-  <form method="POST" action="{{ url_for('cashbook') }}">
-
-    <!-- DR / CR toggle -->
-    <div class="mb-3 d-flex gap-4">
-      <div class="form-check">
-        <input class="form-check-input" type="radio" name="side" id="sideDR"
-               value="DR" checked onchange="updateStyle()">
-        <label class="form-check-label fw-semibold text-success" for="sideDR">
-          <i class="bi bi-arrow-down-circle me-1"></i>DR &nbsp;<small class="fw-normal text-muted">(money received)</small>
-        </label>
-      </div>
-      <div class="form-check">
-        <input class="form-check-input" type="radio" name="side" id="sideCR"
-               value="CR" onchange="updateStyle()">
-        <label class="form-check-label fw-semibold text-danger" for="sideCR">
-          <i class="bi bi-arrow-up-circle me-1"></i>CR &nbsp;<small class="fw-normal text-muted">(money paid out)</small>
-        </label>
-      </div>
-    </div>
-
-    <div class="row g-3 align-items-end">
-      <div class="col-md-2">
-        <label class="form-label required">Date</label>
-        <input type="text" name="entry_date" class="form-control date-input"
-               placeholder="DD/MM/YYYY" value="{{ today }}" required>
-      </div>
-      <div class="col-md-4">
-        <label class="form-label required">Particulars</label>
-        <input type="text" name="particulars" class="form-control"
-               placeholder="e.g. Cash collected from field" required>
-      </div>
-      <div class="col-md-2">
-        <label class="form-label">Cash Amount (₹)</label>
-        <input type="number" name="cash_amount" class="form-control"
-               step="0.01" min="0" placeholder="0.00">
-      </div>
-      <div class="col-md-2">
-        <label class="form-label">Bank Amount (₹)</label>
-        <input type="number" name="bank_amount" class="form-control"
-               step="0.01" min="0" placeholder="0.00">
-      </div>
-      <div class="col-md-2">
-        <button type="submit" class="btn btn-success w-100" id="saveBtn">
-          <i class="bi bi-check-lg me-1"></i>Save
-        </button>
-      </div>
-    </div>
-  </form>
-</div>
-
-<!-- ── Date Filter ────────────────────────────────────────────────────────── -->
+<!-- ── Date Filter + Export ───────────────────────────────────────────────── -->
 <div class="form-card mb-3 py-2">
   <form method="GET" action="{{ url_for('cashbook') }}" class="row g-2 align-items-end">
     <div class="col-auto">
-      <label class="form-label mb-1 small">From</label>
-      <input type="text" name="from" class="form-control form-control-sm date-input"
+      <label class="form-label mb-1 small fw-semibold">From</label>
+      <input type="text" name="from" class="form-control form-control-sm"
              placeholder="DD/MM/YYYY" value="{{ from_date }}">
     </div>
     <div class="col-auto">
-      <label class="form-label mb-1 small">To</label>
-      <input type="text" name="to" class="form-control form-control-sm date-input"
+      <label class="form-label mb-1 small fw-semibold">To</label>
+      <input type="text" name="to" class="form-control form-control-sm"
              placeholder="DD/MM/YYYY" value="{{ to_date }}">
     </div>
-    <div class="col-auto d-flex gap-2">
+    <div class="col-auto d-flex gap-2 flex-wrap">
       <button type="submit" class="btn btn-primary btn-sm">
         <i class="bi bi-funnel me-1"></i>Filter
       </button>
@@ -81,145 +42,240 @@
         <i class="bi bi-x-circle me-1"></i>Clear
       </a>
       {% endif %}
+      <a href="{{ url_for('cashbook_export_excel', **({'from': from_date} if from_date else {}), **({'to': to_date} if to_date else {})) }}"
+         class="btn btn-success btn-sm">
+        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+      </a>
+      <a href="{{ url_for('cashbook_export_print', **({'from': from_date} if from_date else {}), **({'to': to_date} if to_date else {})) }}"
+         class="btn btn-outline-dark btn-sm" target="_blank">
+        <i class="bi bi-printer me-1"></i>Print / PDF
+      </a>
     </div>
   </form>
 </div>
 
-<!-- ── Summary Cards ─────────────────────────────────────────────────────── -->
-<div class="row g-3 mb-3">
-  <div class="col-6 col-md-3">
-    <div class="card border-success text-center py-2">
-      <div class="small text-muted">DR Cash</div>
-      <div class="fw-bold text-success fs-6">₹{{ "%.2f"|format(dr_cash) }}</div>
+<!-- ── Add Entries Form ───────────────────────────────────────────────────── -->
+<div class="form-card mb-4">
+  <div class="section-title mb-2 d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-plus-circle me-1"></i>Add Entries</span>
+    <div class="d-flex gap-2">
+      <button type="button" class="btn btn-outline-success btn-sm" onclick="addRow('DR')">
+        <i class="bi bi-plus-lg me-1"></i>DR Row
+      </button>
+      <button type="button" class="btn btn-outline-danger btn-sm" onclick="addRow('CR')">
+        <i class="bi bi-plus-lg me-1"></i>CR Row
+      </button>
     </div>
   </div>
-  <div class="col-6 col-md-3">
-    <div class="card border-success text-center py-2">
-      <div class="small text-muted">DR Bank</div>
-      <div class="fw-bold text-success fs-6">₹{{ "%.2f"|format(dr_bank) }}</div>
+
+  <form method="POST" action="{{ url_for('cashbook') }}?{{ request.query_string.decode() }}" id="entryForm">
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-2" id="entryTable">
+        <thead class="table-dark">
+          <tr>
+            <th style="width:110px">Date</th>
+            <th style="width:80px" class="text-center">Side</th>
+            <th>Particulars</th>
+            <th style="width:130px">Cash (₹)</th>
+            <th style="width:130px">Bank (₹)</th>
+            <th style="width:36px"></th>
+          </tr>
+        </thead>
+        <tbody id="entryBody">
+          <!-- initial 3 DR rows -->
+          <tr class="row-form border-start border-success border-3">
+            <td><input type="text" name="entry_date[]" class="form-control form-control-sm"
+                       placeholder="DD/MM/YYYY" value="{{ today }}"></td>
+            <td class="text-center">
+              <select name="side[]" class="form-select form-select-sm side-sel">
+                <option value="DR" selected>DR</option>
+                <option value="CR">CR</option>
+              </select>
+            </td>
+            <td><input type="text" name="particulars[]" class="form-control form-control-sm"
+                       placeholder="e.g. Opening Balance"></td>
+            <td><input type="number" name="cash_amount[]" class="form-control form-control-sm"
+                       step="0.01" min="0" placeholder="0.00"></td>
+            <td><input type="number" name="bank_amount[]" class="form-control form-control-sm"
+                       step="0.01" min="0" placeholder="0.00"></td>
+            <td><button type="button" class="btn btn-outline-danger btn-sm py-0 px-1"
+                        onclick="removeRow(this)"><i class="bi bi-trash"></i></button></td>
+          </tr>
+        </tbody>
+      </table>
     </div>
-  </div>
-  <div class="col-6 col-md-3">
-    <div class="card border-danger text-center py-2">
-      <div class="small text-muted">CR Cash</div>
-      <div class="fw-bold text-danger fs-6">₹{{ "%.2f"|format(cr_cash) }}</div>
+    <div class="d-flex justify-content-end">
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-check-lg me-1"></i>Save All Entries
+      </button>
     </div>
-  </div>
-  <div class="col-6 col-md-3">
-    <div class="card border-danger text-center py-2">
-      <div class="small text-muted">CR Bank</div>
-      <div class="fw-bold text-danger fs-6">₹{{ "%.2f"|format(cr_bank) }}</div>
-    </div>
-  </div>
+  </form>
 </div>
 
-<!-- Net balance row -->
-<div class="row g-3 mb-3">
-  <div class="col-6 col-md-3">
-    <div class="card bg-light text-center py-2">
-      <div class="small text-muted">Net Cash Balance</div>
-      {% set net_cash = dr_cash - cr_cash %}
-      <div class="fw-bold fs-6 {{ 'text-success' if net_cash >= 0 else 'text-danger' }}">
-        ₹{{ "%.2f"|format(net_cash|abs) }}
-        <small class="fw-normal">{{ '(DR)' if net_cash >= 0 else '(CR)' }}</small>
-      </div>
-    </div>
-  </div>
-  <div class="col-6 col-md-3">
-    <div class="card bg-light text-center py-2">
-      <div class="small text-muted">Net Bank Balance</div>
-      {% set net_bank = dr_bank - cr_bank %}
-      <div class="fw-bold fs-6 {{ 'text-success' if net_bank >= 0 else 'text-danger' }}">
-        ₹{{ "%.2f"|format(net_bank|abs) }}
-        <small class="fw-normal">{{ '(DR)' if net_bank >= 0 else '(CR)' }}</small>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ── Cashbook Table ─────────────────────────────────────────────────────── -->
+<!-- ── Traditional Double-Entry Cashbook View ─────────────────────────────── -->
+{% if entries %}
 <div class="form-card">
-  <div class="section-title mb-2">
-    <i class="bi bi-table me-1"></i>Entries
-    {% if entries %}
-    <span class="badge bg-secondary ms-2">{{ entries|length }}</span>
-    {% endif %}
+  <div class="section-title mb-3 d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-table me-1"></i>Cash Book</span>
+    <span class="text-muted small">
+      {% if from_date or to_date %}{{ from_date or '—' }} to {{ to_date or '—' }}{% else %}All entries{% endif %}
+      &nbsp;|&nbsp; {{ entries|length }} entries
+    </span>
   </div>
 
-  {% if entries %}
   <div class="table-responsive">
-    <table class="table table-sm table-hover align-middle mb-0">
-      <thead class="table-dark">
+    <table class="cb-table">
+      <thead>
         <tr>
-          <th>#</th>
+          <th colspan="4" class="side-hdr-dr">Dr</th>
+          <th class="sep-col"></th>
+          <th colspan="4" class="side-hdr-cr">Cr</th>
+        </tr>
+        <tr>
           <th>Date</th>
-          <th>Side</th>
           <th>Particulars</th>
-          <th class="text-end">Cash (₹)</th>
-          <th class="text-end">Bank (₹)</th>
-          <th class="text-muted small">By</th>
-          <th></th>
+          <th class="num">Cash (₹)</th>
+          <th class="num">Bank (₹)</th>
+          <th class="sep-col"></th>
+          <th>Date</th>
+          <th>Particulars</th>
+          <th class="num">Cash (₹)</th>
+          <th class="num">Bank (₹)</th>
         </tr>
       </thead>
       <tbody>
-        {% for e in entries %}
+        {% set dr_list = entries | selectattr('side','equalto','DR') | list %}
+        {% set cr_list = entries | selectattr('side','equalto','CR') | list %}
+        {% set max_rows = [dr_list|length, cr_list|length + 1]|max %}
+        {% for i in range(max_rows) %}
         <tr>
-          <td class="text-muted small">{{ e.id }}</td>
-          <td class="text-nowrap">{{ e.entry_date }}</td>
+          {# DR side #}
+          {% if i < dr_list|length %}
+          {% set de = dr_list[i] %}
+          <td class="text-nowrap">{{ de.entry_date }}</td>
           <td>
-            {% if e.side == 'DR' %}
-            <span class="badge bg-success">DR</span>
-            {% else %}
-            <span class="badge bg-danger">CR</span>
-            {% endif %}
-          </td>
-          <td>{{ e.particulars }}</td>
-          <td class="text-end fw-semibold {{ 'text-success' if e.side=='DR' else 'text-danger' }}">
-            {% if e.cash_amount %}₹{{ "%.2f"|format(e.cash_amount) }}{% else %}<span class="text-muted">—</span>{% endif %}
-          </td>
-          <td class="text-end fw-semibold {{ 'text-success' if e.side=='DR' else 'text-danger' }}">
-            {% if e.bank_amount %}₹{{ "%.2f"|format(e.bank_amount) }}{% else %}<span class="text-muted">—</span>{% endif %}
-          </td>
-          <td class="text-muted small text-nowrap">{{ e.created_by_name or '—' }}</td>
-          <td>
-            <form method="POST" action="{{ url_for('cashbook_delete', eid=e.id) }}"
-                  onsubmit="return confirm('Delete this entry?')">
-              <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-1">
-                <i class="bi bi-trash"></i>
+            {{ de.particulars }}
+            <form method="POST" action="{{ url_for('cashbook_delete', eid=de.id) }}?{{ request.query_string.decode() }}"
+                  class="d-inline" onsubmit="return confirm('Delete this entry?')">
+              <button type="submit" class="btn btn-link btn-sm text-danger p-0 ms-1" title="Delete">
+                <i class="bi bi-x-circle"></i>
               </button>
             </form>
           </td>
+          <td class="num text-success">{% if de.cash_amount %}{{ "%.2f"|format(de.cash_amount) }}{% endif %}</td>
+          <td class="num text-success">{% if de.bank_amount %}{{ "%.2f"|format(de.bank_amount) }}{% endif %}</td>
+          {% else %}
+          <td></td><td></td><td></td><td></td>
+          {% endif %}
+
+          <td class="sep-col"></td>
+
+          {# CR side #}
+          {% if i < cr_list|length %}
+          {% set ce = cr_list[i] %}
+          <td class="text-nowrap">{{ ce.entry_date }}</td>
+          <td>
+            {{ ce.particulars }}
+            <form method="POST" action="{{ url_for('cashbook_delete', eid=ce.id) }}?{{ request.query_string.decode() }}"
+                  class="d-inline" onsubmit="return confirm('Delete this entry?')">
+              <button type="submit" class="btn btn-link btn-sm text-danger p-0 ms-1" title="Delete">
+                <i class="bi bi-x-circle"></i>
+              </button>
+            </form>
+          </td>
+          <td class="num text-danger">{% if ce.cash_amount %}{{ "%.2f"|format(ce.cash_amount) }}{% endif %}</td>
+          <td class="num text-danger">{% if ce.bank_amount %}{{ "%.2f"|format(ce.bank_amount) }}{% endif %}</td>
+          {% elif i == cr_list|length %}
+          {# Auto closing balance row #}
+          <td></td>
+          <td class="fw-semibold text-muted fst-italic">By Closing Balance</td>
+          <td class="num fw-semibold text-muted">
+            {% if closing_cash > 0 %}{{ "%.2f"|format(closing_cash) }}{% endif %}
+          </td>
+          <td class="num fw-semibold text-muted">
+            {% if closing_bank > 0 %}{{ "%.2f"|format(closing_bank) }}{% endif %}
+          </td>
+          {% else %}
+          <td></td><td></td><td></td><td></td>
+          {% endif %}
         </tr>
         {% endfor %}
       </tbody>
-      <tfoot class="table-secondary fw-bold">
+      <tfoot>
         <tr>
-          <td colspan="4">Totals</td>
-          <td class="text-end">
-            <span class="text-success">↓₹{{ "%.2f"|format(dr_cash) }}</span>
-            <span class="mx-1 text-muted">/</span>
-            <span class="text-danger">↑₹{{ "%.2f"|format(cr_cash) }}</span>
-          </td>
-          <td class="text-end">
-            <span class="text-success">↓₹{{ "%.2f"|format(dr_bank) }}</span>
-            <span class="mx-1 text-muted">/</span>
-            <span class="text-danger">↑₹{{ "%.2f"|format(cr_bank) }}</span>
-          </td>
-          <td colspan="2"></td>
+          <td></td>
+          <td class="text-end">Totals</td>
+          <td class="num">{{ "%.2f"|format(dr_cash) }}</td>
+          <td class="num">{{ "%.2f"|format(dr_bank) }}</td>
+          <td class="sep-col"></td>
+          <td></td>
+          <td class="text-end">Totals</td>
+          <td class="num">{{ "%.2f"|format(cr_cash + [closing_cash, 0]|max) }}</td>
+          <td class="num">{{ "%.2f"|format(cr_bank + [closing_bank, 0]|max) }}</td>
         </tr>
       </tfoot>
     </table>
   </div>
-  {% else %}
-  <p class="text-muted text-center py-4">No cashbook entries found.</p>
-  {% endif %}
 </div>
+{% else %}
+<div class="form-card text-center text-muted py-4">
+  <i class="bi bi-journal-x" style="font-size:2rem;opacity:.4;"></i>
+  <div class="mt-2">No cashbook entries found.</div>
+</div>
+{% endif %}
 
 <script>
-function updateStyle() {
-  const isCR = document.getElementById('sideCR').checked;
-  document.getElementById('saveBtn').className = isCR
-    ? 'btn btn-danger w-100' : 'btn btn-success w-100';
+const today = "{{ today }}";
+
+function sideClass(side) {
+  return side === 'DR'
+    ? 'row-form border-start border-success border-3'
+    : 'row-form border-start border-danger border-3';
 }
+
+function addRow(side) {
+  const tbody = document.getElementById('entryBody');
+  const tr = document.createElement('tr');
+  tr.className = sideClass(side);
+  tr.innerHTML = `
+    <td><input type="text" name="entry_date[]" class="form-control form-control-sm"
+               placeholder="DD/MM/YYYY" value="${today}"></td>
+    <td class="text-center">
+      <select name="side[]" class="form-select form-select-sm side-sel" onchange="updateRowStyle(this)">
+        <option value="DR"${side==='DR'?' selected':''}>DR</option>
+        <option value="CR"${side==='CR'?' selected':''}>CR</option>
+      </select>
+    </td>
+    <td><input type="text" name="particulars[]" class="form-control form-control-sm" placeholder="Particulars"></td>
+    <td><input type="number" name="cash_amount[]" class="form-control form-control-sm"
+               step="0.01" min="0" placeholder="0.00"></td>
+    <td><input type="number" name="bank_amount[]" class="form-control form-control-sm"
+               step="0.01" min="0" placeholder="0.00"></td>
+    <td><button type="button" class="btn btn-outline-danger btn-sm py-0 px-1"
+                onclick="removeRow(this)"><i class="bi bi-trash"></i></button></td>`;
+  tbody.appendChild(tr);
+  // Init flatpickr on the new date input
+  if (window.flatpickr) {
+    flatpickr(tr.querySelector('input[placeholder="DD/MM/YYYY"]'), {
+      dateFormat: 'd/m/Y', allowInput: true, disableMobile: true, defaultDate: today
+    });
+  }
+}
+
+function removeRow(btn) {
+  const tbody = document.getElementById('entryBody');
+  if (tbody.rows.length > 1) {
+    btn.closest('tr').remove();
+  }
+}
+
+function updateRowStyle(sel) {
+  sel.closest('tr').className = sideClass(sel.value);
+}
+
+// Wire up initial selects
+document.querySelectorAll('.side-sel').forEach(s =>
+  s.addEventListener('change', () => updateRowStyle(s))
+);
 </script>
 {% endblock %}
