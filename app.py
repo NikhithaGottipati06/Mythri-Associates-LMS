@@ -5691,18 +5691,16 @@ def cashbook_export_excel():
     ws.merge_cells('A2:I2')
     cell(2, 1, period, align='center')
 
-    # Sub-headers DR / CR
+    # Sub-headers: LEFT = Cr (green), RIGHT = Dr (red)
     ws.merge_cells('A3:D3')
-    cell(3, 1, 'Dr', bold=True, fill_hex='E2EFDA').font = Font(bold=True, size=11, name='Arial')
+    cell(3, 1, 'Cr', bold=True, fill_hex='E2EFDA').font = Font(bold=True, size=11, name='Arial', color='1F6B3B')
     ws['A3'].fill = PatternFill('solid', fgColor='E2EFDA')
     ws.merge_cells('F3:I3')
-    cell(3, 6, 'Cr', bold=True, fill_hex='FCE4D6').font = Font(bold=True, size=11, name='Arial')
+    cell(3, 6, 'Dr', bold=True, fill_hex='FCE4D6').font = Font(bold=True, size=11, name='Arial', color='9C0006')
     ws['F3'].fill = PatternFill('solid', fgColor='FCE4D6')
-    # blank separator
     ws.merge_cells('E3:E4')
     ws['E3'].fill = PatternFill('solid', fgColor='D9D9D9')
 
-    # Column headers
     hdr_fill = 'BDD7EE'
     for col, txt in [(1,'Date'),(2,'Particulars'),(3,'Cash (₹)'),(4,'Bank (₹)')]:
         cell(4, col, txt, bold=True, fill_hex=hdr_fill)
@@ -5721,43 +5719,55 @@ def cashbook_export_excel():
     ws.row_dimensions[1].height = 22
     ws.row_dimensions[3].height = 16
 
+    DR_RED   = '9C0006'
+    CR_GREEN = '1F6B3B'
+    RED_BOLD = Font(bold=True, color=DR_RED,   name='Arial', size=10)
+    GRN_NORM = Font(bold=False, color=CR_GREEN, name='Arial', size=10)
+    GRN_BOLD = Font(bold=True,  color=CR_GREEN, name='Arial', size=10)
+
     max_rows = max(len(dr_list) + (0 if closing_on_cr else 1),
                    len(cr_list) + (1 if closing_on_cr else 0))
     for i in range(max_rows):
         r = 5 + i
         ws.row_dimensions[r].height = 15
-        # DR side
-        if i < len(dr_list):
-            e = dr_list[i]
-            cell(r, 1, e['entry_date'], align='center')
-            cell(r, 2, e['particulars'], align='left')
-            cell(r, 3, e['cash_amount'] or 0, num_fmt='#,##0.00', align='right')
-            cell(r, 4, e['bank_amount'] or 0, num_fmt='#,##0.00', align='right')
-        elif not closing_on_cr and i == len(dr_list):
-            cell(r, 1, '', align='center')
-            cell(r, 2, 'To Closing Balance', bold=True, align='left')
-            cell(r, 3, closing_cash, num_fmt='#,##0.00', align='right', bold=True)
-            cell(r, 4, closing_bank, num_fmt='#,##0.00', align='right', bold=True)
-        else:
-            for c in range(1, 5):
-                cell(r, c, '')
-        # separator
-        ws.cell(row=r, column=5).fill = PatternFill('solid', fgColor='D9D9D9')
-        # CR side
+
+        # LEFT = CR side (green)
         if i < len(cr_list):
             e = cr_list[i]
-            cell(r, 6, e['entry_date'], align='center')
-            cell(r, 7, e['particulars'], align='left')
-            cell(r, 8, e['cash_amount'] or 0, num_fmt='#,##0.00', align='right')
-            cell(r, 9, e['bank_amount'] or 0, num_fmt='#,##0.00', align='right')
+            c1 = cell(r, 1, e['entry_date'], align='center')
+            c2 = cell(r, 2, e['particulars'], align='left')
+            c3 = cell(r, 3, e['cash_amount'] or 0, num_fmt='#,##0.00', align='right')
+            c4 = cell(r, 4, e['bank_amount'] or 0, num_fmt='#,##0.00', align='right')
+            for cx in (c1, c2, c3, c4): cx.font = GRN_NORM
         elif closing_on_cr and i == len(cr_list):
-            cell(r, 6, '', align='center')
-            cell(r, 7, 'By Closing Balance', bold=True, align='left')
-            cell(r, 8, closing_cash, num_fmt='#,##0.00', align='right', bold=True)
-            cell(r, 9, closing_bank, num_fmt='#,##0.00', align='right', bold=True)
+            c1 = cell(r, 1, '', align='center')
+            c2 = cell(r, 2, 'By Closing Balance', align='left')
+            c3 = cell(r, 3, closing_cash, num_fmt='#,##0.00', align='right')
+            c4 = cell(r, 4, closing_bank, num_fmt='#,##0.00', align='right')
+            for cx in (c1, c2, c3, c4): cx.font = RED_BOLD
         else:
-            for c in range(6, 10):
-                cell(r, c, '')
+            for c in range(1, 5): cell(r, c, '')
+
+        ws.cell(row=r, column=5).fill = PatternFill('solid', fgColor='D9D9D9')
+
+        # RIGHT = DR side (red)
+        if i < len(dr_list):
+            e = dr_list[i]
+            is_ob = (e['particulars'] == 'Opening Balance')
+            fnt = Font(bold=is_ob, color=DR_RED, name='Arial', size=10)
+            c1 = cell(r, 6, e['entry_date'], align='center')
+            c2 = cell(r, 7, e['particulars'], align='left')
+            c3 = cell(r, 8, e['cash_amount'] or 0, num_fmt='#,##0.00', align='right')
+            c4 = cell(r, 9, e['bank_amount'] or 0, num_fmt='#,##0.00', align='right')
+            for cx in (c1, c2, c3, c4): cx.font = fnt
+        elif not closing_on_cr and i == len(dr_list):
+            c1 = cell(r, 6, '', align='center')
+            c2 = cell(r, 7, 'To Closing Balance', align='left')
+            c3 = cell(r, 8, closing_cash, num_fmt='#,##0.00', align='right')
+            c4 = cell(r, 9, closing_bank, num_fmt='#,##0.00', align='right')
+            for cx in (c1, c2, c3, c4): cx.font = RED_BOLD
+        else:
+            for c in range(6, 10): cell(r, c, '')
 
     # Totals row — both sides equal after closing balance
     tr = 5 + max_rows

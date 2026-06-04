@@ -46,9 +46,9 @@
   <table>
     <thead>
       <tr>
-        <th colspan="4" class="side-hdr dr-hdr">Dr</th>
-        <th class="sep"></th>
         <th colspan="4" class="side-hdr cr-hdr">Cr</th>
+        <th class="sep"></th>
+        <th colspan="4" class="side-hdr dr-hdr">Dr</th>
       </tr>
       <tr>
         <th class="col-hdr" style="width:90px">Date</th>
@@ -70,36 +70,37 @@
       {% endif %}
       {% for i in range(max_rows) %}
       <tr>
-        {# DR side #}
-        {% if i < dr_list|length %}
-          {% set de = dr_list[i] %}
-          <td>{{ de.entry_date }}</td>
-          <td>{{ de.particulars }}</td>
-          <td class="num">{% if de.cash_amount %}{{ "%.2f"|format(de.cash_amount) }}{% endif %}</td>
-          <td class="num">{% if de.bank_amount %}{{ "%.2f"|format(de.bank_amount) }}{% endif %}</td>
-        {% elif not closing_on_cr and i == dr_list|length %}
+        {# LEFT = CR side (green) #}
+        {% if i < cr_list|length %}
+          {% set ce = cr_list[i] %}
+          <td>{{ ce.entry_date }}</td>
+          <td style="color:#198754">{{ ce.particulars }}</td>
+          <td class="num" style="color:#198754;font-weight:600">{% if ce.cash_amount %}{{ "%.2f"|format(ce.cash_amount) }}{% endif %}</td>
+          <td class="num" style="color:#198754;font-weight:600">{% if ce.bank_amount %}{{ "%.2f"|format(ce.bank_amount) }}{% endif %}</td>
+        {% elif closing_on_cr and i == cr_list|length %}
           <td>&nbsp;</td>
-          <td class="closing">To Closing Balance</td>
-          <td class="num closing">{% if closing_cash %}{{ "%.2f"|format(closing_cash) }}{% endif %}</td>
-          <td class="num closing">{% if closing_bank %}{{ "%.2f"|format(closing_bank) }}{% endif %}</td>
+          <td class="closing" style="color:#dc3545;font-weight:700">By Closing Balance</td>
+          <td class="num" style="color:#dc3545;font-weight:700">{% if closing_cash %}{{ "%.2f"|format(closing_cash) }}{% endif %}</td>
+          <td class="num" style="color:#dc3545;font-weight:700">{% if closing_bank %}{{ "%.2f"|format(closing_bank) }}{% endif %}</td>
         {% else %}
           <td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>
         {% endif %}
 
         <td class="sep"></td>
 
-        {# CR side #}
-        {% if i < cr_list|length %}
-          {% set ce = cr_list[i] %}
-          <td>{{ ce.entry_date }}</td>
-          <td>{{ ce.particulars }}</td>
-          <td class="num">{% if ce.cash_amount %}{{ "%.2f"|format(ce.cash_amount) }}{% endif %}</td>
-          <td class="num">{% if ce.bank_amount %}{{ "%.2f"|format(ce.bank_amount) }}{% endif %}</td>
-        {% elif closing_on_cr and i == cr_list|length %}
+        {# RIGHT = DR side (red) #}
+        {% if i < dr_list|length %}
+          {% set de = dr_list[i] %}
+          {% set is_ob = (de.particulars == 'Opening Balance') %}
+          <td style="color:#dc3545;{% if is_ob %}font-weight:700{% endif %}">{{ de.entry_date }}</td>
+          <td style="color:#dc3545;{% if is_ob %}font-weight:700{% endif %}">{{ de.particulars }}</td>
+          <td class="num" style="color:#dc3545;font-weight:{% if is_ob %}700{% else %}600{% endif %}">{% if de.cash_amount %}{{ "%.2f"|format(de.cash_amount) }}{% endif %}</td>
+          <td class="num" style="color:#dc3545;font-weight:{% if is_ob %}700{% else %}600{% endif %}">{% if de.bank_amount %}{{ "%.2f"|format(de.bank_amount) }}{% endif %}</td>
+        {% elif not closing_on_cr and i == dr_list|length %}
           <td>&nbsp;</td>
-          <td class="closing">By Closing Balance</td>
-          <td class="num closing">{% if closing_cash %}{{ "%.2f"|format(closing_cash) }}{% endif %}</td>
-          <td class="num closing">{% if closing_bank %}{{ "%.2f"|format(closing_bank) }}{% endif %}</td>
+          <td class="closing" style="color:#dc3545;font-weight:700">To Closing Balance</td>
+          <td class="num" style="color:#dc3545;font-weight:700">{% if closing_cash %}{{ "%.2f"|format(closing_cash) }}{% endif %}</td>
+          <td class="num" style="color:#dc3545;font-weight:700">{% if closing_bank %}{{ "%.2f"|format(closing_bank) }}{% endif %}</td>
         {% else %}
           <td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>
         {% endif %}

@@ -82,8 +82,7 @@
           </tr>
         </thead>
         <tbody id="entryBody">
-          <!-- initial 3 DR rows -->
-          <tr class="row-form border-start border-success border-3">
+          <tr class="row-form border-start border-danger border-3">
             <td><input type="text" name="entry_date[]" class="form-control form-control-sm"
                        placeholder="DD/MM/YYYY" value="{{ today }}"></td>
             <td class="text-center">
@@ -127,20 +126,16 @@
     <table class="cb-table">
       <thead>
         <tr>
-          <th colspan="4" class="side-hdr-dr">Dr</th>
-          <th class="sep-col"></th>
           <th colspan="4" class="side-hdr-cr">Cr</th>
+          <th class="sep-col"></th>
+          <th colspan="4" class="side-hdr-dr">Dr</th>
         </tr>
         <tr>
-          <th>Date</th>
-          <th>Particulars</th>
-          <th class="num">Cash (₹)</th>
-          <th class="num">Bank (₹)</th>
+          <th>Date</th><th>Particulars</th>
+          <th class="num">Cash (₹)</th><th class="num">Bank (₹)</th>
           <th class="sep-col"></th>
-          <th>Date</th>
-          <th>Particulars</th>
-          <th class="num">Cash (₹)</th>
-          <th class="num">Bank (₹)</th>
+          <th>Date</th><th>Particulars</th>
+          <th class="num">Cash (₹)</th><th class="num">Bank (₹)</th>
         </tr>
       </thead>
       <tbody>
@@ -153,48 +148,49 @@
         {% endif %}
         {% for i in range(max_rows) %}
         <tr>
-          {# ── DR side ── #}
-          {% if i < dr_list|length %}
-            {% set de = dr_list[i] %}
-            <td class="text-nowrap">{{ de.entry_date }}</td>
-            <td>
-              {{ de.particulars }}
-              <form method="POST" action="{{ url_for('cashbook_delete', eid=de.id) }}?{{ request.query_string.decode() }}"
-                    class="d-inline" onsubmit="return confirm('Delete this entry?')">
-                <button type="submit" class="btn btn-link btn-sm text-danger p-0 ms-1"><i class="bi bi-x-circle"></i></button>
-              </form>
-            </td>
-            <td class="num text-success">{% if de.cash_amount %}{{ "%.2f"|format(de.cash_amount) }}{% endif %}</td>
-            <td class="num text-success">{% if de.bank_amount %}{{ "%.2f"|format(de.bank_amount) }}{% endif %}</td>
-          {% elif not closing_on_cr and i == dr_list|length %}
-            <td></td>
-            <td class="fw-semibold fst-italic text-secondary">To Closing Balance</td>
-            <td class="num fw-semibold text-secondary">{% if closing_cash %}{{ "%.2f"|format(closing_cash) }}{% endif %}</td>
-            <td class="num fw-semibold text-secondary">{% if closing_bank %}{{ "%.2f"|format(closing_bank) }}{% endif %}</td>
-          {% else %}
-            <td></td><td></td><td></td><td></td>
-          {% endif %}
-
-          <td class="sep-col"></td>
-
-          {# ── CR side ── #}
+          {# ── LEFT = CR side (green) ── #}
           {% if i < cr_list|length %}
             {% set ce = cr_list[i] %}
             <td class="text-nowrap">{{ ce.entry_date }}</td>
-            <td>
+            <td class="text-success">
               {{ ce.particulars }}
               <form method="POST" action="{{ url_for('cashbook_delete', eid=ce.id) }}?{{ request.query_string.decode() }}"
                     class="d-inline" onsubmit="return confirm('Delete this entry?')">
                 <button type="submit" class="btn btn-link btn-sm text-danger p-0 ms-1"><i class="bi bi-x-circle"></i></button>
               </form>
             </td>
-            <td class="num text-danger">{% if ce.cash_amount %}{{ "%.2f"|format(ce.cash_amount) }}{% endif %}</td>
-            <td class="num text-danger">{% if ce.bank_amount %}{{ "%.2f"|format(ce.bank_amount) }}{% endif %}</td>
+            <td class="num text-success fw-semibold">{% if ce.cash_amount %}{{ "%.2f"|format(ce.cash_amount) }}{% endif %}</td>
+            <td class="num text-success fw-semibold">{% if ce.bank_amount %}{{ "%.2f"|format(ce.bank_amount) }}{% endif %}</td>
           {% elif closing_on_cr and i == cr_list|length %}
             <td></td>
-            <td class="fw-semibold fst-italic text-secondary">By Closing Balance</td>
-            <td class="num fw-semibold text-secondary">{% if closing_cash %}{{ "%.2f"|format(closing_cash) }}{% endif %}</td>
-            <td class="num fw-semibold text-secondary">{% if closing_bank %}{{ "%.2f"|format(closing_bank) }}{% endif %}</td>
+            <td class="fw-bold fst-italic text-danger">By Closing Balance</td>
+            <td class="num fw-bold text-danger">{% if closing_cash %}{{ "%.2f"|format(closing_cash) }}{% endif %}</td>
+            <td class="num fw-bold text-danger">{% if closing_bank %}{{ "%.2f"|format(closing_bank) }}{% endif %}</td>
+          {% else %}
+            <td></td><td></td><td></td><td></td>
+          {% endif %}
+
+          <td class="sep-col"></td>
+
+          {# ── RIGHT = DR side (red) ── #}
+          {% if i < dr_list|length %}
+            {% set de = dr_list[i] %}
+            {% set is_ob = (de.particulars == 'Opening Balance') %}
+            <td class="text-nowrap {{ 'fw-bold text-danger' if is_ob else '' }}">{{ de.entry_date }}</td>
+            <td class="{{ 'fw-bold text-danger' if is_ob else 'text-danger' }}">
+              {{ de.particulars }}
+              <form method="POST" action="{{ url_for('cashbook_delete', eid=de.id) }}?{{ request.query_string.decode() }}"
+                    class="d-inline" onsubmit="return confirm('Delete this entry?')">
+                <button type="submit" class="btn btn-link btn-sm text-danger p-0 ms-1"><i class="bi bi-x-circle"></i></button>
+              </form>
+            </td>
+            <td class="num fw-semibold {{ 'fw-bold' if is_ob else '' }} text-danger">{% if de.cash_amount %}{{ "%.2f"|format(de.cash_amount) }}{% endif %}</td>
+            <td class="num fw-semibold {{ 'fw-bold' if is_ob else '' }} text-danger">{% if de.bank_amount %}{{ "%.2f"|format(de.bank_amount) }}{% endif %}</td>
+          {% elif not closing_on_cr and i == dr_list|length %}
+            <td></td>
+            <td class="fw-bold fst-italic text-danger">To Closing Balance</td>
+            <td class="num fw-bold text-danger">{% if closing_cash %}{{ "%.2f"|format(closing_cash) }}{% endif %}</td>
+            <td class="num fw-bold text-danger">{% if closing_bank %}{{ "%.2f"|format(closing_bank) }}{% endif %}</td>
           {% else %}
             <td></td><td></td><td></td><td></td>
           {% endif %}
@@ -203,13 +199,11 @@
       </tbody>
       <tfoot>
         <tr>
-          <td></td>
-          <td class="text-end">Totals</td>
+          <td></td><td class="text-end">Totals</td>
           <td class="num">{{ "%.2f"|format(grand_cash) }}</td>
           <td class="num">{{ "%.2f"|format(grand_bank) }}</td>
           <td class="sep-col"></td>
-          <td></td>
-          <td class="text-end">Totals</td>
+          <td></td><td class="text-end">Totals</td>
           <td class="num">{{ "%.2f"|format(grand_cash) }}</td>
           <td class="num">{{ "%.2f"|format(grand_bank) }}</td>
         </tr>
@@ -229,8 +223,8 @@ const today = "{{ today }}";
 
 function sideClass(side) {
   return side === 'DR'
-    ? 'row-form border-start border-success border-3'
-    : 'row-form border-start border-danger border-3';
+    ? 'row-form border-start border-danger border-3'
+    : 'row-form border-start border-success border-3';
 }
 
 function addRow(side) {
