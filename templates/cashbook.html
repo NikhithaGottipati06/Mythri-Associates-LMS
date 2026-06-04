@@ -42,11 +42,11 @@
         <i class="bi bi-x-circle me-1"></i>Clear
       </a>
       {% endif %}
-      <a href="{{ url_for('cashbook_export_excel', **({'from': from_date} if from_date else {}), **({'to': to_date} if to_date else {})) }}"
+      <a href="{{ url_for('cashbook_export_excel', **{'from': from_date, 'to': to_date}) }}"
          class="btn btn-success btn-sm">
         <i class="bi bi-file-earmark-excel me-1"></i>Excel
       </a>
-      <a href="{{ url_for('cashbook_export_print', **({'from': from_date} if from_date else {}), **({'to': to_date} if to_date else {})) }}"
+      <a href="{{ url_for('cashbook_export_print', **{'from': from_date, 'to': to_date}) }}"
          class="btn btn-outline-dark btn-sm" target="_blank">
         <i class="bi bi-printer me-1"></i>Print / PDF
       </a>
