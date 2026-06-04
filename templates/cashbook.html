@@ -22,18 +22,18 @@
 
 <!-- ── Date Filter + Export ───────────────────────────────────────────────── -->
 <div class="form-card mb-3 py-2">
-  <form method="GET" action="{{ url_for('cashbook') }}" class="row g-2 align-items-end">
-    <div class="col-auto">
-      <label class="form-label mb-1 small fw-semibold">From</label>
-      <input type="text" name="from" class="form-control form-control-sm"
-             placeholder="DD/MM/YYYY" value="{{ from_date }}">
-    </div>
-    <div class="col-auto">
-      <label class="form-label mb-1 small fw-semibold">To</label>
-      <input type="text" name="to" class="form-control form-control-sm"
-             placeholder="DD/MM/YYYY" value="{{ to_date }}">
-    </div>
-    <div class="col-auto d-flex gap-2 flex-wrap">
+  <div class="d-flex gap-2 flex-wrap align-items-end">
+    <form method="GET" action="{{ url_for('cashbook') }}" class="d-flex gap-2 align-items-end flex-wrap">
+      <div>
+        <label class="form-label mb-1 small fw-semibold">From</label>
+        <input type="text" name="from" class="form-control form-control-sm"
+               placeholder="DD/MM/YYYY" value="{{ from_date }}">
+      </div>
+      <div>
+        <label class="form-label mb-1 small fw-semibold">To</label>
+        <input type="text" name="to" class="form-control form-control-sm"
+               placeholder="DD/MM/YYYY" value="{{ to_date }}">
+      </div>
       <button type="submit" class="btn btn-primary btn-sm">
         <i class="bi bi-funnel me-1"></i>Filter
       </button>
@@ -42,24 +42,23 @@
         <i class="bi bi-x-circle me-1"></i>Clear
       </a>
       {% endif %}
-      <a href="/cashbook/export/excel?from={{ from_date }}&to={{ to_date }}"
-         class="btn btn-success btn-sm">
-        <i class="bi bi-file-earmark-excel me-1"></i>Excel
-      </a>
-      <a href="/cashbook/export/print?from={{ from_date }}&to={{ to_date }}"
-         class="btn btn-outline-dark btn-sm" target="_blank">
-        <i class="bi bi-printer me-1"></i>Print / PDF
-      </a>
-      {% if not entries %}
-      <form method="POST" action="{{ url_for('cashbook_import_maithri') }}" class="d-inline"
-            onsubmit="return confirm('Import Maithri PDF data (04/05 – 20/05/2026)? This only works on an empty cashbook.')">
-        <button type="submit" class="btn btn-warning btn-sm">
-          <i class="bi bi-cloud-upload me-1"></i>Import PDF Data
-        </button>
-      </form>
-      {% endif %}
-    </div>
-  </form>
+    </form>
+
+    <a href="/cashbook/export/excel?from={{ from_date }}&to={{ to_date }}"
+       class="btn btn-success btn-sm">
+      <i class="bi bi-file-earmark-excel me-1"></i>Excel
+    </a>
+    <a href="/cashbook/export/print?from={{ from_date }}&to={{ to_date }}"
+       class="btn btn-outline-dark btn-sm" target="_blank">
+      <i class="bi bi-printer me-1"></i>Print / PDF
+    </a>
+
+    <form method="POST" action="{{ url_for('cashbook_import_maithri') }}">
+      <button type="submit" class="btn btn-warning btn-sm">
+        <i class="bi bi-cloud-upload me-1"></i>Import PDF Data
+      </button>
+    </form>
+  </div>
 </div>
 
 <!-- ── Add Entries Form ───────────────────────────────────────────────────── -->
