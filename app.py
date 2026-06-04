@@ -5639,7 +5639,7 @@ def cashbook():
         grand_cash=grand_cash, grand_bank=grand_bank)
 
 
-@app.route('/cashbook/import-maithri', methods=['POST'])
+@app.route('/cashbook/import-maithri', methods=['GET', 'POST'])
 @admin_required
 def cashbook_import_maithri():
     SEED = [
@@ -5710,11 +5710,7 @@ def cashbook_import_maithri():
         ('20/05/2026','CR','By loan to Members',120000,61000),
     ]
     db = get_db()
-    existing = db.execute("SELECT COUNT(*) FROM cashbook_entries").fetchone()[0]
-    if existing > 0:
-        db.close()
-        flash(f'Import skipped — {existing} entries already exist in the cashbook.', 'warning')
-        return redirect(url_for('cashbook'))
+    db.execute("DELETE FROM cashbook_entries")
     uid = session['user_id']
     for (d, s, p, ca, ba) in SEED:
         db.execute(
