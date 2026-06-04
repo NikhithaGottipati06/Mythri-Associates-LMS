@@ -5570,7 +5570,7 @@ def cashbook():
         cash_amounts = request.form.getlist('cash_amount[]')
         bank_amounts = request.form.getlist('bank_amount[]')
 
-        saved, errors = 0, []
+        saved = 0
         for i in range(len(dates)):
             p  = parts_list[i].strip() if i < len(parts_list) else ''
             if not p:
@@ -5579,10 +5579,6 @@ def cashbook():
             s  = sides[i] if i < len(sides) else 'DR'
             ca = float(cash_amounts[i] or 0) if i < len(cash_amounts) else 0
             ba = float(bank_amounts[i] or 0) if i < len(bank_amounts) else 0
-            blocked, ldate = _day_lock_check(db, d)
-            if blocked:
-                errors.append(f'{ldate} is locked (Day End done).')
-                continue
             db.execute(
                 "INSERT INTO cashbook_entries (entry_date,side,particulars,cash_amount,bank_amount,created_by) "
                 "VALUES (?,?,?,?,?,?)",
@@ -5593,9 +5589,7 @@ def cashbook():
         if saved:
             db.commit()
             flash(f'{saved} entr{"ies" if saved > 1 else "y"} saved.', 'success')
-        for e in errors:
-            flash(e, 'danger')
-        if not saved and not errors:
+        else:
             flash('No valid entries to save. Fill in Particulars for each row.', 'warning')
         db.close()
         return redirect(url_for('cashbook',
@@ -5627,13 +5621,7 @@ def cashbook():
 @admin_required
 def cashbook_delete(eid):
     db = get_db()
-    entry = db.execute("SELECT * FROM cashbook_entries WHERE id=?", (eid,)).fetchone()
-    if entry:
-        blocked, ldate = _day_lock_check(db, entry['entry_date'])
-        if blocked:
-            db.close()
-            flash(f'{ldate} is locked. Undo Day End to delete entries.', 'danger')
-            return redirect(url_for('cashbook'))
+    if db.execute("SELECT id FROM cashbook_entries WHERE id=?", (eid,)).fetchone():
         db.execute("DELETE FROM cashbook_entries WHERE id=?", (eid,))
         db.commit()
         flash('Entry deleted.', 'success')
