@@ -1,0 +1,225 @@
+{% extends 'base.html' %}
+{% block title %}Cashbook{% endblock %}
+{% block content %}
+<div class="page-header">
+  <i class="bi bi-journal-text" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Cashbook</h5>
+</div>
+
+<!-- ── Entry Form ─────────────────────────────────────────────────────────── -->
+<div class="form-card mb-4">
+  <div class="section-title mb-3">Add Entry</div>
+  <form method="POST" action="{{ url_for('cashbook') }}">
+
+    <!-- DR / CR toggle -->
+    <div class="mb-3 d-flex gap-4">
+      <div class="form-check">
+        <input class="form-check-input" type="radio" name="side" id="sideDR"
+               value="DR" checked onchange="updateStyle()">
+        <label class="form-check-label fw-semibold text-success" for="sideDR">
+          <i class="bi bi-arrow-down-circle me-1"></i>DR &nbsp;<small class="fw-normal text-muted">(money received)</small>
+        </label>
+      </div>
+      <div class="form-check">
+        <input class="form-check-input" type="radio" name="side" id="sideCR"
+               value="CR" onchange="updateStyle()">
+        <label class="form-check-label fw-semibold text-danger" for="sideCR">
+          <i class="bi bi-arrow-up-circle me-1"></i>CR &nbsp;<small class="fw-normal text-muted">(money paid out)</small>
+        </label>
+      </div>
+    </div>
+
+    <div class="row g-3 align-items-end">
+      <div class="col-md-2">
+        <label class="form-label required">Date</label>
+        <input type="text" name="entry_date" class="form-control date-input"
+               placeholder="DD/MM/YYYY" value="{{ today }}" required>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label required">Particulars</label>
+        <input type="text" name="particulars" class="form-control"
+               placeholder="e.g. Cash collected from field" required>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Cash Amount (₹)</label>
+        <input type="number" name="cash_amount" class="form-control"
+               step="0.01" min="0" placeholder="0.00">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Bank Amount (₹)</label>
+        <input type="number" name="bank_amount" class="form-control"
+               step="0.01" min="0" placeholder="0.00">
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-success w-100" id="saveBtn">
+          <i class="bi bi-check-lg me-1"></i>Save
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<!-- ── Date Filter ────────────────────────────────────────────────────────── -->
+<div class="form-card mb-3 py-2">
+  <form method="GET" action="{{ url_for('cashbook') }}" class="row g-2 align-items-end">
+    <div class="col-auto">
+      <label class="form-label mb-1 small">From</label>
+      <input type="text" name="from" class="form-control form-control-sm date-input"
+             placeholder="DD/MM/YYYY" value="{{ from_date }}">
+    </div>
+    <div class="col-auto">
+      <label class="form-label mb-1 small">To</label>
+      <input type="text" name="to" class="form-control form-control-sm date-input"
+             placeholder="DD/MM/YYYY" value="{{ to_date }}">
+    </div>
+    <div class="col-auto d-flex gap-2">
+      <button type="submit" class="btn btn-primary btn-sm">
+        <i class="bi bi-funnel me-1"></i>Filter
+      </button>
+      {% if from_date or to_date %}
+      <a href="{{ url_for('cashbook') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-x-circle me-1"></i>Clear
+      </a>
+      {% endif %}
+    </div>
+  </form>
+</div>
+
+<!-- ── Summary Cards ─────────────────────────────────────────────────────── -->
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3">
+    <div class="card border-success text-center py-2">
+      <div class="small text-muted">DR Cash</div>
+      <div class="fw-bold text-success fs-6">₹{{ "%.2f"|format(dr_cash) }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-success text-center py-2">
+      <div class="small text-muted">DR Bank</div>
+      <div class="fw-bold text-success fs-6">₹{{ "%.2f"|format(dr_bank) }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-danger text-center py-2">
+      <div class="small text-muted">CR Cash</div>
+      <div class="fw-bold text-danger fs-6">₹{{ "%.2f"|format(cr_cash) }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card border-danger text-center py-2">
+      <div class="small text-muted">CR Bank</div>
+      <div class="fw-bold text-danger fs-6">₹{{ "%.2f"|format(cr_bank) }}</div>
+    </div>
+  </div>
+</div>
+
+<!-- Net balance row -->
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3">
+    <div class="card bg-light text-center py-2">
+      <div class="small text-muted">Net Cash Balance</div>
+      {% set net_cash = dr_cash - cr_cash %}
+      <div class="fw-bold fs-6 {{ 'text-success' if net_cash >= 0 else 'text-danger' }}">
+        ₹{{ "%.2f"|format(net_cash|abs) }}
+        <small class="fw-normal">{{ '(DR)' if net_cash >= 0 else '(CR)' }}</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card bg-light text-center py-2">
+      <div class="small text-muted">Net Bank Balance</div>
+      {% set net_bank = dr_bank - cr_bank %}
+      <div class="fw-bold fs-6 {{ 'text-success' if net_bank >= 0 else 'text-danger' }}">
+        ₹{{ "%.2f"|format(net_bank|abs) }}
+        <small class="fw-normal">{{ '(DR)' if net_bank >= 0 else '(CR)' }}</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Cashbook Table ─────────────────────────────────────────────────────── -->
+<div class="form-card">
+  <div class="section-title mb-2">
+    <i class="bi bi-table me-1"></i>Entries
+    {% if entries %}
+    <span class="badge bg-secondary ms-2">{{ entries|length }}</span>
+    {% endif %}
+  </div>
+
+  {% if entries %}
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead class="table-dark">
+        <tr>
+          <th>#</th>
+          <th>Date</th>
+          <th>Side</th>
+          <th>Particulars</th>
+          <th class="text-end">Cash (₹)</th>
+          <th class="text-end">Bank (₹)</th>
+          <th class="text-muted small">By</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in entries %}
+        <tr>
+          <td class="text-muted small">{{ e.id }}</td>
+          <td class="text-nowrap">{{ e.entry_date }}</td>
+          <td>
+            {% if e.side == 'DR' %}
+            <span class="badge bg-success">DR</span>
+            {% else %}
+            <span class="badge bg-danger">CR</span>
+            {% endif %}
+          </td>
+          <td>{{ e.particulars }}</td>
+          <td class="text-end fw-semibold {{ 'text-success' if e.side=='DR' else 'text-danger' }}">
+            {% if e.cash_amount %}₹{{ "%.2f"|format(e.cash_amount) }}{% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td class="text-end fw-semibold {{ 'text-success' if e.side=='DR' else 'text-danger' }}">
+            {% if e.bank_amount %}₹{{ "%.2f"|format(e.bank_amount) }}{% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td class="text-muted small text-nowrap">{{ e.created_by_name or '—' }}</td>
+          <td>
+            <form method="POST" action="{{ url_for('cashbook_delete', eid=e.id) }}"
+                  onsubmit="return confirm('Delete this entry?')">
+              <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-1">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="table-secondary fw-bold">
+        <tr>
+          <td colspan="4">Totals</td>
+          <td class="text-end">
+            <span class="text-success">↓₹{{ "%.2f"|format(dr_cash) }}</span>
+            <span class="mx-1 text-muted">/</span>
+            <span class="text-danger">↑₹{{ "%.2f"|format(cr_cash) }}</span>
+          </td>
+          <td class="text-end">
+            <span class="text-success">↓₹{{ "%.2f"|format(dr_bank) }}</span>
+            <span class="mx-1 text-muted">/</span>
+            <span class="text-danger">↑₹{{ "%.2f"|format(cr_bank) }}</span>
+          </td>
+          <td colspan="2"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-muted text-center py-4">No cashbook entries found.</p>
+  {% endif %}
+</div>
+
+<script>
+function updateStyle() {
+  const isCR = document.getElementById('sideCR').checked;
+  document.getElementById('saveBtn').className = isCR
+    ? 'btn btn-danger w-100' : 'btn btn-success w-100';
+}
+</script>
+{% endblock %}

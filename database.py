@@ -340,6 +340,17 @@ def init_branch_db(db_path):
             original_name TEXT,
             uploaded_at TEXT DEFAULT (datetime('now'))
         );
+
+        CREATE TABLE IF NOT EXISTS cashbook_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entry_date TEXT NOT NULL,
+            side TEXT NOT NULL CHECK(side IN ('DR','CR')),
+            particulars TEXT NOT NULL,
+            cash_amount REAL DEFAULT 0,
+            bank_amount REAL DEFAULT 0,
+            created_by INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT (datetime('now','localtime'))
+        );
     """)
 
     existing = c.execute("SELECT COUNT(*) FROM users").fetchone()[0]
@@ -404,6 +415,16 @@ def migrate_branch_db(db_path):
             filename TEXT NOT NULL,
             original_name TEXT,
             uploaded_at TEXT DEFAULT (datetime('now'))
+        )""",
+        """CREATE TABLE IF NOT EXISTS cashbook_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entry_date TEXT NOT NULL,
+            side TEXT NOT NULL CHECK(side IN ('DR','CR')),
+            particulars TEXT NOT NULL,
+            cash_amount REAL DEFAULT 0,
+            bank_amount REAL DEFAULT 0,
+            created_by INTEGER REFERENCES users(id),
+            created_at TEXT DEFAULT (datetime('now','localtime'))
         )""",
     ]
     tally_tables = """

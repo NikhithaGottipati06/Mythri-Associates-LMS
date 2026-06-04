@@ -5534,6 +5534,101 @@ def tally_trial_balance():
 
 
 
+# ── Cashbook ──────────────────────────────────────────────────────────────────
+
+@app.route('/cashbook', methods=['GET', 'POST'])
+@admin_required
+def cashbook():
+    db = get_db()
+    today = datetime.now().strftime('%d/%m/%Y')
+
+    if request.method == 'POST':
+        entry_date  = _to_ddmmyyyy(request.form.get('entry_date', today))
+        side        = request.form.get('side', 'DR')
+        particulars = request.form.get('particulars', '').strip()
+        cash_amount = float(request.form.get('cash_amount') or 0)
+        bank_amount = float(request.form.get('bank_amount') or 0)
+
+        blocked, ldate = _day_lock_check(db, entry_date)
+        if blocked:
+            db.close()
+            flash(f'{ldate} is locked (Day End done). Undo Day End to make changes.', 'danger')
+            return redirect(url_for('cashbook'))
+
+        if not particulars or (cash_amount <= 0 and bank_amount <= 0):
+            flash('Particulars and at least one amount (Cash or Bank) are required.', 'danger')
+            db.close()
+            return redirect(url_for('cashbook'))
+
+        db.execute(
+            "INSERT INTO cashbook_entries (entry_date, side, particulars, cash_amount, bank_amount, created_by) "
+            "VALUES (?,?,?,?,?,?)",
+            (entry_date, side, particulars, cash_amount, bank_amount, session['user_id'])
+        )
+        db.commit()
+        flash(f'{"DR" if side=="DR" else "CR"} entry saved.', 'success')
+        db.close()
+        return redirect(url_for('cashbook'))
+
+    # Date range filter
+    from_date = request.args.get('from', '')
+    to_date   = request.args.get('to', '')
+
+    where_parts = []
+    params = []
+    if from_date:
+        where_parts.append("entry_date >= ?")
+        params.append(_to_ddmmyyyy(from_date))
+    if to_date:
+        where_parts.append("entry_date <= ?")
+        params.append(_to_ddmmyyyy(to_date))
+
+    where_sql = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+
+    # SQLite stores DD/MM/YYYY so we sort via substr conversion
+    entries = db.execute(
+        f"""SELECT ce.*, u.name as created_by_name
+            FROM cashbook_entries ce
+            LEFT JOIN users u ON ce.created_by=u.id
+            {where_sql}
+            ORDER BY
+              substr(ce.entry_date,7,4)||substr(ce.entry_date,4,2)||substr(ce.entry_date,1,2) ASC,
+              ce.id ASC""",
+        params
+    ).fetchall()
+    db.close()
+
+    # Totals
+    dr_cash  = sum(e['cash_amount']  or 0 for e in entries if e['side'] == 'DR')
+    dr_bank  = sum(e['bank_amount']  or 0 for e in entries if e['side'] == 'DR')
+    cr_cash  = sum(e['cash_amount']  or 0 for e in entries if e['side'] == 'CR')
+    cr_bank  = sum(e['bank_amount']  or 0 for e in entries if e['side'] == 'CR')
+
+    return render_template('cashbook.html',
+        entries=entries, today=today,
+        from_date=from_date, to_date=to_date,
+        dr_cash=dr_cash, dr_bank=dr_bank,
+        cr_cash=cr_cash, cr_bank=cr_bank)
+
+
+@app.route('/cashbook/<int:eid>/delete', methods=['POST'])
+@admin_required
+def cashbook_delete(eid):
+    db = get_db()
+    entry = db.execute("SELECT * FROM cashbook_entries WHERE id=?", (eid,)).fetchone()
+    if entry:
+        blocked, ldate = _day_lock_check(db, entry['entry_date'])
+        if blocked:
+            db.close()
+            flash(f'{ldate} is locked (Day End done). Undo Day End to delete entries.', 'danger')
+            return redirect(url_for('cashbook'))
+        db.execute("DELETE FROM cashbook_entries WHERE id=?", (eid,))
+        db.commit()
+        flash('Entry deleted.', 'success')
+    db.close()
+    return redirect(url_for('cashbook'))
+
+
 if __name__ == '__main__':
     init_db()
     app.run(debug=True, host='0.0.0.0', port=5000)

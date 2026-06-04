@@ -160,6 +160,13 @@
     {% endif %}
   </div>
 
+  <!-- Cashbook – Admin only -->
+  {% if session.role == 'Admin' %}
+  <div class="nav-section">Cashbook</div>
+  <a class="nav-link {% if request.endpoint=='cashbook' %}active{% endif %}"
+     href="{{ url_for('cashbook') }}"><i class="bi bi-journal-text"></i> Cashbook</a>
+  {% endif %}
+
   <!-- Tally – Admin only -->
   {% if session.role == 'Admin' %}
   <div class="nav-section">Tally</div>
