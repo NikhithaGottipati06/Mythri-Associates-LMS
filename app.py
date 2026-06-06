@@ -3918,6 +3918,44 @@ def report_disbursement():
     return render_template('reports/disbursement_report.html', records=records, centers=centers,
                            center_filter=center_filter, from_date=from_date, to_date=to_date)
 
+@app.route('/reports/processing-fee')
+@login_required
+def report_processing_fee():
+    db = get_db()
+    center_filter = request.args.get('center_id', '')
+    from_date = request.args.get('from_date', '')
+    to_date = request.args.get('to_date', '')
+    query = """
+        SELECT ld.loan_id, ld.disbursement_date, ld.disbursed_amount,
+               la.application_no, la.processing_fee, la.insurance_fee,
+               la.nominee_insurance_fee, la.other_charges,
+               m.full_name as member_name, m.member_code,
+               c.center_name, c.center_code,
+               lt.loan_type_name
+        FROM loan_disbursements ld
+        LEFT JOIN loan_applications la ON ld.application_id=la.id
+        LEFT JOIN members m ON la.member_id=m.id
+        LEFT JOIN centers c ON la.center_id=c.id
+        LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
+        WHERE ld.status='Disbursed'
+    """
+    params = []
+    if center_filter:
+        query += " AND la.center_id=?"
+        params.append(center_filter)
+    if from_date:
+        query += " AND ld.disbursement_date >= ?"
+        params.append(from_date)
+    if to_date:
+        query += " AND ld.disbursement_date <= ?"
+        params.append(to_date)
+    query += " ORDER BY ld.disbursement_date, c.center_code"
+    records = db.execute(query, params).fetchall()
+    centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
+    db.close()
+    return render_template('reports/processing_fee_report.html', records=records, centers=centers,
+                           center_filter=center_filter, from_date=from_date, to_date=to_date)
+
 @app.route('/reports/prepaid')
 @login_required
 def report_prepaid():

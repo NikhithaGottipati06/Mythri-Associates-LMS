@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+{% block title %}Processing Fee Report{% endblock %}
+{% block content %}
+
+<div class="print-header">
+  <h4>MAITRI ASSOCIATES – Vijayawada</h4>
+  <h5>Processing Fee Report
+    {% if from_date or to_date %}– {{ from_date }}{% if to_date %} to {{ to_date }}{% endif %}{% endif %}
+  </h5>
+</div>
+
+<div class="page-header no-print">
+  <i class="bi bi-receipt" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Processing Fee Report</h5>
+</div>
+<div class="action-bar no-print">
+  <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+  <button onclick="window.print()" class="btn-print-pdf ms-2"><i class="bi bi-printer-fill"></i> Print / PDF</button>
+</div>
+
+<form method="GET" class="form-card mb-3 no-print">
+  <div class="row g-2 align-items-end">
+    <div class="col-md-3">
+      <label class="form-label">Center</label>
+      <select name="center_id" class="form-select form-select-sm">
+        <option value="">All Centers</option>
+        {% for c in centers %}
+        <option value="{{ c.id }}" {% if center_filter == c.id|string %}selected{% endif %}>{{ c.center_code }} – {{ c.center_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">From Date</label>
+      <input type="text" name="from_date" class="form-control form-control-sm" value="{{ from_date }}" placeholder="DD/MM/YYYY">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">To Date</label>
+      <input type="text" name="to_date" class="form-control form-control-sm" value="{{ to_date }}" placeholder="DD/MM/YYYY">
+    </div>
+    <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
+  </div>
+</form>
+
+{% set ns = namespace(cur_center='', sno=0,
+    g_proc=0, g_ins=0, g_nom_ins=0, g_other=0, g_total=0,
+    t_proc=0, t_ins=0, t_nom_ins=0, t_other=0, t_total=0) %}
+
+{% for r in records %}
+  {% set row_total = (r.processing_fee or 0) + (r.insurance_fee or 0) + (r.nominee_insurance_fee or 0) + (r.other_charges or 0) %}
+
+  {% if r.center_code != ns.cur_center %}
+    {% if ns.cur_center != '' %}
+    <tfoot>
+      <tr style="background:#dce8f8;font-weight:700;">
+        <td colspan="5" class="text-end">Group {{ ns.cur_center }} Total:</td>
+        <td class="text-end">{{ '{:,.0f}'.format(ns.g_proc) }}</td>
+        <td class="text-end">{{ '{:,.0f}'.format(ns.g_ins) }}</td>
+        <td class="text-end">{{ '{:,.0f}'.format(ns.g_nom_ins) }}</td>
+        <td class="text-end">{{ '{:,.0f}'.format(ns.g_other) }}</td>
+        <td class="text-end" style="color:blue;">{{ '{:,.0f}'.format(ns.g_total) }}</td>
+      </tr>
+    </tfoot>
+    </table></div></div>
+    {% endif %}
+    {% set ns.cur_center = r.center_code %}
+    {% set ns.sno = 0 %}
+    {% set ns.g_proc = 0 %}
+    {% set ns.g_ins = 0 %}
+    {% set ns.g_nom_ins = 0 %}
+    {% set ns.g_other = 0 %}
+    {% set ns.g_total = 0 %}
+    <div class="form-card mb-2">
+    <div class="print-info" style="font-weight:700;margin-bottom:4px;">{{ r.center_code }} / {{ r.center_name }}</div>
+    <div class="section-title no-print">{{ r.center_code }} / {{ r.center_name }}</div>
+    <div style="overflow-x:auto;">
+    <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:1000px;">
+      <thead>
+        <tr>
+          <th>S.No</th>
+          <th>Member Code</th>
+          <th>Member Name</th>
+          <th>Loan ID</th>
+          <th>Disburse Date</th>
+          <th class="text-end">Processing Fee</th>
+          <th class="text-end">Insurance Fee</th>
+          <th class="text-end">Nominee Ins. Fee</th>
+          <th class="text-end">Other Charges</th>
+          <th class="text-end">Total Fees</th>
+        </tr>
+      </thead>
+      <tbody>
+  {% endif %}
+
+  {% set ns.sno = ns.sno + 1 %}
+  {% set ns.g_proc = ns.g_proc + (r.processing_fee or 0) %}
+  {% set ns.g_ins = ns.g_ins + (r.insurance_fee or 0) %}
+  {% set ns.g_nom_ins = ns.g_nom_ins + (r.nominee_insurance_fee or 0) %}
+  {% set ns.g_other = ns.g_other + (r.other_charges or 0) %}
+  {% set ns.g_total = ns.g_total + row_total %}
+  {% set ns.t_proc = ns.t_proc + (r.processing_fee or 0) %}
+  {% set ns.t_ins = ns.t_ins + (r.insurance_fee or 0) %}
+  {% set ns.t_nom_ins = ns.t_nom_ins + (r.nominee_insurance_fee or 0) %}
+  {% set ns.t_other = ns.t_other + (r.other_charges or 0) %}
+  {% set ns.t_total = ns.t_total + row_total %}
+  <tr>
+    <td>{{ ns.sno }}</td>
+    <td class="fw-semibold text-primary">{{ r.member_code }}</td>
+    <td>{{ r.member_name }}</td>
+    <td>{{ r.loan_id or r.application_no }}</td>
+    <td>{{ r.disbursement_date }}</td>
+    <td class="text-end">{{ '{:,.0f}'.format(r.processing_fee or 0) }}</td>
+    <td class="text-end">{{ '{:,.0f}'.format(r.insurance_fee or 0) }}</td>
+    <td class="text-end">{{ '{:,.0f}'.format(r.nominee_insurance_fee or 0) }}</td>
+    <td class="text-end">{{ '{:,.0f}'.format(r.other_charges or 0) }}</td>
+    <td class="text-end fw-semibold">{{ '{:,.0f}'.format(row_total) }}</td>
+  </tr>
+{% else %}
+  <div class="form-card text-center text-muted py-4">No disbursed loans found.</div>
+{% endfor %}
+
+{% if records %}
+  <tfoot>
+    <tr style="background:#dce8f8;font-weight:700;">
+      <td colspan="5" class="text-end">Group {{ ns.cur_center }} Total:</td>
+      <td class="text-end">{{ '{:,.0f}'.format(ns.g_proc) }}</td>
+      <td class="text-end">{{ '{:,.0f}'.format(ns.g_ins) }}</td>
+      <td class="text-end">{{ '{:,.0f}'.format(ns.g_nom_ins) }}</td>
+      <td class="text-end">{{ '{:,.0f}'.format(ns.g_other) }}</td>
+      <td class="text-end" style="color:blue;">{{ '{:,.0f}'.format(ns.g_total) }}</td>
+    </tr>
+  </tfoot>
+  </table></div></div>
+
+  <div class="form-card">
+    <div class="section-title">Grand Total</div>
+    <table class="table table-bordered mb-0" style="font-size:12px;">
+      <thead>
+        <tr style="background:#1a3c6e;color:#fff;" class="fw-bold">
+          <th>Total Loans</th>
+          <th class="text-end">Processing Fee</th>
+          <th class="text-end">Insurance Fee</th>
+          <th class="text-end">Nominee Ins. Fee</th>
+          <th class="text-end">Other Charges</th>
+          <th class="text-end">Total Fees Collected</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="fw-bold">
+          <td>{{ records|length }}</td>
+          <td class="text-end">{{ '{:,.0f}'.format(ns.t_proc) }}</td>
+          <td class="text-end">{{ '{:,.0f}'.format(ns.t_ins) }}</td>
+          <td class="text-end">{{ '{:,.0f}'.format(ns.t_nom_ins) }}</td>
+          <td class="text-end">{{ '{:,.0f}'.format(ns.t_other) }}</td>
+          <td class="text-end" style="color:#1a3c6e;">{{ '{:,.0f}'.format(ns.t_total) }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+
+{% endblock %}
