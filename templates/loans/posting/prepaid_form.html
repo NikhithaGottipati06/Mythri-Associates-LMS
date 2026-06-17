@@ -7,10 +7,105 @@
 </div>
 <div class="action-bar">
   <a href="{{ url_for('prepaid_list') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
-  <span class="ms-3 fw-semibold" style="font-size:13px;">Member: {{ loan.member_name }} | Amount: ₹{{ '{:,.0f}'.format(loan.disbursed_amount) }}</span>
 </div>
-<form method="POST">
-  <div class="form-card">
+
+<!-- Loan Summary -->
+<div class="form-card mb-3">
+  <div class="section-title">Loan Summary</div>
+  <div class="row g-2" style="font-size:13px;">
+    <div class="col-6 col-md-3"><span class="text-muted">Member</span><br><strong>{{ loan.member_name }}</strong> ({{ loan.member_code }})</div>
+    <div class="col-6 col-md-3"><span class="text-muted">Loan ID</span><br><strong>{{ loan.loan_id }}</strong></div>
+    <div class="col-6 col-md-3"><span class="text-muted">Loan Type</span><br><strong>{{ loan.loan_type_name or '—' }}</strong></div>
+    <div class="col-6 col-md-3"><span class="text-muted">Disbursement Date</span><br><strong>{{ loan.disbursement_date }}</strong></div>
+  </div>
+  <hr style="margin:10px 0;">
+  <div class="row g-2">
+    <div class="col-6 col-md-2">
+      <div style="background:#e8f0fe;border-radius:6px;padding:8px 12px;text-align:center;">
+        <div style="font-size:11px;color:#555;">Disbursed Amount</div>
+        <div style="font-size:15px;font-weight:700;color:#1a3c6e;">₹{{ '{:,.0f}'.format(loan.disbursed_amount) }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div style="background:#e8f0fe;border-radius:6px;padding:8px 12px;text-align:center;">
+        <div style="font-size:11px;color:#555;">Total Installments</div>
+        <div style="font-size:15px;font-weight:700;color:#1a3c6e;">{{ loan.total_installments }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div style="background:#e8f0fe;border-radius:6px;padding:8px 12px;text-align:center;">
+        <div style="font-size:11px;color:#555;">EMI Amount</div>
+        <div style="font-size:15px;font-weight:700;color:#1a3c6e;">₹{{ '{:,.0f}'.format(inst_amt) }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div style="background:#e8f0fe;border-radius:6px;padding:8px 12px;text-align:center;">
+        <div style="font-size:11px;color:#555;">Installments Paid</div>
+        <div style="font-size:15px;font-weight:700;color:#198754;">{{ paid_count }} / {{ loan.total_installments }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div style="background:#fff3cd;border-radius:6px;padding:8px 12px;text-align:center;">
+        <div style="font-size:11px;color:#555;">Principal Paid</div>
+        <div style="font-size:15px;font-weight:700;color:#856404;">₹{{ '{:,.2f}'.format(principal_paid) }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div style="background:#f8d7da;border-radius:6px;padding:8px 12px;text-align:center;">
+        <div style="font-size:11px;color:#555;">Outstanding Principal</div>
+        <div style="font-size:15px;font-weight:700;color:#dc3545;">₹{{ '{:,.2f}'.format(outstanding_principal) }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div style="background:#e8f0fe;border-radius:6px;padding:8px 12px;text-align:center;">
+        <div style="font-size:11px;color:#555;">Interest Rate</div>
+        <div style="font-size:15px;font-weight:700;color:#1a3c6e;">{{ loan.interest_rate }}%</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div style="background:#e8f0fe;border-radius:6px;padding:8px 12px;text-align:center;">
+        <div style="font-size:11px;color:#555;">Total Interest</div>
+        <div style="font-size:15px;font-weight:700;color:#1a3c6e;">₹{{ '{:,.2f}'.format(total_interest) }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div style="background:#fff3cd;border-radius:6px;padding:8px 12px;text-align:center;">
+        <div style="font-size:11px;color:#555;">Interest Paid</div>
+        <div style="font-size:15px;font-weight:700;color:#856404;">₹{{ '{:,.2f}'.format(interest_paid) }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div style="background:#f8d7da;border-radius:6px;padding:8px 12px;text-align:center;">
+        <div style="font-size:11px;color:#555;">Interest Remaining</div>
+        <div style="font-size:15px;font-weight:700;color:#dc3545;">₹{{ '{:,.2f}'.format(interest_remaining) }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div style="background:#e8f0fe;border-radius:6px;padding:8px 12px;text-align:center;">
+        <div style="font-size:11px;color:#555;">Remaining EMIs</div>
+        <div style="font-size:15px;font-weight:700;color:#1a3c6e;">{{ remaining_installments }}</div>
+      </div>
+    </div>
+    {% if prepaid_principal > 0 or prepaid_interest > 0 %}
+    <div class="col-6 col-md-2">
+      <div style="background:#d1e7dd;border-radius:6px;padding:8px 12px;text-align:center;">
+        <div style="font-size:11px;color:#555;">Prepaid Principal</div>
+        <div style="font-size:15px;font-weight:700;color:#0f5132;">₹{{ '{:,.2f}'.format(prepaid_principal) }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div style="background:#d1e7dd;border-radius:6px;padding:8px 12px;text-align:center;">
+        <div style="font-size:11px;color:#555;">Prepaid Interest</div>
+        <div style="font-size:15px;font-weight:700;color:#0f5132;">₹{{ '{:,.2f}'.format(prepaid_interest) }}</div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Prepaid Entry Form -->
+<form method="POST" id="prepaidForm">
+  <div class="form-card mb-3">
     <div class="section-title">New Prepaid/Undo Entry</div>
     <div class="row g-3">
       <div class="col-md-4">
@@ -24,11 +119,8 @@
       </div>
       <div class="col-md-3">
         <label class="form-label required">Date</label>
-        <input type="text" name="transaction_date" class="form-control field-required" placeholder="DD/MM/YYYY" required>
-      </div>
-      <div class="col-md-2">
-        <label class="form-label required">Amount (₹)</label>
-        <input type="number" name="amount" class="form-control field-required" step="0.01" required>
+        <input type="text" name="transaction_date" class="form-control field-required datepicker"
+               placeholder="DD/MM/YYYY" value="{{ '{}'.format(now if now is defined else '') }}" required>
       </div>
       <div class="col-md-3">
         <label class="form-label">Mode</label>
@@ -36,41 +128,105 @@
           <option>Cash</option><option>Bank Transfer</option><option>Cheque</option>
         </select>
       </div>
-      <div class="col-md-6">
-        <label class="form-label">Narration</label>
-        <input type="text" name="narration" class="form-control">
-      </div>
-      <div class="col-md-3 d-flex align-items-end">
-        <div class="form-check mb-2">
+      <div class="col-md-2 d-flex align-items-end pb-1">
+        <div class="form-check">
           <input class="form-check-input" type="checkbox" name="is_undo" id="is_undo">
           <label class="form-check-label fw-semibold" for="is_undo">Is Undo?</label>
         </div>
       </div>
     </div>
+
+    <!-- Amount Breakdown -->
+    <hr style="margin:14px 0 10px;">
+    <div class="section-title" style="font-size:12px;margin-bottom:10px;">Payment Breakdown</div>
+    <div class="row g-3 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label required">Outstanding Principal (₹)</label>
+        <input type="number" id="principal_amount" name="principal_amount"
+               class="form-control breakdown-field"
+               step="0.01" min="0"
+               value="{{ '{:.2f}'.format(outstanding_principal) }}" required>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label required">Interest Amount (₹)</label>
+        <input type="number" id="interest_amount" name="interest_amount"
+               class="form-control breakdown-field"
+               step="0.01" min="0"
+               value="{{ '{:.2f}'.format(interest_remaining) }}" required>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Other Charges (₹)</label>
+        <input type="number" id="other_charges" name="other_charges"
+               class="form-control breakdown-field"
+               step="0.01" min="0" value="0.00">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Total Amount (₹)</label>
+        <input type="number" id="total_display" class="form-control fw-bold"
+               style="background:#e8f0fe;font-size:15px;" readonly>
+      </div>
+    </div>
+    <div class="row g-3 mt-1">
+      <div class="col-md-8">
+        <label class="form-label">Narration</label>
+        <input type="text" name="narration" class="form-control" placeholder="Optional narration">
+      </div>
+    </div>
   </div>
+
   <div class="d-flex gap-2 mb-3">
     <button type="submit" class="btn btn-warning"><i class="bi bi-check2 me-1"></i>Post Transaction</button>
     <a href="{{ url_for('prepaid_list') }}" class="btn btn-secondary">Cancel</a>
   </div>
 </form>
+
+<!-- Transaction History -->
 <div class="form-card">
   <div class="section-title">Transaction History</div>
   <div class="lms-table" style="margin:0;">
     <table class="table table-sm mb-0">
-      <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Mode</th><th>Narration</th><th>Undo?</th></tr></thead>
+      <thead>
+        <tr>
+          <th>Date</th><th>Type</th>
+          <th>Principal</th><th>Interest</th><th>Other Charges</th><th>Total</th>
+          <th>Mode</th><th>Narration</th><th>Undo?</th>
+        </tr>
+      </thead>
       <tbody>
       {% for t in transactions %}
-        <tr>
-          <td>{{ t.transaction_date }}</td><td>{{ t.type_name or '—' }}</td>
-          <td>₹{{ '{:,.2f}'.format(t.amount) }}</td><td>{{ t.mode }}</td>
+        <tr {% if t.is_undo %}style="opacity:0.6;"{% endif %}>
+          <td>{{ t.transaction_date }}</td>
+          <td>{{ t.type_name or '—' }}</td>
+          <td>₹{{ '{:,.2f}'.format(t.principal_amount if t.principal_amount is not none else t.amount) }}</td>
+          <td>₹{{ '{:,.2f}'.format(t.interest_amount or 0) }}</td>
+          <td>₹{{ '{:,.2f}'.format(t.other_charges or 0) }}</td>
+          <td class="fw-semibold">₹{{ '{:,.2f}'.format(t.amount) }}</td>
+          <td>{{ t.mode }}</td>
           <td>{{ t.narration or '—' }}</td>
-          <td>{% if t.is_undo %}<span class="badge bg-warning text-dark">Yes</span>{% else %}No{% endif %}</td>
+          <td>{% if t.is_undo %}<span class="badge bg-warning text-dark">Yes</span>{% else %}—{% endif %}</td>
         </tr>
       {% else %}
-        <tr><td colspan="6" class="text-center text-muted py-2">No transactions yet.</td></tr>
+        <tr><td colspan="9" class="text-center text-muted py-2">No transactions yet.</td></tr>
       {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+
+<script>
+(function () {
+  var fields = document.querySelectorAll('.breakdown-field');
+  var total  = document.getElementById('total_display');
+
+  function recalc() {
+    var p = Number.parseFloat(document.getElementById('principal_amount').value) || 0;
+    var i = Number.parseFloat(document.getElementById('interest_amount').value)  || 0;
+    var o = Number.parseFloat(document.getElementById('other_charges').value)    || 0;
+    total.value = (p + i + o).toFixed(2);
+  }
+
+  fields.forEach(function(f) { f.addEventListener('input', recalc); });
+  recalc();
+})();
+</script>
 {% endblock %}

@@ -2219,11 +2219,15 @@ def prepaid_list():
 @login_required
 def prepaid_post(did):
     db = get_db()
+    _ensure_prepaid_breakdown_cols(db)
     loan = db.execute("""
-        SELECT ld.*, la.application_no, m.full_name as member_name
+        SELECT ld.*, la.application_no, m.full_name as member_name, m.member_code,
+               lt.interest_rate, lt.interest_type, lt.loan_type_name
         FROM loan_disbursements ld
         LEFT JOIN loan_applications la ON ld.application_id=la.id
-        LEFT JOIN members m ON la.member_id=m.id WHERE ld.id=?
+        LEFT JOIN members m ON la.member_id=m.id
+        LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
+        WHERE ld.id=?
     """, (did,)).fetchone()
     if request.method == 'POST':
         txn_date = _to_ddmmyyyy(request.form.get('transaction_date', datetime.now().strftime('%d/%m/%Y')))
@@ -2231,17 +2235,53 @@ def prepaid_post(did):
             flash(f'Day {txn_date} is closed. Undo Day End first to make changes.', 'danger')
             db.close()
             return redirect(url_for('prepaid_list'))
+        principal_amt = float(request.form.get('principal_amount') or 0)
+        interest_amt  = float(request.form.get('interest_amount') or 0)
+        other_chg     = float(request.form.get('other_charges') or 0)
+        total_amt     = round(principal_amt + interest_amt + other_chg, 2)
         db.execute("""
             INSERT INTO prepaid_transactions (disbursement_id,prepaid_type_id,transaction_date,
-            amount,mode,narration,is_undo,posted_by)
-            VALUES (?,?,?,?,?,?,?,?)
+            amount,principal_amount,interest_amount,other_charges,mode,narration,is_undo,posted_by)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
         """, (did, request.form.get('prepaid_type_id') or None, txn_date,
-              request.form.get('amount', 0), request.form.get('mode', 'Cash'),
+              total_amt, principal_amt, interest_amt, other_chg,
+              request.form.get('mode', 'Cash'),
               request.form.get('narration', ''), 1 if request.form.get('is_undo') else 0,
               session['user_id']))
         db.commit()
         flash('Prepaid transaction posted.', 'success')
         return redirect(url_for('prepaid_list'))
+
+    # Loan payment stats
+    stats = db.execute("""
+        SELECT COUNT(id) as installments_paid,
+               COALESCE(SUM(principal),0) as principal_paid,
+               COALESCE(SUM(interest),0) as interest_paid
+        FROM recovery_postings WHERE disbursement_id=? AND installment_no > 0
+    """, (did,)).fetchone()
+    prepaid_stats = db.execute("""
+        SELECT COALESCE(SUM(CASE WHEN is_undo=0
+                              THEN COALESCE(principal_amount, amount)
+                              ELSE -COALESCE(principal_amount, amount) END), 0) as prepaid_principal,
+               COALESCE(SUM(CASE WHEN is_undo=0
+                              THEN COALESCE(interest_amount, 0)
+                              ELSE -COALESCE(interest_amount, 0) END), 0) as prepaid_interest
+        FROM prepaid_transactions WHERE disbursement_id=?
+    """, (did,)).fetchone()
+    disbursed      = float(loan['disbursed_amount'] or 0)
+    rate           = float(loan['interest_rate'] or 0)
+    tenure         = int(loan['total_installments'] or 1)
+    inst_amt       = float(loan['installment_amount'] or 0)
+    paid_count     = stats['installments_paid']
+    principal_paid = stats['principal_paid']
+    interest_paid  = stats['interest_paid']
+    prepaid_principal = float(prepaid_stats['prepaid_principal'] or 0)
+    prepaid_interest  = float(prepaid_stats['prepaid_interest'] or 0)
+    total_interest = round(disbursed * rate / 100, 2)
+    outstanding_principal = round(max(disbursed - principal_paid - prepaid_principal, 0), 2)
+    interest_remaining    = round(max(total_interest - interest_paid - prepaid_interest, 0), 2)
+    remaining_installments = max(tenure - paid_count, 0)
+
     prepaid_types = db.execute("SELECT * FROM prepaid_types WHERE active=1").fetchall()
     transactions = db.execute(
         """SELECT pt.*, prt.name as type_name FROM prepaid_transactions pt
@@ -2250,7 +2290,15 @@ def prepaid_post(did):
     ).fetchall()
     db.close()
     return render_template('loans/posting/prepaid_form.html', loan=loan,
-                           prepaid_types=prepaid_types, transactions=transactions)
+                           prepaid_types=prepaid_types, transactions=transactions,
+                           paid_count=paid_count, principal_paid=principal_paid,
+                           interest_paid=interest_paid, total_interest=total_interest,
+                           outstanding_principal=outstanding_principal,
+                           interest_remaining=interest_remaining,
+                           remaining_installments=remaining_installments,
+                           inst_amt=inst_amt,
+                           prepaid_principal=prepaid_principal,
+                           prepaid_interest=prepaid_interest)
 
 # ── Advance Recovery ──────────────────────────────────────────────────────────
 
@@ -4007,7 +4055,15 @@ def report_outstanding():
                COALESCE(SUM(rp.principal),0) as principal_paid,
                COALESCE(SUM(rp.interest),0) as interest_paid,
                COUNT(rp.id) as installments_paid,
-               ld.disbursed_amount - COALESCE(SUM(rp.principal),0) as outstanding
+               COALESCE((SELECT SUM(CASE WHEN pt.is_undo=0
+                              THEN COALESCE(pt.principal_amount, pt.amount)
+                              ELSE -COALESCE(pt.principal_amount, pt.amount) END)
+                         FROM prepaid_transactions pt WHERE pt.disbursement_id=ld.id), 0) as prepaid_amount,
+               ld.disbursed_amount - COALESCE(SUM(rp.principal),0)
+                 - COALESCE((SELECT SUM(CASE WHEN pt.is_undo=0
+                              THEN COALESCE(pt.principal_amount, pt.amount)
+                              ELSE -COALESCE(pt.principal_amount, pt.amount) END)
+                              FROM prepaid_transactions pt WHERE pt.disbursement_id=ld.id), 0) as outstanding
         FROM loan_disbursements ld
         LEFT JOIN loan_applications la ON ld.application_id=la.id
         LEFT JOIN members m ON la.member_id=m.id
@@ -4936,6 +4992,18 @@ def _ensure_fee_paid_date_col(db):
         WHERE fee_paid_date IS NULL AND (total_fees IS NOT NULL AND total_fees != 0)
     """)
     db.commit()
+
+
+def _ensure_prepaid_breakdown_cols(db):
+    """Add principal_amount, interest_amount, other_charges columns to prepaid_transactions."""
+    for col in ['principal_amount REAL DEFAULT NULL',
+                'interest_amount REAL DEFAULT 0',
+                'other_charges REAL DEFAULT 0']:
+        try:
+            db.execute(f"ALTER TABLE prepaid_transactions ADD COLUMN {col}")
+            db.commit()
+        except Exception:
+            pass
 
 
 def _tally_expenses(db, from_iso, to_iso):

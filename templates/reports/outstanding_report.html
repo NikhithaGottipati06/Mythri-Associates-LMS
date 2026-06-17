@@ -34,12 +34,12 @@
 {% set ns = namespace(cur_center='', sno=0, g_loan=0, g_paid=0, g_os=0, total_loan=0, total_os=0) %}
 
 {% for d in data %}
-  {% set os = d.disbursed_amount - d.principal_paid %}
+  {% set os = [d.outstanding, 0]|max %}
   {% if d.center_code != ns.cur_center %}
     {% if ns.cur_center != '' %}
     <tfoot>
       <tr style="background:#dce8f8;font-weight:700;">
-        <td colspan="3" class="text-end">{{ ns.cur_center }} Total:</td>
+        <td colspan="5" class="text-end">{{ ns.cur_center }} Total:</td>
         <td style="color:blue;">{{ '{:,.0f}'.format(ns.g_loan) }}</td>
         <td style="color:#dc3545;">{{ '{:,.2f}'.format(ns.g_os) }}</td>
       </tr>
@@ -56,7 +56,7 @@
     <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:700px;">
       <thead>
         <tr>
-          <th>S.No</th><th>Center Code</th><th>Center Name</th>
+          <th>S.No</th><th>Center Code</th><th>Center Name</th><th>Member Code</th><th>Member Name</th>
           <th>Loan Amount</th><th>Outstanding</th>
         </tr>
       </thead>
@@ -72,6 +72,8 @@
     <td>{{ ns.sno }}</td>
     <td>{{ d.center_code }}</td>
     <td>{{ d.center_name }}</td>
+    <td>{{ d.member_code }}</td>
+    <td>{{ d.member_name }}</td>
     <td>{{ '{:,.0f}'.format(d.disbursed_amount) }}</td>
     <td class="fw-semibold {% if os > 0 %}text-danger{% endif %}">{{ '{:,.2f}'.format(os) }}</td>
   </tr>
@@ -82,7 +84,7 @@
 {% if data %}
   <tfoot>
     <tr style="background:#dce8f8;font-weight:700;">
-      <td colspan="3" class="text-end">{{ ns.cur_center }} Total:</td>
+      <td colspan="5" class="text-end">{{ ns.cur_center }} Total:</td>
       <td style="color:blue;">{{ '{:,.0f}'.format(ns.g_loan) }}</td>
       <td style="color:#dc3545;">{{ '{:,.2f}'.format(ns.g_os) }}</td>
     </tr>
