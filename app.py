@@ -4043,6 +4043,7 @@ def report_prepaid():
 @login_required
 def report_outstanding():
     db = get_db()
+    _ensure_prepaid_breakdown_cols(db)
     center_filter = request.args.get('center_id', '')
     data = db.execute("""
         SELECT ld.loan_id, ld.disbursed_amount, ld.total_installments, ld.installment_amount,
