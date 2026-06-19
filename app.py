@@ -1550,6 +1550,8 @@ def loan_applications_delete(aid):
         db.close()
         flash(f'{ldate} is locked (Day End done). Undo Day End to make changes.', 'danger')
         return redirect(url_for('loan_applications_list'))
+    db.execute("DELETE FROM loan_approvals WHERE application_id=?", (aid,))
+    db.execute("DELETE FROM loan_disbursements WHERE application_id=?", (aid,))
     db.execute("DELETE FROM loan_applications WHERE id=?", (aid,))
     db.commit()
     db.close()
