@@ -1550,28 +1550,33 @@ def loan_applications_delete(aid):
         db.close()
         flash(f'{ldate} is locked (Day End done). Undo Day End to make changes.', 'danger')
         return redirect(url_for('loan_applications_list'))
-    db.execute("""DELETE FROM savings_transactions WHERE
-                  disbursement_id IN (SELECT id FROM loan_disbursements WHERE application_id=?)
-                  OR recovery_posting_id IN (
-                      SELECT id FROM recovery_postings WHERE disbursement_id IN
-                      (SELECT id FROM loan_disbursements WHERE application_id=?)
-                  )""", (aid, aid))
-    db.execute("""DELETE FROM recovery_postings WHERE disbursement_id IN
-                  (SELECT id FROM loan_disbursements WHERE application_id=?)""", (aid,))
-    db.execute("""DELETE FROM prepaid_transactions WHERE disbursement_id IN
-                  (SELECT id FROM loan_disbursements WHERE application_id=?)""", (aid,))
-    db.execute("""DELETE FROM advance_recoveries WHERE disbursement_id IN
-                  (SELECT id FROM loan_disbursements WHERE application_id=?)""", (aid,))
-    db.execute("""DELETE FROM moratoriums WHERE disbursement_id IN
-                  (SELECT id FROM loan_disbursements WHERE application_id=?)""", (aid,))
-    db.execute("""DELETE FROM arrear_entries WHERE disbursement_id IN
-                  (SELECT id FROM loan_disbursements WHERE application_id=?)""", (aid,))
-    db.execute("DELETE FROM loan_approvals WHERE application_id=?", (aid,))
-    db.execute("DELETE FROM loan_disbursements WHERE application_id=?", (aid,))
-    db.execute("DELETE FROM loan_applications WHERE id=?", (aid,))
-    db.commit()
-    db.close()
-    flash('Application deleted.', 'success')
+    try:
+        db.execute("""DELETE FROM savings_transactions WHERE
+                      disbursement_id IN (SELECT id FROM loan_disbursements WHERE application_id=?)
+                      OR recovery_posting_id IN (
+                          SELECT id FROM recovery_postings WHERE disbursement_id IN
+                          (SELECT id FROM loan_disbursements WHERE application_id=?)
+                      )""", (aid, aid))
+        db.execute("""DELETE FROM recovery_postings WHERE disbursement_id IN
+                      (SELECT id FROM loan_disbursements WHERE application_id=?)""", (aid,))
+        db.execute("""DELETE FROM prepaid_transactions WHERE disbursement_id IN
+                      (SELECT id FROM loan_disbursements WHERE application_id=?)""", (aid,))
+        db.execute("""DELETE FROM advance_recoveries WHERE disbursement_id IN
+                      (SELECT id FROM loan_disbursements WHERE application_id=?)""", (aid,))
+        db.execute("""DELETE FROM moratoriums WHERE disbursement_id IN
+                      (SELECT id FROM loan_disbursements WHERE application_id=?)""", (aid,))
+        db.execute("""DELETE FROM arrear_entries WHERE disbursement_id IN
+                      (SELECT id FROM loan_disbursements WHERE application_id=?)""", (aid,))
+        db.execute("DELETE FROM loan_approvals WHERE application_id=?", (aid,))
+        db.execute("DELETE FROM loan_disbursements WHERE application_id=?", (aid,))
+        db.execute("DELETE FROM loan_applications WHERE id=?", (aid,))
+        db.commit()
+        flash('Application deleted.', 'success')
+    except Exception as e:
+        db.rollback()
+        flash(f'Error deleting application: {e}', 'danger')
+    finally:
+        db.close()
     return redirect(url_for('loan_applications_list'))
 
 # ── Loan Approvals ────────────────────────────────────────────────────────────
