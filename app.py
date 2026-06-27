@@ -1789,7 +1789,21 @@ def loan_disburse(aid):
     loan_id = _next_loan_id(db)
     disbursed_amount = float(request.form.get('disbursed_amount', 0))
     total_inst = int(request.form.get('total_installments', 50))
-    inst_amount = round(disbursed_amount / total_inst, 2) if total_inst else 0
+    lt_rec = db.execute("""
+        SELECT lt.interest_rate, lt.interest_type
+        FROM loan_applications la
+        LEFT JOIN loan_types lt ON lt.id=la.loan_type_id
+        WHERE la.id=?
+    """, (aid,)).fetchone()
+    if lt_rec and lt_rec['interest_rate']:
+        rate = float(lt_rec['interest_rate'] or 0)
+        if (lt_rec['interest_type'] or 'Percent') == 'Fixed':
+            total_interest = rate
+        else:
+            total_interest = disbursed_amount * rate / 100
+    else:
+        total_interest = 0
+    inst_amount = round((disbursed_amount + total_interest) / total_inst, 2) if total_inst else 0
     db.execute("""
         INSERT INTO loan_disbursements (application_id,disbursement_no,loan_id,disbursed_amount,
         disbursement_date,mode,account_no,disbursed_by,status,total_installments,installment_amount,remarks)
@@ -1828,9 +1842,11 @@ def loan_bulk_disburse():
     for aid in selected_ids:
         aid = int(aid)
         app_rec = db.execute("""
-            SELECT la.*, COALESCE(apr.approved_amount, la.applied_amount) as disburse_amount
+            SELECT la.*, COALESCE(apr.approved_amount, la.applied_amount) as disburse_amount,
+                   lt.interest_rate, lt.interest_type
             FROM loan_applications la
             LEFT JOIN loan_approvals apr ON apr.application_id=la.id
+            LEFT JOIN loan_types lt ON lt.id=la.loan_type_id
             WHERE la.id=? AND la.status='Approved'
         """, (aid,)).fetchone()
         if not app_rec:
@@ -1840,7 +1856,12 @@ def loan_bulk_disburse():
         dis_no = f"DIS{num:06d}"
         loan_id = _next_loan_id(db)
         disbursed_amount = float(app_rec['disburse_amount'] or 0)
-        inst_amount = round(disbursed_amount / total_inst, 2) if total_inst else 0
+        rate = float(app_rec['interest_rate'] or 0)
+        if (app_rec['interest_type'] or 'Percent') == 'Fixed':
+            total_interest = rate
+        else:
+            total_interest = disbursed_amount * rate / 100
+        inst_amount = round((disbursed_amount + total_interest) / total_inst, 2) if total_inst else 0
         db.execute("""
             INSERT INTO loan_disbursements (application_id,disbursement_no,loan_id,disbursed_amount,
             disbursement_date,mode,account_no,disbursed_by,status,total_installments,installment_amount,remarks)
