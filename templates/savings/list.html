@@ -12,7 +12,7 @@
   <div class="row g-3 align-items-end">
     <div class="col-md-4">
       <label class="form-label fw-semibold" style="font-size:13px;">Select Member</label>
-      <select id="memberSelect" class="form-select form-select-sm" onchange="fetchMemberInfo(this.value)">
+      <select id="memberSelect" class="form-select form-select-sm" data-searchable="true" onchange="fetchMemberInfo(this.value)">
         <option value="">— Choose Member —</option>
         {% for m in all_members %}
         <option value="{{ m.id }}">{{ m.member_code }} – {{ m.full_name }} ({{ m.center_code }})</option>

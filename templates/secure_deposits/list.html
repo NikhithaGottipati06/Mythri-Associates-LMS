@@ -23,7 +23,7 @@
 
       <div class="col-md-3">
         <label class="form-label fw-semibold" style="font-size:13px;">Member</label>
-        <select name="member_id" id="memberSelect" class="form-select form-select-sm" required onchange="fetchMemberInfo(this.value)">
+        <select name="member_id" id="memberSelect" class="form-select form-select-sm" data-searchable="true" required onchange="fetchMemberInfo(this.value)">
           <option value="">— Select Member —</option>
           {% for m in all_members %}
           <option value="{{ m.id }}" data-center="{{ m.center_id }}">{{ m.member_code }} – {{ m.full_name }} ({{ m.center_code }})</option>

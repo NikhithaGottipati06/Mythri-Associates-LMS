@@ -14,7 +14,7 @@
     <div class="row g-3">
       <div class="col-md-5">
         <label class="form-label required">Member</label>
-        <select name="member_id" class="form-select field-required" id="member_id" required onchange="fillMember(this.value)">
+        <select name="member_id" class="form-select field-required" id="member_id" data-searchable="true" required onchange="fillMember(this.value)">
           <option value="">— Select Member —</option>
           {% for m in members %}
           <option value="{{ m.id }}" {% if app and app.member_id == m.id %}selected{% endif %}>

@@ -3998,6 +3998,7 @@ def report_disbursement():
     center_filter = request.args.get('center_id', '')
     from_date = request.args.get('from_date', '')
     to_date = request.args.get('to_date', '')
+    view_mode = request.args.get('view_mode', 'all')
     query = """
         SELECT ld.*, la.application_no, la.purpose, la.loan_cycle, la.processing_fee, la.insurance_fee,
                la.nominee_name,
@@ -4029,7 +4030,45 @@ def report_disbursement():
     centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
     db.close()
     return render_template('reports/disbursement_report.html', records=records, centers=centers,
-                           center_filter=center_filter, from_date=from_date, to_date=to_date)
+                           center_filter=center_filter, from_date=from_date, to_date=to_date,
+                           view_mode=view_mode)
+
+@app.route('/reports/savings')
+@login_required
+def report_savings():
+    db = get_db()
+    center_filter = request.args.get('center_id', '')
+    from_date = request.args.get('from_date', '')
+    to_date = request.args.get('to_date', '')
+    view_mode = request.args.get('view_mode', 'all')
+    query = """
+        SELECT m.id as member_id, m.member_code, m.full_name as member_name,
+               c.center_code, c.center_name,
+               COALESCE(SUM(st.deposit_amount),0) as total_deposits,
+               COALESCE(SUM(st.withdraw_amount),0) as total_withdrawals,
+               COALESCE(SUM(st.deposit_amount),0) - COALESCE(SUM(st.withdraw_amount),0) as balance
+        FROM members m
+        LEFT JOIN centers c ON m.center_id=c.id
+        LEFT JOIN savings_transactions st ON st.member_id=m.id
+        WHERE m.status='ACTIVE'
+    """
+    params = []
+    if center_filter:
+        query += " AND m.center_id=?"
+        params.append(center_filter)
+    if from_date:
+        query += " AND st.transaction_date >= ?"
+        params.append(from_date)
+    if to_date:
+        query += " AND st.transaction_date <= ?"
+        params.append(to_date)
+    query += " GROUP BY m.id HAVING COALESCE(SUM(st.deposit_amount),0) > 0 OR COALESCE(SUM(st.withdraw_amount),0) > 0 ORDER BY c.center_code, m.member_code"
+    records = db.execute(query, params).fetchall()
+    centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
+    db.close()
+    return render_template('reports/savings_report.html', records=records, centers=centers,
+                           center_filter=center_filter, from_date=from_date, to_date=to_date,
+                           view_mode=view_mode)
 
 @app.route('/reports/processing-fee')
 @login_required
@@ -4104,46 +4143,112 @@ def report_prepaid():
     return render_template('reports/prepaid_report.html', records=records, centers=centers,
                            center_filter=center_filter, from_date=from_date, to_date=to_date)
 
+@app.route('/reports/recovery-posting')
+@login_required
+def report_recovery_posting():
+    db = get_db()
+    week_type = request.args.get('week_type', '')
+    center_filter = request.args.get('center_id', '')
+    params = []
+    query = """
+        SELECT ld.loan_id, ld.disbursed_amount, ld.disbursement_date, ld.total_installments,
+               la.application_no, la.loan_cycle,
+               m.full_name as member_name, m.member_code,
+               c.center_name, c.center_code,
+               lt.loan_type_name, COALESCE(ld.total_installments, lt.tenure_weeks) as tenure_weeks,
+               COALESCE((SELECT SUM(rp.paid_amount) FROM recovery_postings rp
+                         WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0),0) as total_paid,
+               COALESCE((SELECT SUM(rp.principal) FROM recovery_postings rp
+                         WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0),0) as principal_paid,
+               COALESCE((SELECT SUM(rp.interest) FROM recovery_postings rp
+                         WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0),0) as interest_paid,
+               COALESCE((SELECT COUNT(*) FROM recovery_postings rp
+                         WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0),0) as installments_paid
+        FROM loan_disbursements ld
+        LEFT JOIN loan_applications la ON ld.application_id=la.id
+        LEFT JOIN members m ON la.member_id=m.id
+        LEFT JOIN centers c ON la.center_id=c.id
+        LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
+        WHERE ld.status='Disbursed'
+    """
+    if center_filter:
+        query += " AND la.center_id=?"
+        params.append(center_filter)
+    if week_type:
+        query += " AND COALESCE(ld.total_installments, lt.tenure_weeks)=?"
+        params.append(int(week_type))
+    query += " ORDER BY c.center_code, m.member_code"
+    data = db.execute(query, params).fetchall()
+    week_types = db.execute(
+        "SELECT DISTINCT tenure_weeks FROM loan_types WHERE active=1 AND tenure_weeks IS NOT NULL AND tenure_weeks != '' ORDER BY tenure_weeks"
+    ).fetchall()
+    centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1 ORDER BY center_code").fetchall()
+    db.close()
+    return render_template('reports/recovery_posting_report.html', data=data,
+                           centers=centers, center_filter=center_filter,
+                           week_types=week_types, week_type=week_type)
+
 @app.route('/reports/outstanding')
 @login_required
 def report_outstanding():
     db = get_db()
     _ensure_prepaid_breakdown_cols(db)
     center_filter = request.args.get('center_id', '')
-    data = db.execute("""
+    as_of_date = request.args.get('as_of_date', datetime.now().strftime('%d/%m/%Y'))
+    view_mode = request.args.get('view_mode', 'all')
+    as_of_iso = _to_iso(as_of_date)
+    params = [as_of_iso]
+    query = """
         SELECT ld.loan_id, ld.disbursed_amount, ld.total_installments, ld.installment_amount,
                ld.disbursement_date,
                la.application_no, la.purpose, la.loan_cycle,
                m.full_name as member_name, m.member_code, m.grp,
                c.center_name, c.center_code,
                lt.loan_type_name,
-               COALESCE(SUM(rp.paid_amount),0) as total_paid,
-               COALESCE(SUM(rp.principal),0) as principal_paid,
-               COALESCE(SUM(rp.interest),0) as interest_paid,
-               COUNT(rp.id) as installments_paid,
+               COALESCE((SELECT SUM(rp.paid_amount) FROM recovery_postings rp
+                         WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0
+                         AND substr(rp.posting_date,7,4)||'-'||substr(rp.posting_date,4,2)||'-'||substr(rp.posting_date,1,2) <= ?),0) as total_paid,
+               COALESCE((SELECT SUM(rp.principal) FROM recovery_postings rp
+                         WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0
+                         AND substr(rp.posting_date,7,4)||'-'||substr(rp.posting_date,4,2)||'-'||substr(rp.posting_date,1,2) <= ?),0) as principal_paid,
+               COALESCE((SELECT SUM(rp.interest) FROM recovery_postings rp
+                         WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0
+                         AND substr(rp.posting_date,7,4)||'-'||substr(rp.posting_date,4,2)||'-'||substr(rp.posting_date,1,2) <= ?),0) as interest_paid,
+               COALESCE((SELECT COUNT(*) FROM recovery_postings rp
+                         WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0
+                         AND substr(rp.posting_date,7,4)||'-'||substr(rp.posting_date,4,2)||'-'||substr(rp.posting_date,1,2) <= ?),0) as installments_paid,
                COALESCE((SELECT SUM(CASE WHEN pt.is_undo=0
                               THEN COALESCE(pt.principal_amount, pt.amount)
                               ELSE -COALESCE(pt.principal_amount, pt.amount) END)
-                         FROM prepaid_transactions pt WHERE pt.disbursement_id=ld.id), 0) as prepaid_amount,
-               ld.disbursed_amount - COALESCE(SUM(rp.principal),0)
+                         FROM prepaid_transactions pt WHERE pt.disbursement_id=ld.id
+                         AND substr(pt.transaction_date,7,4)||'-'||substr(pt.transaction_date,4,2)||'-'||substr(pt.transaction_date,1,2) <= ?), 0) as prepaid_amount,
+               ld.disbursed_amount - COALESCE((SELECT SUM(rp.principal) FROM recovery_postings rp
+                         WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0
+                         AND substr(rp.posting_date,7,4)||'-'||substr(rp.posting_date,4,2)||'-'||substr(rp.posting_date,1,2) <= ?),0)
                  - COALESCE((SELECT SUM(CASE WHEN pt.is_undo=0
                               THEN COALESCE(pt.principal_amount, pt.amount)
                               ELSE -COALESCE(pt.principal_amount, pt.amount) END)
-                              FROM prepaid_transactions pt WHERE pt.disbursement_id=ld.id), 0) as outstanding
+                              FROM prepaid_transactions pt WHERE pt.disbursement_id=ld.id
+                              AND substr(pt.transaction_date,7,4)||'-'||substr(pt.transaction_date,4,2)||'-'||substr(pt.transaction_date,1,2) <= ?), 0) as outstanding
         FROM loan_disbursements ld
         LEFT JOIN loan_applications la ON ld.application_id=la.id
         LEFT JOIN members m ON la.member_id=m.id
         LEFT JOIN centers c ON la.center_id=c.id
         LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
-        LEFT JOIN recovery_postings rp ON rp.disbursement_id=ld.id AND rp.installment_no > 0
         WHERE ld.status='Disbursed'
-        """ + (" AND la.center_id=?" if center_filter else "") + """
-        GROUP BY ld.id ORDER BY c.center_code, m.grp, m.member_code
-    """, ([center_filter] if center_filter else [])).fetchall()
+        AND substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2) <= ?
+    """
+    if center_filter:
+        query += " AND la.center_id=?"
+        params.append(center_filter)
+    query += " ORDER BY c.center_code, m.grp, m.member_code"
+    params.extend([as_of_iso, as_of_iso, as_of_iso, as_of_iso, as_of_iso, as_of_iso])
+    data = db.execute(query, params).fetchall()
     centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
     db.close()
     return render_template('reports/outstanding_report.html', data=data,
-                           centers=centers, center_filter=center_filter)
+                           centers=centers, center_filter=center_filter,
+                           as_of_date=as_of_date, view_mode=view_mode)
 
 @app.route('/reports/arrears/member-wise')
 @login_required

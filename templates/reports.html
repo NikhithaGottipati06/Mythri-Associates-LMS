@@ -84,6 +84,9 @@
         <a href="{{ url_for('report_outstanding') }}" class="list-group-item list-group-item-action">
           <i class="bi bi-hourglass-split me-2 text-warning"></i>Outstanding Report
         </a>
+        <a href="{{ url_for('report_recovery_posting') }}" class="list-group-item list-group-item-action">
+          <i class="bi bi-arrow-repeat me-2 text-info"></i>Recovery Posting Report
+        </a>
         <a href="{{ url_for('report_prepaid') }}" class="list-group-item list-group-item-action">
           <i class="bi bi-arrow-left-right me-2 text-info"></i>Prepaid Report
         </a>
@@ -135,7 +138,7 @@
     <div class="form-card h-100">
       <div class="section-title"><i class="bi bi-piggy-bank me-1"></i>Savings & Deposit Reports</div>
       <div class="list-group list-group-flush">
-        <a href="{{ url_for('savings_list') }}" class="list-group-item list-group-item-action">
+        <a href="{{ url_for('report_savings') }}" class="list-group-item list-group-item-action">
           <i class="bi bi-piggy-bank me-2 text-purple"></i>Savings Report
         </a>
         <a href="{{ url_for('report_secure_deposits') }}" class="list-group-item list-group-item-action">

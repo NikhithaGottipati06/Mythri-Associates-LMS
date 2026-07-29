@@ -1,15 +1,14 @@
 {% extends 'base.html' %}
-{% block title %}Loan Ledger Report{% endblock %}
+{% block title %}Recovery Posting Report{% endblock %}
 {% block content %}
-
 <div class="print-header">
   <h4>MAITRI ASSOCIATES – Vijayawada</h4>
-  <h5>Loan Ledger Report</h5>
+  <h5>Recovery Posting Report</h5>
 </div>
 
 <div class="page-header no-print">
-  <i class="bi bi-journal-text" style="font-size:20px;color:#1a3c6e;"></i>
-  <h5>Loan Ledger Report</h5>
+  <i class="bi bi-arrow-repeat" style="font-size:20px;color:#1a3c6e;"></i>
+  <h5>Recovery Posting Report</h5>
 </div>
 <div class="action-bar no-print">
   <a href="{{ url_for('reports') }}" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
@@ -28,11 +27,11 @@
       </select>
     </div>
     <div class="col-md-3">
-      <label class="form-label">Member</label>
-      <select name="member_id" class="form-select form-select-sm" data-searchable="true">
-        <option value="">All Members</option>
-        {% for m in members %}
-        <option value="{{ m.id }}" {% if member_filter == m.id|string %}selected{% endif %}>{{ m.member_code }} – {{ m.full_name }}</option>
+      <label class="form-label">Week Type</label>
+      <select name="week_type" class="form-select form-select-sm">
+        <option value="">All Week Types</option>
+        {% for wt in week_types %}
+        <option value="{{ wt.tenure_weeks }}" {% if week_type == wt.tenure_weeks|string %}selected{% endif %}>{{ wt.tenure_weeks }} Weeks</option>
         {% endfor %}
       </select>
     </div>
@@ -45,34 +44,36 @@
   <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:1000px;">
     <thead>
       <tr>
-        <th>S.No</th><th>Loan ID</th><th>Mem Code</th><th>Member Name</th>
-        <th>Center</th><th>Loan Type</th><th>Cycle#</th><th>Disb. Date</th>
-        <th>Loan Amt</th><th>Paid</th><th>Paid Inst.</th><th>Outstanding</th>
+        <th>S.No</th><th>Loan ID</th><th>Member Code</th><th>Member Name</th><th>Center</th>
+        <th>Loan Type</th><th>Week Type</th><th>Disb. Date</th><th>Loan Amt</th>
+        <th>Paid</th><th>Paid Inst.</th><th>Principal</th><th>Interest</th>
       </tr>
     </thead>
     <tbody>
-    {% set ns = namespace(sno=0, t_loan=0, t_paid=0, t_os=0) %}
-    {% for r in records %}
+    {% set ns = namespace(sno=0, t_loan=0, t_paid=0, t_prin=0, t_int=0) %}
+    {% for r in data %}
       {% set ns.sno = ns.sno + 1 %}
       {% set ns.t_loan = ns.t_loan + r.disbursed_amount %}
       {% set ns.t_paid = ns.t_paid + r.total_paid %}
-      {% set ns.t_os = ns.t_os + r.outstanding %}
+      {% set ns.t_prin = ns.t_prin + r.principal_paid %}
+      {% set ns.t_int = ns.t_int + r.interest_paid %}
       <tr>
         <td>{{ ns.sno }}</td>
         <td class="fw-semibold text-primary">{{ r.loan_id or '—' }}</td>
         <td>{{ r.member_code }}</td>
         <td>{{ r.member_name }}</td>
-        <td>{{ r.center_code }}</td>
+        <td>{{ r.center_code }} / {{ r.center_name }}</td>
         <td>{{ r.loan_type_name or '—' }}</td>
-        <td>{{ r.loan_cycle or 1 }}</td>
+        <td>{{ r.tenure_weeks or '—' }}</td>
         <td>{{ r.disbursement_date }}</td>
         <td>{{ '{:,.0f}'.format(r.disbursed_amount) }}</td>
         <td>{{ '{:,.0f}'.format(r.total_paid) }}</td>
-        <td>{{ r.paid_count }}/{{ r.total_installments }}</td>
-        <td class="{% if r.outstanding > 0 %}text-danger fw-semibold{% endif %}">{{ '{:,.2f}'.format(r.outstanding) }}</td>
+        <td>{{ r.installments_paid }}/{{ r.total_installments }}</td>
+        <td>{{ '{:,.0f}'.format(r.principal_paid) }}</td>
+        <td>{{ '{:,.0f}'.format(r.interest_paid) }}</td>
       </tr>
     {% else %}
-      <tr><td colspan="12" class="text-center text-muted py-4">No records found.</td></tr>
+      <tr><td colspan="13" class="text-center text-muted py-4">No records found.</td></tr>
     {% endfor %}
     </tbody>
     <tfoot>
@@ -81,7 +82,8 @@
         <td>{{ '{:,.0f}'.format(ns.t_loan) }}</td>
         <td>{{ '{:,.0f}'.format(ns.t_paid) }}</td>
         <td></td>
-        <td class="text-danger">{{ '{:,.2f}'.format(ns.t_os) }}</td>
+        <td>{{ '{:,.0f}'.format(ns.t_prin) }}</td>
+        <td>{{ '{:,.0f}'.format(ns.t_int) }}</td>
       </tr>
     </tfoot>
   </table>
