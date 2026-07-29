@@ -4242,7 +4242,7 @@ def report_outstanding():
         query += " AND la.center_id=?"
         params.append(center_filter)
     query += " ORDER BY c.center_code, m.grp, m.member_code"
-    params.extend([as_of_iso, as_of_iso, as_of_iso, as_of_iso, as_of_iso, as_of_iso])
+    params.extend([as_of_iso] * 7)
     data = db.execute(query, params).fetchall()
     centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
     db.close()
