@@ -1940,7 +1940,7 @@ def recovery_posting_list():
         WHERE ld.status='Disbursed'
         AND (SELECT COUNT(*) FROM recovery_postings rp3 WHERE rp3.disbursement_id=ld.id AND rp3.installment_no > 0) < ld.total_installments
         AND date(substr(ld.disbursement_date,7,4)||'-'||substr(ld.disbursement_date,4,2)||'-'||substr(ld.disbursement_date,1,2))
-            < date(substr(:date,7,4)||'-'||substr(:date,4,2)||'-'||substr(:date,1,2))
+            <= date(substr(:date,7,4)||'-'||substr(:date,4,2)||'-'||substr(:date,1,2))
     """
     if center_filter:
         query += " AND la.center_id=:center_id"
@@ -1951,6 +1951,10 @@ def recovery_posting_list():
     query += " ORDER BY c.center_code, m.member_code"
 
     loans = db.execute(query, params).fetchall()
+    loans = [
+        loan for loan in loans
+        if _is_recovery_posting_due(date_filter, loan['disbursement_date'], loan['meeting_week'])
+    ]
     centers = db.execute(
         "SELECT id, center_code, center_name, meeting_week FROM centers WHERE active=1 ORDER BY center_code"
     ).fetchall()
@@ -2145,6 +2149,23 @@ def _to_ddmmyyyy(s):
         except ValueError:
             continue
     return s
+
+
+def _is_recovery_posting_due(posting_date, disbursement_date, meeting_day=None):
+    """Return True when a loan should appear for recovery posting on the given date."""
+    try:
+        posting_dt = datetime.strptime(_to_ddmmyyyy(posting_date), '%d/%m/%Y')
+        disbursement_dt = datetime.strptime(_to_ddmmyyyy(disbursement_date), '%d/%m/%Y')
+    except Exception:
+        return False
+
+    if posting_dt < disbursement_dt + timedelta(days=7):
+        return False
+
+    if not meeting_day:
+        return True
+
+    return posting_dt.strftime('%A') == meeting_day
 
 def _days_since(date_str):
     """Days from DD/MM/YYYY date to today."""
