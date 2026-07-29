@@ -37,14 +37,60 @@
       <label class="form-label">To Date</label>
       <input type="text" name="to_date" class="form-control form-control-sm" value="{{ to_date }}" placeholder="DD/MM/YYYY">
     </div>
+    <div class="col-md-2">
+      <label class="form-label">View</label>
+      <select name="view_mode" class="form-select form-select-sm">
+        <option value="all" {% if view_mode == 'all' %}selected{% endif %}>All Centers</option>
+        <option value="center" {% if view_mode == 'center' %}selected{% endif %}>Center Wise</option>
+        <option value="member" {% if view_mode == 'member' %}selected{% endif %}>Member Wise</option>
+      </select>
+    </div>
     <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
   </div>
 </form>
 
+{% if view_mode == 'member' %}
+<div class="form-card">
+  <div style="overflow-x:auto;">
+  <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:1000px;">
+    <thead>
+      <tr>
+        <th>S.No</th><th>Center Code</th><th>Center Name</th><th>Member Code</th><th>Member Name</th><th>Loan ID</th><th>Issue Date</th><th>Loan Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% set ns = namespace(sno=0, total_amt=0) %}
+    {% for r in records %}
+      {% set ns.sno = ns.sno + 1 %}
+      {% set ns.total_amt = ns.total_amt + r.disbursed_amount %}
+      <tr>
+        <td>{{ ns.sno }}</td>
+        <td>{{ r.center_code }}</td>
+        <td>{{ r.center_name }}</td>
+        <td class="fw-semibold text-primary">{{ r.member_code }}</td>
+        <td>{{ r.member_name }}</td>
+        <td>{{ r.loan_id or r.application_no or '—' }}</td>
+        <td>{{ r.disbursement_date }}</td>
+        <td class="fw-semibold">{{ '{:,.0f}'.format(r.disbursed_amount) }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="8" class="text-center text-muted py-4">No disbursements found.</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr style="background:#dce8f8;font-weight:700;">
+        <td colspan="7" class="text-end">Totals:</td>
+        <td>{{ '{:,.0f}'.format(ns.total_amt) }}</td>
+      </tr>
+    </tfoot>
+  </table>
+  </div>
+</div>
+{% else %}
 {% set ns = namespace(cur_center='', sno=0, g_amt=0, total_amt=0) %}
 
 {% for r in records %}
-  {% if r.center_code != ns.cur_center %}
+  {% if view_mode == 'center' and r.center_code != ns.cur_center %}
     {% if ns.cur_center != '' %}
     <tfoot>
       <tr style="background:#dce8f8;font-weight:700;">
@@ -75,6 +121,24 @@
       <tbody>
   {% endif %}
 
+  {% if view_mode != 'center' %}
+    {% if loop.first %}
+    <div class="form-card mb-2">
+    <div style="overflow-x:auto;">
+    <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:1100px;">
+      <thead>
+        <tr>
+          <th>S.No</th><th>Center Code</th><th>Center Name</th>
+          <th>Member Code</th><th>Member Name</th>
+          <th>Nominee Name</th><th>Nominee Relation</th>
+          <th>Tenure (Wks)</th><th>Loan Cycle</th>
+          <th>Issue Date</th><th>Loan Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+    {% endif %}
+  {% endif %}
+
   {% set ns.sno = ns.sno + 1 %}
   {% set ns.g_amt = ns.g_amt + r.disbursed_amount %}
   {% set ns.total_amt = ns.total_amt + r.disbursed_amount %}
@@ -95,7 +159,8 @@
   <div class="form-card text-center text-muted py-4">No disbursements found.</div>
 {% endfor %}
 
-{% if records %}
+{% if records and view_mode != 'member' %}
+  {% if view_mode == 'center' and ns.cur_center != '' %}
   <tfoot>
     <tr style="background:#dce8f8;font-weight:700;">
       <td colspan="9" class="text-end">Group {{ ns.cur_center }} Total:</td>
@@ -104,6 +169,17 @@
     </tr>
   </tfoot>
   </table></div></div>
+  {% elif view_mode != 'center' %}
+  </tbody>
+  <tfoot>
+    <tr style="background:#dce8f8;font-weight:700;">
+      <td colspan="9" class="text-end">Grand Total:</td>
+      <td style="color:blue;">{{ '{:,.0f}'.format(ns.g_amt) }}</td>
+      <td colspan="1"></td>
+    </tr>
+  </tfoot>
+  </table></div></div>
+  {% endif %}
 
   <div class="form-card">
     <div class="section-title">Grand Total</div>
@@ -116,6 +192,7 @@
       </tbody>
     </table>
   </div>
+{% endif %}
 {% endif %}
 
 {% endblock %}
