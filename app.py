@@ -2151,6 +2151,34 @@ def _to_ddmmyyyy(s):
     return s
 
 
+def _coerce_week_type(value):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _build_period_filter(from_date, to_date, column_name):
+    from_iso = _to_iso(from_date) if from_date else ''
+    to_iso   = _to_iso(to_date)   if to_date   else ''
+    expr = f"substr({column_name},7,4)||'-'||substr({column_name},4,2)||'-'||substr({column_name},1,2)"
+    parts, params = [], []
+    if from_iso:
+        parts.append(f"{expr} >= ?")
+        params.append(from_iso)
+    if to_iso:
+        parts.append(f"{expr} <= ?")
+        params.append(to_iso)
+    clause = ' AND '.join(parts) if parts else '1=1'
+    return clause, tuple(params)
+
+
 def _is_recovery_posting_due(posting_date, disbursement_date, meeting_day=None):
     """Return True when a loan should appear for recovery posting on the given date."""
     try:
@@ -4542,9 +4570,13 @@ def report_glance():
     db = get_db()
     from_date = request.args.get('from_date', '')
     to_date   = request.args.get('to_date', '')
+    week_type = _coerce_week_type(request.args.get('week_type', ''))
     from_iso  = _to_iso(from_date) if from_date else ''
     to_iso    = _to_iso(to_date)   if to_date   else ''
     centers   = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
+    week_types = db.execute(
+        "SELECT DISTINCT tenure_weeks FROM loan_types WHERE active=1 AND tenure_weeks IS NOT NULL AND tenure_weeks != '' ORDER BY tenure_weeks"
+    ).fetchall()
 
     def ic(col):
         return f"substr({col},7,4)||'-'||substr({col},4,2)||'-'||substr({col},1,2)"
@@ -4563,9 +4595,15 @@ def report_glance():
             if from_iso: parts.append(f'{expr} >= ?'); ps.append(from_iso)
             if to_iso:   parts.append(f'{expr} <= ?'); ps.append(to_iso)
             return (' AND '.join(parts) if parts else '1=1'), tuple(ps)
-        # 'close'
         if not to_iso: return '1=1', ()
         return f'{expr} <= ?', (to_iso,)
+
+    def apply_week_filter(where_clause, params):
+        if week_type is None:
+            return where_clause, params
+        if where_clause == '1=1':
+            return 'COALESCE(lt.tenure_weeks, 0)=?', [*params, week_type]
+        return f'{where_clause} AND COALESCE(lt.tenure_weeks, 0)=?', [*params, week_type]
 
     def mem_count(period):
         c, p = dc('m.date_of_join', period)
@@ -4573,9 +4611,11 @@ def report_glance():
 
     def borrowers(period):
         c, p = dc('ld.disbursement_date', period)
+        c, p = apply_week_filter(c, list(p))
         return scalar(
             f'SELECT COUNT(DISTINCT la.member_id) FROM loan_disbursements ld '
-            f'LEFT JOIN loan_applications la ON ld.application_id=la.id WHERE {c}', p)
+            f'LEFT JOIN loan_applications la ON ld.application_id=la.id '
+            f'LEFT JOIN loan_types lt ON la.loan_type_id=lt.id WHERE {c}', p)
 
     def mem_fee(period):
         c, p = dc('m.date_of_join', period)
@@ -4583,22 +4623,36 @@ def report_glance():
 
     def disb_count(period):
         c, p = dc('ld.disbursement_date', period)
-        return scalar(f'SELECT COUNT(*) FROM loan_disbursements ld WHERE {c}', p)
+        c, p = apply_week_filter(c, list(p))
+        return scalar(
+            f'SELECT COUNT(*) FROM loan_disbursements ld '
+            f'LEFT JOIN loan_applications la ON ld.application_id=la.id '
+            f'LEFT JOIN loan_types lt ON la.loan_type_id=lt.id WHERE {c}', p)
 
     def disb_amt(period):
         c, p = dc('ld.disbursement_date', period)
-        return scalar(f'SELECT COALESCE(SUM(ld.disbursed_amount),0) FROM loan_disbursements ld WHERE {c}', p)
+        c, p = apply_week_filter(c, list(p))
+        return scalar(
+            f'SELECT COALESCE(SUM(ld.disbursed_amount),0) FROM loan_disbursements ld '
+            f'LEFT JOIN loan_applications la ON ld.application_id=la.id '
+            f'LEFT JOIN loan_types lt ON la.loan_type_id=lt.id WHERE {c}', p)
 
     def la_sum(field, period):
         c, p = dc('ld.disbursement_date', period)
+        c, p = apply_week_filter(c, list(p))
         return scalar(
             f'SELECT COALESCE(SUM(la.{field}),0) FROM loan_disbursements ld '
-            f'LEFT JOIN loan_applications la ON ld.application_id=la.id WHERE {c}', p)
+            f'LEFT JOIN loan_applications la ON ld.application_id=la.id '
+            f'LEFT JOIN loan_types lt ON la.loan_type_id=lt.id WHERE {c}', p)
 
     def rp_sum(field, period):
         c, p = dc('rp.posting_date', period)
+        c, p = apply_week_filter(c, list(p))
         return scalar(
             f'SELECT COALESCE(SUM(rp.{field}),0) FROM recovery_postings rp '
+            f'JOIN loan_disbursements ld ON rp.disbursement_id=ld.id '
+            f'LEFT JOIN loan_applications la ON ld.application_id=la.id '
+            f'LEFT JOIN loan_types lt ON la.loan_type_id=lt.id '
             f'WHERE rp.installment_no>0 AND {c}', p)
 
     def save_dep(period):
@@ -4636,6 +4690,7 @@ def report_glance():
     total_centers   = scalar("SELECT COUNT(*) FROM centers WHERE active=1")
     total_withdrawn = scalar("SELECT COUNT(*) FROM members WHERE status='WITHDRAWN'")
     loans_closed    = scalar("SELECT COUNT(*) FROM loan_disbursements WHERE status='Closed'")
+    centers_added_during = 0
 
     rows = []
     def R(sno, name, o, d, cl=None):
@@ -4643,7 +4698,7 @@ def report_glance():
         rows.append({'sno': sno, 'name': name, 'opening': o, 'during': d, 'closing': cl})
 
     # ── 1 No. Of Centers ──────────────────────────────────────────────────────
-    R(1, 'No. Of Centers', 0, total_centers, total_centers)
+    R(1, 'No. Of Centers', total_centers, centers_added_during, total_centers)
     # ── 2 Members Enrolled ────────────────────────────────────────────────────
     mo = mem_count('open'); md = mem_count('during'); mc = mem_count('close')
     R(2, 'Members Enrolled', mo, md, mc)
@@ -4713,7 +4768,8 @@ def report_glance():
 
     db.close()
     return render_template('reports/glance_report.html', rows=rows, centers=centers,
-                           from_date=from_date, to_date=to_date)
+                           from_date=from_date, to_date=to_date, week_types=week_types,
+                           week_type=week_type)
 
 @app.route('/reports/passbook')
 @login_required

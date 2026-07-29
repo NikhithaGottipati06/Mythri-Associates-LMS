@@ -8,6 +8,9 @@
     {% if from_date or to_date %}
       – {{ from_date or 'Beginning' }} to {{ to_date or 'Date' }}
     {% endif %}
+    {% if week_type %}
+      – {{ week_type }} Weeks
+    {% endif %}
   </h5>
 </div>
 
@@ -29,6 +32,15 @@
     <div class="col-md-2">
       <label class="form-label">To Date</label>
       <input type="text" name="to_date" class="form-control form-control-sm" value="{{ to_date }}" placeholder="DD/MM/YYYY">
+    </div>
+    <div class="col-md-2">
+      <label class="form-label">Week Type</label>
+      <select name="week_type" class="form-select form-select-sm">
+        <option value="">All</option>
+        {% for wt in week_types %}
+        <option value="{{ wt.tenure_weeks }}" {% if week_type == wt.tenure_weeks %}selected{% endif %}>{{ wt.tenure_weeks }} Weeks</option>
+        {% endfor %}
+      </select>
     </div>
     <div class="col-auto"><button type="submit" class="btn btn-primary btn-sm">Filter</button></div>
   </div>
