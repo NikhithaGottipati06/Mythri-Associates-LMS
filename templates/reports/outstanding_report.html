@@ -83,104 +83,97 @@
   </div>
 </div>
 {% else %}
-{% set ns = namespace(cur_center='', sno=0, g_loan=0, g_os=0, total_loan=0, total_os=0) %}
-
+{% set ns = namespace(center_rows=[], seen_centers={}) %}
 {% for d in data %}
   {% set os = [d.outstanding, 0]|max %}
-  {% if view_mode == 'center' and d.center_code != ns.cur_center %}
-    {% if ns.cur_center != '' %}
-    <tfoot>
-      <tr style="background:#dce8f8;font-weight:700;">
-        <td colspan="5" class="text-end">{{ ns.cur_center }} Total:</td>
-        <td style="color:blue;">{{ '{:,.0f}'.format(ns.g_loan) }}</td>
-        <td style="color:#dc3545;">{{ '{:,.2f}'.format(ns.g_os) }}</td>
-      </tr>
-    </tfoot>
-    </table></div></div>
+  {% if view_mode == 'center' %}
+    {% set center_key = d.center_code ~ '|' ~ d.center_name %}
+    {% if center_key not in ns.seen_centers %}
+      {% set _ = ns.seen_centers.update({center_key: {'center_code': d.center_code, 'center_name': d.center_name, 'member_count': 0, 'loan_amount': 0, 'outstanding': 0}}) %}
     {% endif %}
-    {% set ns.cur_center = d.center_code %}
-    {% set ns.sno = 0 %}
-    {% set ns.g_loan = 0 %}{% set ns.g_os = 0 %}
-    <div class="form-card mb-2">
-    <div class="print-info" style="font-weight:700;margin-bottom:4px;">{{ d.center_code }} / {{ d.center_name }}</div>
-    <div class="section-title no-print">{{ d.center_code }} / {{ d.center_name }}</div>
-    <div style="overflow-x:auto;">
-    <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:700px;">
-      <thead>
-        <tr>
-          <th>S.No</th><th>Center Code</th><th>Center Name</th><th>Member Code</th><th>Member Name</th>
-          <th>Loan Amount</th><th>Outstanding</th>
-        </tr>
-      </thead>
-      <tbody>
+    {% set center_row = ns.seen_centers[center_key] %}
+    {% set _ = center_row.update({'member_count': center_row.member_count + 1, 'loan_amount': center_row.loan_amount + d.disbursed_amount, 'outstanding': center_row.outstanding + os}) %}
+    {% set _ = ns.seen_centers.update({center_key: center_row}) %}
   {% endif %}
-
-  {% if view_mode != 'center' %}
-    {% if loop.first %}
-    <div class="form-card mb-2">
-    <div style="overflow-x:auto;">
-    <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:700px;">
-      <thead>
-        <tr>
-          <th>S.No</th><th>Center Code</th><th>Center Name</th><th>Member Code</th><th>Member Name</th>
-          <th>Loan Amount</th><th>Outstanding</th>
-        </tr>
-      </thead>
-      <tbody>
-    {% endif %}
-  {% endif %}
-
-  {% set ns.sno = ns.sno + 1 %}
-  {% set ns.g_loan = ns.g_loan + d.disbursed_amount %}
-  {% set ns.g_os = ns.g_os + os %}
-  {% set ns.total_loan = ns.total_loan + d.disbursed_amount %}
-  {% set ns.total_os = ns.total_os + os %}
-  <tr>
-    <td>{{ ns.sno }}</td>
-    <td>{{ d.center_code }}</td>
-    <td>{{ d.center_name }}</td>
-    <td>{{ d.member_code }}</td>
-    <td>{{ d.member_name }}</td>
-    <td>{{ '{:,.0f}'.format(d.disbursed_amount) }}</td>
-    <td class="fw-semibold {% if os > 0 %}text-danger{% endif %}">{{ '{:,.2f}'.format(os) }}</td>
-  </tr>
-{% else %}
-  <div class="form-card text-center text-muted py-4">No outstanding loans found.</div>
 {% endfor %}
 
-{% if data and view_mode != 'member' %}
-  {% if view_mode == 'center' and ns.cur_center != '' %}
-  <tfoot>
-    <tr style="background:#dce8f8;font-weight:700;">
-      <td colspan="5" class="text-end">{{ ns.cur_center }} Total:</td>
-      <td style="color:blue;">{{ '{:,.0f}'.format(ns.g_loan) }}</td>
-      <td style="color:#dc3545;">{{ '{:,.2f}'.format(ns.g_os) }}</td>
+{% if view_mode == 'center' %}
+<div class="form-card mb-2">
+  <div style="overflow-x:auto;">
+  <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:700px;">
+    <thead>
+      <tr>
+        <th>S.No</th><th>Center Code</th><th>Center Name</th><th>Member Count</th><th>Loan Amount</th><th>Outstanding</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% set ns2 = namespace(sno=0, total_loan=0, total_os=0) %}
+    {% for _, row in ns.seen_centers.items() %}
+      {% set ns2.sno = ns2.sno + 1 %}
+      {% set ns2.total_loan = ns2.total_loan + row.loan_amount %}
+      {% set ns2.total_os = ns2.total_os + row.outstanding %}
+      <tr>
+        <td>{{ ns2.sno }}</td>
+        <td>{{ row.center_code }}</td>
+        <td>{{ row.center_name }}</td>
+        <td>{{ row.member_count }}</td>
+        <td>{{ '{:,.0f}'.format(row.loan_amount) }}</td>
+        <td class="fw-semibold text-danger">{{ '{:,.2f}'.format(row.outstanding) }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="text-center text-muted py-4">No outstanding loans found.</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr style="background:#dce8f8;font-weight:700;">
+        <td colspan="4" class="text-end">Grand Total:</td>
+        <td>{{ '{:,.0f}'.format(ns2.total_loan) }}</td>
+        <td>{{ '{:,.2f}'.format(ns2.total_os) }}</td>
+      </tr>
+    </tfoot>
+  </table>
+  </div>
+</div>
+{% else %}
+<div class="form-card mb-2">
+<div style="overflow-x:auto;">
+<table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:700px;">
+  <thead>
+    <tr>
+      <th>S.No</th><th>Center Code</th><th>Center Name</th><th>Member Code</th><th>Member Name</th>
+      <th>Loan Amount</th><th>Outstanding</th>
     </tr>
-  </tfoot>
-  </table></div></div>
-  {% elif view_mode != 'center' %}
+  </thead>
+  <tbody>
+  {% set ns3 = namespace(sno=0, total_loan=0, total_os=0) %}
+  {% for d in data %}
+    {% set os = [d.outstanding, 0]|max %}
+    {% set ns3.sno = ns3.sno + 1 %}
+    {% set ns3.total_loan = ns3.total_loan + d.disbursed_amount %}
+    {% set ns3.total_os = ns3.total_os + os %}
+    <tr>
+      <td>{{ ns3.sno }}</td>
+      <td>{{ d.center_code }}</td>
+      <td>{{ d.center_name }}</td>
+      <td>{{ d.member_code }}</td>
+      <td>{{ d.member_name }}</td>
+      <td>{{ '{:,.0f}'.format(d.disbursed_amount) }}</td>
+      <td class="fw-semibold {% if os > 0 %}text-danger{% endif %}">{{ '{:,.2f}'.format(os) }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="text-center text-muted py-4">No outstanding loans found.</td></tr>
+  {% endfor %}
   </tbody>
   <tfoot>
     <tr style="background:#dce8f8;font-weight:700;">
       <td colspan="5" class="text-end">Grand Total:</td>
-      <td style="color:blue;">{{ '{:,.0f}'.format(ns.total_loan) }}</td>
-      <td style="color:#dc3545;">{{ '{:,.2f}'.format(ns.total_os) }}</td>
+      <td>{{ '{:,.0f}'.format(ns3.total_loan) }}</td>
+      <td>{{ '{:,.2f}'.format(ns3.total_os) }}</td>
     </tr>
   </tfoot>
-  </table></div></div>
-  {% endif %}
-  <div class="form-card">
-    <div class="section-title">Grand Total</div>
-    <table class="table table-bordered mb-0" style="font-size:12px;">
-      <tbody>
-        <tr class="fw-bold" style="background:#1a3c6e;color:#fff;">
-          <td>Total Active Loans: {{ data|length }}</td>
-          <td>Total Loan Amount: {{ '{:,.0f}'.format(ns.total_loan) }}</td>
-          <td>Total Outstanding: {{ '{:,.2f}'.format(ns.total_os) }}</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+</table>
+</div>
+</div>
 {% endif %}
 {% endif %}
 

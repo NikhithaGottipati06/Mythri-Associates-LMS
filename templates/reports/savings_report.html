@@ -88,108 +88,100 @@
   </div>
 </div>
 {% else %}
-{% set ns = namespace(cur_center='', sno=0, g_deposits=0, g_withdrawals=0, g_balance=0, total_deposits=0, total_withdrawals=0, total_balance=0) %}
-
+{% set ns = namespace(center_rows=[], seen_centers={}) %}
 {% for r in records %}
-  {% if view_mode == 'center' and r.center_code != ns.cur_center %}
-    {% if ns.cur_center != '' %}
-    <tfoot>
-      <tr style="background:#dce8f8;font-weight:700;">
-        <td colspan="4" class="text-end">{{ ns.cur_center }} Total:</td>
-        <td>{{ '{:,.0f}'.format(ns.g_deposits) }}</td>
-        <td>{{ '{:,.0f}'.format(ns.g_withdrawals) }}</td>
-        <td>{{ '{:,.0f}'.format(ns.g_balance) }}</td>
-      </tr>
-    </tfoot>
-    </table></div></div>
+  {% if view_mode == 'center' %}
+    {% set center_key = r.center_code ~ '|' ~ r.center_name %}
+    {% if center_key not in ns.seen_centers %}
+      {% set _ = ns.seen_centers.update({center_key: {'center_code': r.center_code, 'center_name': r.center_name, 'member_count': 0, 'deposits': 0, 'withdrawals': 0, 'balance': 0}}) %}
     {% endif %}
-    {% set ns.cur_center = r.center_code %}
-    {% set ns.sno = 0 %}
-    {% set ns.g_deposits = 0 %}{% set ns.g_withdrawals = 0 %}{% set ns.g_balance = 0 %}
-    <div class="form-card mb-2">
-    <div class="print-info" style="font-weight:700;margin-bottom:4px;">{{ r.center_code }} / {{ r.center_name }}</div>
-    <div class="section-title no-print">{{ r.center_code }} / {{ r.center_name }}</div>
-    <div style="overflow-x:auto;">
-    <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:800px;">
-      <thead>
-        <tr>
-          <th>S.No</th><th>Center Code</th><th>Center Name</th><th>Member Code</th><th>Member Name</th><th>Deposits</th><th>Withdrawals</th><th>Balance</th>
-        </tr>
-      </thead>
-      <tbody>
+    {% set center_row = ns.seen_centers[center_key] %}
+    {% set _ = center_row.update({'member_count': center_row.member_count + 1, 'deposits': center_row.deposits + r.total_deposits, 'withdrawals': center_row.withdrawals + r.total_withdrawals, 'balance': center_row.balance + r.balance}) %}
+    {% set _ = ns.seen_centers.update({center_key: center_row}) %}
   {% endif %}
-
-  {% if view_mode != 'center' %}
-    {% if loop.first %}
-    <div class="form-card mb-2">
-    <div style="overflow-x:auto;">
-    <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:800px;">
-      <thead>
-        <tr>
-          <th>S.No</th><th>Center Code</th><th>Center Name</th><th>Member Code</th><th>Member Name</th><th>Deposits</th><th>Withdrawals</th><th>Balance</th>
-        </tr>
-      </thead>
-      <tbody>
-    {% endif %}
-  {% endif %}
-
-  {% set ns.sno = ns.sno + 1 %}
-  {% set ns.g_deposits = ns.g_deposits + r.total_deposits %}
-  {% set ns.g_withdrawals = ns.g_withdrawals + r.total_withdrawals %}
-  {% set ns.g_balance = ns.g_balance + r.balance %}
-  {% set ns.total_deposits = ns.total_deposits + r.total_deposits %}
-  {% set ns.total_withdrawals = ns.total_withdrawals + r.total_withdrawals %}
-  {% set ns.total_balance = ns.total_balance + r.balance %}
-  <tr>
-    <td>{{ ns.sno }}</td>
-    <td>{{ r.center_code }}</td>
-    <td>{{ r.center_name }}</td>
-    <td>{{ r.member_code }}</td>
-    <td>{{ r.member_name }}</td>
-    <td>{{ '{:,.0f}'.format(r.total_deposits) }}</td>
-    <td>{{ '{:,.0f}'.format(r.total_withdrawals) }}</td>
-    <td class="fw-semibold {% if r.balance >= 0 %}text-success{% else %}text-danger{% endif %}">{{ '{:,.0f}'.format(r.balance) }}</td>
-  </tr>
-{% else %}
-  <div class="form-card text-center text-muted py-4">No savings transactions found.</div>
 {% endfor %}
 
-{% if records and view_mode != 'member' %}
-  {% if view_mode == 'center' and ns.cur_center != '' %}
-  <tfoot>
-    <tr style="background:#dce8f8;font-weight:700;">
-      <td colspan="4" class="text-end">{{ ns.cur_center }} Total:</td>
-      <td>{{ '{:,.0f}'.format(ns.g_deposits) }}</td>
-      <td>{{ '{:,.0f}'.format(ns.g_withdrawals) }}</td>
-      <td>{{ '{:,.0f}'.format(ns.g_balance) }}</td>
+{% if view_mode == 'center' %}
+<div class="form-card mb-2">
+  <div style="overflow-x:auto;">
+  <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:800px;">
+    <thead>
+      <tr>
+        <th>S.No</th><th>Center Code</th><th>Center Name</th><th>Member Count</th><th>Deposits</th><th>Withdrawals</th><th>Balance</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% set ns2 = namespace(sno=0, total_deposits=0, total_withdrawals=0, total_balance=0) %}
+    {% for _, row in ns.seen_centers.items() %}
+      {% set ns2.sno = ns2.sno + 1 %}
+      {% set ns2.total_deposits = ns2.total_deposits + row.deposits %}
+      {% set ns2.total_withdrawals = ns2.total_withdrawals + row.withdrawals %}
+      {% set ns2.total_balance = ns2.total_balance + row.balance %}
+      <tr>
+        <td>{{ ns2.sno }}</td>
+        <td>{{ row.center_code }}</td>
+        <td>{{ row.center_name }}</td>
+        <td>{{ row.member_count }}</td>
+        <td>{{ '{:,.0f}'.format(row.deposits) }}</td>
+        <td>{{ '{:,.0f}'.format(row.withdrawals) }}</td>
+        <td class="fw-semibold {% if row.balance >= 0 %}text-success{% else %}text-danger{% endif %}">{{ '{:,.0f}'.format(row.balance) }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="text-center text-muted py-4">No savings transactions found.</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr style="background:#dce8f8;font-weight:700;">
+        <td colspan="4" class="text-end">Grand Total:</td>
+        <td>{{ '{:,.0f}'.format(ns2.total_deposits) }}</td>
+        <td>{{ '{:,.0f}'.format(ns2.total_withdrawals) }}</td>
+        <td>{{ '{:,.0f}'.format(ns2.total_balance) }}</td>
+      </tr>
+    </tfoot>
+  </table>
+  </div>
+</div>
+{% else %}
+<div class="form-card mb-2">
+<div style="overflow-x:auto;">
+<table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:800px;">
+  <thead>
+    <tr>
+      <th>S.No</th><th>Center Code</th><th>Center Name</th><th>Member Code</th><th>Member Name</th><th>Deposits</th><th>Withdrawals</th><th>Balance</th>
     </tr>
-  </tfoot>
-  </table></div></div>
-  {% elif view_mode != 'center' %}
+  </thead>
+  <tbody>
+  {% set ns3 = namespace(sno=0, total_deposits=0, total_withdrawals=0, total_balance=0) %}
+  {% for r in records %}
+    {% set ns3.sno = ns3.sno + 1 %}
+    {% set ns3.total_deposits = ns3.total_deposits + r.total_deposits %}
+    {% set ns3.total_withdrawals = ns3.total_withdrawals + r.total_withdrawals %}
+    {% set ns3.total_balance = ns3.total_balance + r.balance %}
+    <tr>
+      <td>{{ ns3.sno }}</td>
+      <td>{{ r.center_code }}</td>
+      <td>{{ r.center_name }}</td>
+      <td>{{ r.member_code }}</td>
+      <td>{{ r.member_name }}</td>
+      <td>{{ '{:,.0f}'.format(r.total_deposits) }}</td>
+      <td>{{ '{:,.0f}'.format(r.total_withdrawals) }}</td>
+      <td class="fw-semibold {% if r.balance >= 0 %}text-success{% else %}text-danger{% endif %}">{{ '{:,.0f}'.format(r.balance) }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="8" class="text-center text-muted py-4">No savings transactions found.</td></tr>
+  {% endfor %}
   </tbody>
   <tfoot>
     <tr style="background:#dce8f8;font-weight:700;">
       <td colspan="4" class="text-end">Grand Total:</td>
-      <td>{{ '{:,.0f}'.format(ns.total_deposits) }}</td>
-      <td>{{ '{:,.0f}'.format(ns.total_withdrawals) }}</td>
-      <td>{{ '{:,.0f}'.format(ns.total_balance) }}</td>
+      <td>{{ '{:,.0f}'.format(ns3.total_deposits) }}</td>
+      <td>{{ '{:,.0f}'.format(ns3.total_withdrawals) }}</td>
+      <td>{{ '{:,.0f}'.format(ns3.total_balance) }}</td>
     </tr>
   </tfoot>
-  </table></div></div>
-  {% endif %}
-  <div class="form-card">
-    <div class="section-title">Grand Total</div>
-    <table class="table table-bordered mb-0" style="font-size:12px;">
-      <tbody>
-        <tr class="fw-bold" style="background:#1a3c6e;color:#fff;">
-          <td>Total Members: {{ records|length }}</td>
-          <td>Total Deposits: {{ '{:,.0f}'.format(ns.total_deposits) }}</td>
-          <td>Total Withdrawals: {{ '{:,.0f}'.format(ns.total_withdrawals) }}</td>
-          <td>Net Balance: {{ '{:,.0f}'.format(ns.total_balance) }}</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+</table>
+</div>
+</div>
 {% endif %}
 {% endif %}
 
