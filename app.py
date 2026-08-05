@@ -1694,7 +1694,7 @@ def loan_disburse_new():
 
         member = db.execute("SELECT * FROM members WHERE id=?", (request.form.get('member_id'),)).fetchone()
         lt = db.execute("SELECT * FROM loan_types WHERE id=?", (request.form.get('loan_type_id'),)).fetchone()
-        amount = float(request.form.get('applied_amount', 0))
+        amount = _to_float(request.form.get('applied_amount'), 0)
         tenure = int(lt['tenure_weeks']) if lt else int(request.form.get('tenure_weeks', 50))
         app_date = _to_ddmmyyyy(request.form.get('applied_date', ''))
 
@@ -1787,7 +1787,7 @@ def loan_disburse(aid):
     num = int(last['disbursement_no'][3:]) + 1 if last else 1
     dis_no = f"DIS{num:06d}"
     loan_id = _next_loan_id(db)
-    disbursed_amount = float(request.form.get('disbursed_amount', 0))
+    disbursed_amount = _to_float(request.form.get('disbursed_amount'), 0)
     total_inst = int(request.form.get('total_installments', 50))
     lt_rec = db.execute("""
         SELECT lt.interest_rate, lt.interest_type
@@ -1974,7 +1974,7 @@ def recovery_bulk_post():
         flash(f'Day {posting_date} is closed. Undo Day End first to make changes.', 'danger')
         db.close()
         return redirect(url_for('recovery_posting_list', date=posting_date))
-    savings_amount = float(request.form.get('savings_amount', 100))
+    savings_amount = _to_float(request.form.get('savings_amount'), 100)
     posted = 0
     for did in selected_ids:
         did = int(did)
@@ -2066,7 +2066,7 @@ def recovery_post(did):
               session['user_id']))
         recovery_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
         # Auto-create savings transaction
-        savings_amount = float(request.form.get('savings_amount', 100))
+        savings_amount = _to_float(request.form.get('savings_amount'), 100)
         if savings_amount > 0 and loan['member_id']:
             # Calculate running balance
             prev_balance = db.execute(
@@ -2149,6 +2149,21 @@ def _to_ddmmyyyy(s):
         except ValueError:
             continue
     return s
+
+
+def _to_float(s, default=0.0):
+    """Safely coerce a form value to float; treat empty strings as default."""
+    try:
+        if s is None:
+            return float(default)
+        if isinstance(s, str) and s.strip() == '':
+            return float(default)
+        return float(s)
+    except Exception:
+        try:
+            return float(default)
+        except Exception:
+            return 0.0
 
 
 def _coerce_week_type(value):
@@ -2604,7 +2619,7 @@ def savings_member_info():
 @login_required
 def savings_deposit(mid):
     db = get_db()
-    deposit_amount = float(request.form.get('deposit_amount', 0))
+    deposit_amount = _to_float(request.form.get('deposit_amount'), 0)
     transaction_date = _to_ddmmyyyy(request.form.get('transaction_date', datetime.now().strftime('%d/%m/%Y')))
     if deposit_amount <= 0:
         flash('Invalid deposit amount.', 'danger')
@@ -2629,7 +2644,7 @@ def savings_deposit(mid):
 @login_required
 def savings_withdraw(mid):
     db = get_db()
-    withdraw_amount = float(request.form.get('withdraw_amount', 0))
+    withdraw_amount = _to_float(request.form.get('withdraw_amount'), 0)
     transaction_date = _to_ddmmyyyy(request.form.get('transaction_date', datetime.now().strftime('%d/%m/%Y')))
     # Check available balance
     row = db.execute(
@@ -2815,7 +2830,7 @@ def secure_deposit_account_delete(sdid):
 @login_required
 def secure_deposit_add(mid):
     db = get_db()
-    amount = float(request.form.get('deposit_amount', 0))
+    amount = _to_float(request.form.get('deposit_amount'), 0)
     date = request.form.get('transaction_date', '').strip()
     remarks = request.form.get('remarks', '').strip()
     percentage = float(request.form.get('percentage', 0) or 0)
@@ -2840,7 +2855,7 @@ def secure_deposit_add(mid):
 @login_required
 def secure_deposit_withdraw(mid):
     db = get_db()
-    amount = float(request.form.get('withdraw_amount', 0))
+    amount = _to_float(request.form.get('withdraw_amount'), 0)
     date = request.form.get('transaction_date', '').strip()
     remarks = request.form.get('remarks', '').strip()
     prev = db.execute(
@@ -3088,7 +3103,7 @@ def rd_pay(rdid):
         flash('All installments already paid. RD marked as Closed.', 'warning')
         return redirect(url_for('rd_detail', rdid=rdid))
     transaction_date = request.form.get('transaction_date', '').strip()
-    amount = float(request.form.get('amount', account['installment_amount']))
+    amount = _to_float(request.form.get('amount'), account['installment_amount'])
     remarks = request.form.get('remarks', '').strip()
     if not transaction_date or amount <= 0:
         flash('Invalid date or amount.', 'danger')
@@ -3114,7 +3129,7 @@ def rd_withdraw(rdid):
         flash('RD account not found or already closed.', 'danger')
         db.close()
         return redirect(url_for('rd_list'))
-    amount = float(request.form.get('amount', 0))
+    amount = _to_float(request.form.get('amount'), 0)
     transaction_date = request.form.get('transaction_date', '').strip()
     remarks = request.form.get('remarks', '').strip()
     if amount <= 0 or not transaction_date:
