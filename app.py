@@ -2187,13 +2187,31 @@ def _is_recovery_posting_due(posting_date, disbursement_date, meeting_day=None):
     except Exception:
         return False
 
-    if posting_dt < disbursement_dt + timedelta(days=7):
-        return False
-
+    # If no meeting day is provided, require at least one week gap.
     if not meeting_day:
-        return True
+        return posting_dt >= disbursement_dt + timedelta(days=7)
 
-    return posting_dt.strftime('%A') == meeting_day
+    # Compute the next meeting date AFTER the disbursement date.
+    # If the meeting day is the same weekday as the disbursement, the next meeting
+    # is one week later; otherwise it's the next occurrence of the meeting day
+    # (which may be within 1-6 days). Allow posting on that next meeting (or any
+    # later meeting day), but not earlier.
+    try:
+        target_weekday = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].index(meeting_day)
+    except ValueError:
+        # Fallback to string compare if meeting_day isn't a canonical name
+        return posting_dt.strftime('%A') == meeting_day and posting_dt >= disbursement_dt + timedelta(days=7)
+
+    days_ahead = (target_weekday - disbursement_dt.weekday()) % 7
+    # If the meeting day is the same weekday, schedule to the following week.
+    # Also treat a meeting that occurs the very next day as the following week's
+    # meeting so that very-late-in-week disbursements don't get the immediate
+    # next meeting posted.
+    if days_ahead == 0 or days_ahead == 1:
+        days_ahead = 7
+    next_meeting = disbursement_dt + timedelta(days=days_ahead)
+
+    return posting_dt.strftime('%A') == meeting_day and posting_dt >= next_meeting
 
 def _days_since(date_str):
     """Days from DD/MM/YYYY date to today."""
@@ -4690,7 +4708,6 @@ def report_glance():
     total_centers   = scalar("SELECT COUNT(*) FROM centers WHERE active=1")
     total_withdrawn = scalar("SELECT COUNT(*) FROM members WHERE status='WITHDRAWN'")
     loans_closed    = scalar("SELECT COUNT(*) FROM loan_disbursements WHERE status='Closed'")
-    centers_added_during = 0
 
     rows = []
     def R(sno, name, o, d, cl=None):
@@ -4698,7 +4715,7 @@ def report_glance():
         rows.append({'sno': sno, 'name': name, 'opening': o, 'during': d, 'closing': cl})
 
     # ── 1 No. Of Centers ──────────────────────────────────────────────────────
-    R(1, 'No. Of Centers', total_centers, centers_added_during, total_centers)
+    R(1, 'No. Of Centers', 0, total_centers, total_centers)
     # ── 2 Members Enrolled ────────────────────────────────────────────────────
     mo = mem_count('open'); md = mem_count('during'); mc = mem_count('close')
     R(2, 'Members Enrolled', mo, md, mc)
