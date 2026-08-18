@@ -4848,9 +4848,9 @@ def report_glance():
     else:
         next_prin = 0
         next_int = 0
-    R(18, 'Prin Due Next Period', next_prin, 0, next_prin)
+    R(18, 'Prin Due Next Period', 0, next_prin, next_prin)
     # ── 19 Int Due Next Period ────────────────────────────────────────────────
-    R(19, 'Int Due Next Period', next_int, 0, next_int)
+    R(19, 'Int Due Next Period', 0, next_int, next_int)
     # ── 20 Arrear Loans ───────────────────────────────────────────────────────
     R(20, 'Arrear Loans', arrear_count('open'), arrear_count('during'), arrear_count('close'))
     # ── 21 Arrear Prin ────────────────────────────────────────────────────────
