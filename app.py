@@ -3784,10 +3784,22 @@ def report_collection_sheet():
         total_int = rate if itype == 'Fixed' else amt * rate / 100
         d['int_per_inst'] = round(total_int / tenure, 2) if tenure else 0
         loans.append(d)
+    # Compute grand totals for prin/int due to avoid Jinja arithmetic issues
+    grand_prin_due = 0.0
+    grand_int_due = 0.0
+    for l in loans:
+        ti = float(l.get('disbursed_amount') or 0)
+        inst = int(l.get('total_installments') or 0)
+        if inst:
+            grand_prin_due += (ti / inst)
+        grand_int_due += float(l.get('int_per_inst') or 0)
+    grand_total_due = grand_prin_due + grand_int_due
     centers = db.execute("SELECT id, center_code, center_name FROM centers WHERE active=1").fetchall()
     db.close()
     return render_template('reports/collection_sheet.html', loans=loans, centers=centers,
-                           center_filter=center_filter, report_date=report_date)
+                           center_filter=center_filter, report_date=report_date,
+                           grand_prin_due=grand_prin_due, grand_int_due=grand_int_due,
+                           grand_total_due=grand_total_due)
 
 @app.route('/reports/summary-sheet')
 @login_required

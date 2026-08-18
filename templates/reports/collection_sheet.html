@@ -156,13 +156,9 @@
       <tr class="fw-bold" style="background:#1a3c6e;color:#fff;">
         {% set g_loan = loans | sum(attribute='disbursed_amount') %}
         {% set g_paid = loans | sum(attribute='total_paid') %}
-        {% set g_prin = 0 %}
-        {% set g_int = 0 %}
-        {% for l in loans %}
-          {% set g_prin = g_prin + ((l.disbursed_amount / l.total_installments) if l.total_installments else 0) %}
-          {% set g_int = g_int + (l.int_per_inst or 0) %}
-        {% endfor %}
-        {% set g_due = g_prin + g_int %}
+        {% set g_prin = grand_prin_due if grand_prin_due is defined else 0 %}
+        {% set g_int = grand_int_due if grand_int_due is defined else 0 %}
+        {% set g_due = grand_total_due if grand_total_due is defined else (g_prin + g_int) %}
         <td>Total Loans: {{ loans|length }}</td>
         <td>Loan Amount: {{ '{:,.0f}'.format(g_loan) }}</td>
         <td>OS Amount: {{ '{:,.2f}'.format(g_loan - g_paid) }}</td>
