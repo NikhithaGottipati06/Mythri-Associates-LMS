@@ -45,7 +45,7 @@
     <thead>
       <tr>
         <th>S.No</th><th>Center Code</th><th>Center Name</th>
-        <th>Mem Code</th><th>Member Name</th><th>DOB</th><th>Phone</th>
+        <th>Mem Code</th><th>Member Name</th><th>Spouse/Guardian</th><th>DOB</th><th>Phone</th>
       </tr>
     </thead>
     <tbody>
@@ -56,6 +56,7 @@
         <td>{{ m.center_name }}</td>
         <td class="fw-semibold text-primary">{{ m.member_code }}</td>
         <td class="fw-semibold">{{ m.full_name }}</td>
+        <td>{{ m.spouse_name or m.guardian_name or '—' }}</td>
         <td>{{ m.date_of_birth or '—' }}</td>
         <td>{{ m.phone1 or '—' }}</td>
       </tr>

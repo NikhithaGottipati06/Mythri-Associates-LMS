@@ -47,9 +47,9 @@
         <th>S.No</th><th>Loan ID</th><th>Member Code</th><th>Member Name</th><th>Center</th>
         <th>Loan Type</th><th>Week Type</th><th>Disb. Date</th><th>Loan Amt</th>
         <th>Paid</th><th>Paid Inst.</th><th>Principal</th><th>Interest</th>
-      </tr>
-    </thead>
-    <tbody>
+      <tr>
+        <th>S.No</th><th>Loan ID</th><th>Member Code</th><th>Member Name</th><th>Spouse/Guardian</th><th>Center</th>
+        <th>Loan Type</th><th>Week Type</th><th>Disb. Date</th><th>Loan Amt</th>
     {% set ns = namespace(sno=0, t_loan=0, t_paid=0, t_prin=0, t_int=0) %}
     {% for r in data %}
       {% set ns.sno = ns.sno + 1 %}
@@ -62,6 +62,7 @@
         <td class="fw-semibold text-primary">{{ r.loan_id or '—' }}</td>
         <td>{{ r.member_code }}</td>
         <td>{{ r.member_name }}</td>
+        <td>{{ r.spouse_name or r.guardian_name or '—' }}</td>
         <td>{{ r.center_code }} / {{ r.center_name }}</td>
         <td>{{ r.loan_type_name or '—' }}</td>
         <td>{{ r.tenure_weeks or '—' }}</td>

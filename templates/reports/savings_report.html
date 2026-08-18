@@ -53,7 +53,7 @@
   <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:900px;">
     <thead>
       <tr>
-        <th>S.No</th><th>Member Code</th><th>Member Name</th><th>Center</th><th>Deposits</th><th>Withdrawals</th><th>Balance</th>
+        <th>S.No</th><th>Member Code</th><th>Member Name</th><th>Spouse/Guardian</th><th>Center</th><th>Deposits</th><th>Withdrawals</th><th>Balance</th>
       </tr>
     </thead>
     <tbody>
@@ -67,6 +67,7 @@
         <td>{{ ns.sno }}</td>
         <td>{{ r.member_code }}</td>
         <td>{{ r.member_name }}</td>
+        <td>{{ r.spouse_name or r.guardian_name or '—' }}</td>
         <td>{{ r.center_code }} / {{ r.center_name }}</td>
         <td>{{ '{:,.0f}'.format(r.total_deposits) }}</td>
         <td>{{ '{:,.0f}'.format(r.total_withdrawals) }}</td>
@@ -147,7 +148,7 @@
 <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:800px;">
   <thead>
     <tr>
-      <th>S.No</th><th>Center Code</th><th>Center Name</th><th>Member Code</th><th>Member Name</th><th>Deposits</th><th>Withdrawals</th><th>Balance</th>
+      <th>S.No</th><th>Center Code</th><th>Center Name</th><th>Member Code</th><th>Member Name</th><th>Spouse/Guardian</th><th>Deposits</th><th>Withdrawals</th><th>Balance</th>
     </tr>
   </thead>
   <tbody>
@@ -163,6 +164,7 @@
       <td>{{ r.center_name }}</td>
       <td>{{ r.member_code }}</td>
       <td>{{ r.member_name }}</td>
+      <td>{{ r.spouse_name or r.guardian_name or '—' }}</td>
       <td>{{ '{:,.0f}'.format(r.total_deposits) }}</td>
       <td>{{ '{:,.0f}'.format(r.total_withdrawals) }}</td>
       <td class="fw-semibold {% if r.balance >= 0 %}text-success{% else %}text-danger{% endif %}">{{ '{:,.0f}'.format(r.balance) }}</td>

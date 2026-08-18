@@ -46,7 +46,7 @@
   <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:800px;">
     <thead>
       <tr>
-        <th>S.No</th><th>Date</th><th>Loan ID</th><th>Mem Code</th><th>Member Name</th>
+        <th>S.No</th><th>Date</th><th>Loan ID</th><th>Mem Code</th><th>Member Name</th><th>Spouse/Guardian</th>
         <th>Center</th><th>Amount</th><th>Mode</th><th>Narration</th>
       </tr>
     </thead>
@@ -61,6 +61,7 @@
         <td class="text-primary fw-semibold">{{ r.loan_id or '—' }}</td>
         <td>{{ r.member_code }}</td>
         <td>{{ r.member_name }}</td>
+        <td>{{ r.spouse_name or r.guardian_name or '—' }}</td>
         <td>{{ r.center_code }}</td>
         <td class="fw-semibold text-success">{{ '{:,.2f}'.format(r.amount or 0) }}</td>
         <td>{{ r.mode }}</td>

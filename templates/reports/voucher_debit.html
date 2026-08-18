@@ -146,7 +146,7 @@
   <table class="table table-bordered table-sm mb-0" style="font-size:11px;">
     <thead>
       <tr style="background:#eaf0fb;">
-        <th>S.No</th><th>Date</th><th>Loan ID</th><th>Mem Code</th><th>Member Name</th>
+        <th>S.No</th><th>Date</th><th>Loan ID</th><th>Mem Code</th><th>Member Name</th><th>Spouse/Guardian</th>
         <th>Center</th><th>Mode</th><th class="text-end">Disbursed</th>
       </tr>
     </thead>
@@ -160,6 +160,7 @@
         <td class="text-primary fw-semibold">{{ r.loan_id or r.disbursement_no }}</td>
         <td>{{ r.member_code }}</td>
         <td>{{ r.member_name }}</td>
+        <td>{{ r.spouse_name or r.guardian_name or '—' }}</td>
         <td>{{ r.center_code }}</td>
         <td>{{ r.mode or 'Cash' }}</td>
         <td class="text-end text-danger fw-semibold">{{ '{:,.2f}'.format(r.disbursed_amount or 0) }}</td>
@@ -180,7 +181,7 @@
   <table class="table table-bordered table-sm mb-0" style="font-size:11px;">
     <thead>
       <tr style="background:#fff3cd;">
-        <th>S.No</th><th>Date</th><th>Mem Code</th><th>Member Name</th>
+        <th>S.No</th><th>Date</th><th>Mem Code</th><th>Member Name</th><th>Spouse/Guardian</th>
         <th>Center</th><th class="text-end">Amount Withdrawn</th>
       </tr>
     </thead>
@@ -193,6 +194,7 @@
         <td>{{ r.transaction_date }}</td>
         <td>{{ r.member_code }}</td>
         <td>{{ r.member_name }}</td>
+        <td>{{ r.spouse_name or r.guardian_name or '—' }}</td>
         <td>{{ r.center_code }}</td>
         <td class="text-end text-danger fw-semibold">{{ '{:,.2f}'.format(r.withdraw_amount or 0) }}</td>
       </tr>
@@ -246,7 +248,7 @@
   <table class="table table-bordered table-sm mb-0" style="font-size:11px;">
     <thead>
       <tr style="background:#f8d7da;">
-        <th>S.No</th><th>Date</th><th>Mem Code</th><th>Member Name</th>
+        <th>S.No</th><th>Date</th><th>Mem Code</th><th>Member Name</th><th>Spouse/Guardian</th>
         <th>Center</th><th>Narration</th><th class="text-end">Amount</th>
       </tr>
     </thead>
@@ -259,6 +261,7 @@
         <td>{{ r.withdraw_date }}</td>
         <td>{{ r.member_code }}</td>
         <td>{{ r.member_name }}</td>
+        <td>{{ r.spouse_name or r.guardian_name or '—' }}</td>
         <td>{{ r.center_code }}</td>
         <td>{{ r.narration or '—' }}</td>
         <td class="text-end text-danger fw-semibold">{{ '{:,.2f}'.format(r.amount or 0) }}</td>

@@ -1399,7 +1399,7 @@ def loan_applications_list():
     db.commit()
 
     apps = db.execute("""
-        SELECT la.*, m.full_name as member_name, m.member_code,
+        SELECT la.*, m.full_name as member_name, m.member_code, m.spouse_name, m.guardian_name,
                c.center_name, c.center_code as c_code, c.meeting_type as center_type,
                lt.loan_type_name,
                ld.disbursement_date, ld.loan_id,
@@ -1586,14 +1586,14 @@ def loan_applications_delete(aid):
 def loan_approvals_list():
     db = get_db()
     pending = db.execute("""
-        SELECT la.*, m.full_name as member_name, m.member_code, lt.loan_type_name
+        SELECT la.*, m.full_name as member_name, m.member_code, m.spouse_name, m.guardian_name, lt.loan_type_name
         FROM loan_applications la
         LEFT JOIN members m ON la.member_id=m.id
         LEFT JOIN loan_types lt ON la.loan_type_id=lt.id
         WHERE la.status='Pending' ORDER BY la.id DESC
     """).fetchall()
     approved = db.execute("""
-        SELECT la.*, m.full_name as member_name, m.member_code, lt.loan_type_name,
+        SELECT la.*, m.full_name as member_name, m.member_code, m.spouse_name, m.guardian_name, lt.loan_type_name,
                u.full_name as approved_by_name, apr.approved_amount, apr.approved_date
         FROM loan_applications la
         LEFT JOIN members m ON la.member_id=m.id
@@ -1664,7 +1664,7 @@ def loan_disbursement_list():
         ORDER BY la.id DESC
     """).fetchall()
     disbursed = db.execute("""
-        SELECT ld.*, la.application_no, m.full_name as member_name, m.member_code,
+        SELECT ld.*, la.application_no, m.full_name as member_name, m.member_code, m.spouse_name, m.guardian_name,
                lt.loan_type_name, lt.interest_rate, lt.interest_type, la.loan_cycle,
                u.full_name as disbursed_by_name
         FROM loan_disbursements ld
@@ -3743,8 +3743,9 @@ def report_collection_sheet():
     except Exception:
         day_of_week = None
     where_extra = ""
-    # params: first entry is report_date for the total_paid subquery, then optional WHERE filter
-    params = [report_date]
+    # params: first two entries are report_date iso for subqueries, then optional WHERE filter
+    report_iso = _to_iso(report_date)
+    params = [report_iso, report_iso]
     if center_filter:
         where_extra = " AND la.center_id=?"
         params.append(center_filter)
@@ -3753,13 +3754,14 @@ def report_collection_sheet():
         params.append(day_of_week)
     rows = db.execute("""
         SELECT ld.*, la.application_no, la.purpose, la.loan_cycle,
-               m.full_name as member_name, m.member_code, m.grp, m.phone1,
+               m.full_name as member_name, m.member_code, m.grp, m.phone1, m.spouse_name, m.guardian_name,
                c.center_name, c.center_code, c.meeting_week,
                lt.loan_type_name, lt.interest_rate, lt.interest_type,
                u.full_name as staff_name,
-               (SELECT COALESCE(SUM(rp.paid_amount),0) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0 AND rp.posting_date=?) as total_paid,
+               (SELECT COALESCE(SUM(rp.paid_amount),0) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0 AND substr(rp.posting_date,7,4)||'-'||substr(rp.posting_date,4,2)||'-'||substr(rp.posting_date,1,2)=?) as total_paid,
                (SELECT COALESCE(SUM(rp.principal),0) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0) as principal_paid,
                (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0) as paid_count,
+               (SELECT COUNT(*) FROM recovery_postings rp WHERE rp.disbursement_id=ld.id AND rp.installment_no > 0 AND substr(rp.posting_date,7,4)||'-'||substr(rp.posting_date,4,2)||'-'||substr(rp.posting_date,1,2) <= ?) as installments_paid,
                (SELECT COALESCE(SUM(ar.amount),0) FROM advance_recoveries ar WHERE ar.disbursement_id=ld.id) as advance_total
         FROM loan_disbursements ld
         LEFT JOIN loan_applications la ON ld.application_id=la.id
@@ -4721,8 +4723,11 @@ def report_glance():
         return scalar(f'SELECT COALESCE(SUM(ar.amount),0) FROM advance_recoveries ar WHERE {c}', p)
 
     total_centers   = scalar("SELECT COUNT(*) FROM centers WHERE active=1")
-    total_withdrawn = scalar("SELECT COUNT(*) FROM members WHERE status='WITHDRAWN'")
     loans_closed    = scalar("SELECT COUNT(*) FROM loan_disbursements WHERE status='Closed'")
+
+    def withdrawn(period):
+        c, p = dc('m.date_of_join', period)
+        return scalar(f"SELECT COUNT(*) FROM members m WHERE status='WITHDRAWN' AND {c}", p)
 
     rows = []
     def R(sno, name, o, d, cl=None):
@@ -4735,9 +4740,10 @@ def report_glance():
     mo = mem_count('open'); md = mem_count('during'); mc = mem_count('close')
     R(2, 'Members Enrolled', mo, md, mc)
     # ── 3 Members Withdrawn ───────────────────────────────────────────────────
-    R(3, 'Members Withdrawn', 0, total_withdrawn, total_withdrawn)
+    wo = withdrawn('open'); wd = withdrawn('during'); wc = withdrawn('close')
+    R(3, 'Members Withdrawn', wo, wd, wc)
     # ── 4 Net Members ─────────────────────────────────────────────────────────
-    R(4, 'Net Members', mo, md, mc - total_withdrawn)
+    R(4, 'Net Members', mo - wo, md - wd, mc - wc)
     # ── 5 Borrowers ───────────────────────────────────────────────────────────
     R(5, 'Borrowers', borrowers('open'), borrowers('during'), borrowers('close'))
     # ── 6 Member Joining Fee ──────────────────────────────────────────────────

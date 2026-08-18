@@ -55,8 +55,8 @@
   <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:1000px;">
     <thead>
       <tr>
-        <th>S.No</th><th>Center Code</th><th>Center Name</th><th>Member Code</th><th>Member Name</th><th>Loan ID</th><th>Issue Date</th><th>Loan Amount</th>
-      </tr>
+          <th>S.No</th><th>Center Code</th><th>Center Name</th><th>Member Code</th><th>Member Name</th><th>Spouse/Guardian</th><th>Loan ID</th><th>Issue Date</th><th>Loan Amount</th>
+        </tr>
     </thead>
     <tbody>
     {% set ns = namespace(sno=0, total_amt=0) %}
@@ -69,6 +69,7 @@
         <td>{{ r.center_name }}</td>
         <td class="fw-semibold text-primary">{{ r.member_code }}</td>
         <td>{{ r.member_name }}</td>
+        <td>{{ r.spouse_name or r.guardian_name or '—' }}</td>
         <td>{{ r.loan_id or r.application_no or '—' }}</td>
         <td>{{ r.disbursement_date }}</td>
         <td class="fw-semibold">{{ '{:,.0f}'.format(r.disbursed_amount) }}</td>
@@ -139,9 +140,9 @@
 <div style="overflow-x:auto;">
 <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:1100px;">
   <thead>
-    <tr>
+      <tr>
       <th>S.No</th><th>Center Code</th><th>Center Name</th>
-      <th>Member Code</th><th>Member Name</th>
+      <th>Member Code</th><th>Member Name</th><th>Spouse/Guardian</th>
       <th>Nominee Name</th><th>Nominee Relation</th>
       <th>Tenure (Wks)</th><th>Loan Cycle</th>
       <th>Issue Date</th><th>Loan Amount</th>
@@ -158,6 +159,7 @@
       <td>{{ r.center_name }}</td>
       <td class="fw-semibold text-primary">{{ r.member_code }}</td>
       <td>{{ r.member_name }}</td>
+      <td>{{ r.spouse_name or r.guardian_name or '—' }}</td>
       <td>{{ r.nominee_name or '—' }}</td>
       <td>{{ r.nominee_relation or '—' }}</td>
       <td class="text-center">{{ r.total_installments }}</td>

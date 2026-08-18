@@ -49,7 +49,7 @@
   <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:900px;">
     <thead>
       <tr>
-        <th>S.No</th><th>Member Code</th><th>Member Name</th><th>Center</th><th>Loan ID</th><th>Loan Amount</th><th>Outstanding</th>
+        <th>S.No</th><th>Member Code</th><th>Member Name</th><th>Spouse/Guardian</th><th>Center</th><th>Loan ID</th><th>Loan Amount</th><th>Outstanding</th>
       </tr>
     </thead>
     <tbody>
@@ -63,6 +63,7 @@
         <td>{{ ns.sno }}</td>
         <td>{{ d.member_code }}</td>
         <td>{{ d.member_name }}</td>
+        <td>{{ d.spouse_name or d.guardian_name or '—' }}</td>
         <td>{{ d.center_code }} / {{ d.center_name }}</td>
         <td>{{ d.loan_id or '—' }}</td>
         <td>{{ '{:,.0f}'.format(d.disbursed_amount) }}</td>
@@ -140,7 +141,7 @@
 <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:700px;">
   <thead>
     <tr>
-      <th>S.No</th><th>Center Code</th><th>Center Name</th><th>Member Code</th><th>Member Name</th>
+      <th>S.No</th><th>Center Code</th><th>Center Name</th><th>Member Code</th><th>Member Name</th><th>Spouse/Guardian</th>
       <th>Loan Amount</th><th>Outstanding</th>
     </tr>
   </thead>
@@ -157,6 +158,7 @@
       <td>{{ d.center_name }}</td>
       <td>{{ d.member_code }}</td>
       <td>{{ d.member_name }}</td>
+      <td>{{ d.spouse_name or d.guardian_name or '—' }}</td>
       <td>{{ '{:,.0f}'.format(d.disbursed_amount) }}</td>
       <td class="fw-semibold {% if os > 0 %}text-danger{% endif %}">{{ '{:,.2f}'.format(os) }}</td>
     </tr>

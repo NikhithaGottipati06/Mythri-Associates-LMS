@@ -36,7 +36,7 @@
   <table class="table table-bordered table-sm mb-0" style="font-size:11px;min-width:700px;">
     <thead>
       <tr>
-        <th>S.No</th><th>Loan ID</th><th>Mem Code</th><th>Member Name</th>
+        <th>S.No</th><th>Loan ID</th><th>Mem Code</th><th>Member Name</th><th>Spouse/Guardian</th>
         <th>Center</th><th>Total Advance</th>
       </tr>
     </thead>
@@ -50,6 +50,7 @@
         <td class="text-primary fw-semibold">{{ d.loan_id or '—' }}</td>
         <td>{{ d.member_code }}</td>
         <td>{{ d.full_name }}</td>
+        <td>{{ d.spouse_name or d.guardian_name or '—' }}</td>
         <td>{{ d.center_code }} – {{ d.center_name }}</td>
         <td class="fw-semibold">{{ '{:,.2f}'.format(d.total_advance) }}</td>
       </tr>

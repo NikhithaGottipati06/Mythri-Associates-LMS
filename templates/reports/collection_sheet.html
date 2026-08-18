@@ -51,7 +51,7 @@
 {% set ns.cur_center = '' %}
 {% for l in loans %}
   {% set os = l.disbursed_amount - l.principal_paid %}
-  {% set bal_inst = l.total_installments - l.paid_count %}
+  {% set bal_inst = l.total_installments - (l.installments_paid or 0) %}
   {% set prin_due = (l.disbursed_amount / l.total_installments) if l.total_installments else 0 %}
   {% set int_due = l.int_per_inst %}
   {% set total_due = prin_due + int_due %}
@@ -92,8 +92,8 @@
       <table class="table table-hover mb-0" style="min-width:900px;font-size:12px;">
         <thead>
           <tr>
-            <th>S.No</th><th>Mem Code</th><th>Member Name</th><th>Phone</th>
-            <th>Issue Date</th><th>Bal Inst#</th>
+            <th>S.No</th><th>Mem Code</th><th>Member Name</th><th>Spouse</th><th>Guardian</th><th>Phone</th>
+              <th>Weeks Paid</th><th>Issue Date</th><th>Bal Inst#</th>
             <th>Loan Amount</th><th>OS Amount</th><th>Adv Amount</th>
             <th>Prin Due</th><th>Int Due</th><th>Total Due</th><th>Collected Amt</th>
           </tr>
@@ -114,7 +114,10 @@
     <td>{{ ns.sno }}</td>
     <td class="fw-semibold text-primary">{{ l.member_code }}</td>
     <td>{{ l.member_name }}</td>
+    <td>{{ l.spouse_name or '—' }}</td>
+    <td>{{ l.guardian_name or '—' }}</td>
     <td>{{ l.phone1 or '—' }}</td>
+    <td class="text-center">{{ l.installments_paid or 0 }}</td>
     <td>{{ l.disbursement_date }}</td>
     <td class="text-center">{{ bal_inst }}</td>
     <td>{{ '{:,.0f}'.format(l.disbursed_amount) }}</td>

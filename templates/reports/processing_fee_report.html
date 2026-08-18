@@ -79,6 +79,7 @@
           <th>S.No</th>
           <th>Member Code</th>
           <th>Member Name</th>
+          <th>Spouse/Guardian</th>
           <th>Loan ID</th>
           <th>Disburse Date</th>
           <th class="text-end">Processing Fee</th>
@@ -106,6 +107,7 @@
     <td>{{ ns.sno }}</td>
     <td class="fw-semibold text-primary">{{ r.member_code }}</td>
     <td>{{ r.member_name }}</td>
+    <td>{{ r.spouse_name or r.guardian_name or '—' }}</td>
     <td>{{ r.loan_id or r.application_no }}</td>
     <td>{{ r.disbursement_date }}</td>
     <td class="text-end">{{ '{:,.0f}'.format(r.processing_fee or 0) }}</td>

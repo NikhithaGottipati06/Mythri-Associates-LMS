@@ -54,7 +54,7 @@
     <table class="table table-bordered table-sm mb-0" style="font-size:11px;">
       <thead>
         <tr>
-          <th>S.No</th><th>Mem Code</th><th>Member Name</th>
+          <th>S.No</th><th>Mem Code</th><th>Member Name</th><th>Spouse/Guardian</th>
           <th>Join Date</th><th>Birth Date</th><th>Gender</th>
           <th>Marital Status</th><th>Phone</th>
         </tr>
@@ -66,6 +66,7 @@
     <td>{{ ns.sno }}</td>
     <td class="fw-semibold text-primary">{{ m.member_code }}</td>
     <td>{{ m.full_name }}</td>
+    <td>{{ m.spouse_name or m.guardian_name or '—' }}</td>
     <td>{{ m.date_of_join or '—' }}</td>
     <td>{{ m.date_of_birth or '—' }}</td>
     <td>{{ m.gender or '—' }}</td>
