@@ -4690,6 +4690,20 @@ def report_glance():
             f'LEFT JOIN loan_types lt ON la.loan_type_id=lt.id '
             f'WHERE rp.installment_no>0 AND {c}', p)
 
+    # Sum of recovery_postings between arbitrary ISO date range (inclusive)
+    def rp_sum_range(field, start_iso, end_iso):
+        if not start_iso or not end_iso:
+            return 0
+        expr = ic('rp.posting_date')
+        return scalar(
+            f"SELECT COALESCE(SUM(rp.{field}),0) FROM recovery_postings rp "
+            f"JOIN loan_disbursements ld ON rp.disbursement_id=ld.id "
+            f"LEFT JOIN loan_applications la ON ld.application_id=la.id "
+            f"LEFT JOIN loan_types lt ON la.loan_type_id=lt.id "
+            f"WHERE rp.installment_no>0 AND {expr} >= ? AND {expr} <= ?",
+            (start_iso, end_iso)
+        )
+
     def save_dep(period):
         c, p = dc('st.transaction_date', period)
         return scalar(f'SELECT COALESCE(SUM(st.deposit_amount),0) FROM savings_transactions st WHERE {c}', p)
@@ -4783,15 +4797,35 @@ def report_glance():
     # ── 14 Interest Recovery ──────────────────────────────────────────────────
     R(14, 'Interest Recovery', rp_sum('interest','open'), rp_sum('interest','during'), rp_sum('interest','close'))
     # ── 15 Prin Due Current Period ────────────────────────────────────────────
-    R(15, 'Prin Due Current Period', 0, 0, 0)
+    prin_due_o = rp_sum('principal', 'open')
+    prin_due_d = rp_sum('principal', 'during')
+    prin_due_c = rp_sum('principal', 'close')
+    R(15, 'Prin Due Current Period', prin_due_o, prin_due_d, prin_due_c)
     # ── 16 Int Due Current Period ─────────────────────────────────────────────
-    R(16, 'Int Due Current Period', 0, 0, 0)
+    int_due_o = rp_sum('interest', 'open')
+    int_due_d = rp_sum('interest', 'during')
+    int_due_c = rp_sum('interest', 'close')
+    R(16, 'Int Due Current Period', int_due_o, int_due_d, int_due_c)
     # ── 17 Savings Current Period ─────────────────────────────────────────────
     R(17, 'Savings Current Period', save_dep('open'), save_dep('during'), save_dep('close'))
     # ── 18 Prin Due Next Period ───────────────────────────────────────────────
-    R(18, 'Prin Due Next Period', 0, 0, 0)
+    # Define a 'next period' as the week following `to_iso` (7 days). If `to_iso` missing, next-period = 0.
+    next_prin_o = 0; next_prin_d = 0; next_prin_c = 0
+    next_int_o = 0; next_int_d = 0; next_int_c = 0
+    if to_iso:
+        try:
+            nxt_end = (datetime.fromisoformat(to_iso) + timedelta(days=7)).date().isoformat()
+            next_prin = rp_sum_range('principal', (datetime.fromisoformat(to_iso) + timedelta(days=1)).date().isoformat(), nxt_end)
+            next_int = rp_sum_range('interest', (datetime.fromisoformat(to_iso) + timedelta(days=1)).date().isoformat(), nxt_end)
+        except Exception:
+            next_prin = 0
+            next_int = 0
+    else:
+        next_prin = 0
+        next_int = 0
+    R(18, 'Prin Due Next Period', next_prin, 0, next_prin)
     # ── 19 Int Due Next Period ────────────────────────────────────────────────
-    R(19, 'Int Due Next Period', 0, 0, 0)
+    R(19, 'Int Due Next Period', next_int, 0, next_int)
     # ── 20 Arrear Loans ───────────────────────────────────────────────────────
     R(20, 'Arrear Loans', arrear_count('open'), arrear_count('during'), arrear_count('close'))
     # ── 21 Arrear Prin ────────────────────────────────────────────────────────
