@@ -404,6 +404,7 @@ def migrate_branch_db(db_path):
         "ALTER TABLE rd_transactions ADD COLUMN transaction_type TEXT DEFAULT 'Payment'",
         "ALTER TABLE rd_accounts ADD COLUMN maturity_amount REAL DEFAULT 0",
         "ALTER TABLE rd_accounts ADD COLUMN tenure_unit TEXT DEFAULT 'Months'",
+        "ALTER TABLE centers ADD COLUMN created_at TEXT",
         # Fix maturity_amount for existing SD accounts
         "UPDATE sd_accounts SET maturity_amount = sd_amount + sd_amount * roi / 100.0 * (tenure_months / 12.0) WHERE sd_amount > 0",
         "ALTER TABLE tally_vouchers ADD COLUMN type TEXT DEFAULT 'Payment'",
@@ -515,6 +516,17 @@ def migrate_branch_db(db_path):
             )
         except Exception:
             pass
+
+    # Backfill centers.created_at where possible: earliest member.date_of_join per center,
+    # otherwise set to today's date (DD/MM/YYYY). Use SQLite strftime to produce DD/MM/YYYY.
+    try:
+        c.execute("UPDATE centers SET created_at = (SELECT MIN(m.date_of_join) FROM members m WHERE m.center_id = centers.id AND m.date_of_join IS NOT NULL AND m.date_of_join != '') WHERE created_at IS NULL OR created_at = ''")
+    except Exception:
+        pass
+    try:
+        c.execute("UPDATE centers SET created_at = strftime('%d/%m/%Y','now','localtime') WHERE created_at IS NULL OR created_at = ''")
+    except Exception:
+        pass
 
     conn.commit()
     conn.close()
