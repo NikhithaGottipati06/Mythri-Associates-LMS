@@ -4789,8 +4789,8 @@ def report_glance():
     # Align Borrowers with Net Members (enrolled - withdrawn) so counts match when
     # date ranges/filters are applied. If you prefer borrowers to represent distinct
     # loan-holders instead, we can revert to the previous logic.
-    # Show Borrowers equal to Net Members (active members) to avoid off-by-one issues
-    R(5, 'Borrowers', amo, amd, amc)
+    # Borrowers: distinct members with disbursements in the period
+    R(5, 'Borrowers', borrowers('open'), borrowers('during'), borrowers('close'))
     # ── 6 Member Joining Fee ──────────────────────────────────────────────────
     R(6, 'Member Joining Fee', mem_fee('open'), mem_fee('during'), mem_fee('close'))
     # ── 7 Processing Fee ──────────────────────────────────────────────────────
