@@ -61,7 +61,7 @@
     </tbody>
     <tfoot>
       <tr style="background:#dce8f8;font-weight:700;">
-        <td colspan="6" class="text-end">Group {{ ns.cur_center }} Total:</td>
+        <td colspan="8" class="text-end">Group {{ ns.cur_center }} Total:</td>
         <td style="color:blue;">{{ '{:,.0f}'.format(ns.g_loan) }}</td>
         <td style="color:blue;">{{ '{:,.2f}'.format(ns.g_os) }}</td>
         <td>{{ '{:,.2f}'.format(ns.g_adv) }}</td>
@@ -92,7 +92,7 @@
       <table class="table table-hover mb-0" style="min-width:900px;font-size:12px;">
         <thead>
           <tr>
-            <th>S.No</th><th>Mem Code</th><th>Member Name</th><th>Spouse</th><th>Guardian</th><th>Phone</th>
+            <th>S.No</th><th>Mem Code</th><th>Member Name</th><th>Spouse/Guardian</th><th>Phone</th>
               <th>Weeks Paid</th><th>Issue Date</th><th>Bal Inst#</th>
             <th>Loan Amount</th><th>OS Amount</th><th>Adv Amount</th>
             <th>Prin Due</th><th>Int Due</th><th>Total Due</th><th>Collected Amt</th>
@@ -114,8 +114,7 @@
     <td>{{ ns.sno }}</td>
     <td class="fw-semibold text-primary">{{ l.member_code }}</td>
     <td>{{ l.member_name }}</td>
-    <td>{{ l.spouse_name or '—' }}</td>
-    <td>{{ l.guardian_name or '—' }}</td>
+    <td>{{ l.spouse_name or l.guardian_name or '—' }}</td>
     <td>{{ l.phone1 or '—' }}</td>
     <td class="text-center">{{ l.installments_paid or 0 }}</td>
     <td>{{ l.disbursement_date }}</td>
@@ -134,7 +133,7 @@
   </tbody>
   <tfoot>
     <tr style="background:#dce8f8;font-weight:700;">
-      <td colspan="6" class="text-end">Group {{ ns.cur_center }} Total:</td>
+      <td colspan="8" class="text-end">Group {{ ns.cur_center }} Total:</td>
       <td style="color:blue;">{{ '{:,.0f}'.format(ns.g_loan) }}</td>
       <td style="color:blue;">{{ '{:,.2f}'.format(ns.g_os) }}</td>
       <td>{{ '{:,.2f}'.format(ns.g_adv) }}</td>
