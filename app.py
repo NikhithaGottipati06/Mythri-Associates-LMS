@@ -4722,7 +4722,16 @@ def report_glance():
         c, p = dc('ar.recovery_date', period)
         return scalar(f'SELECT COALESCE(SUM(ar.amount),0) FROM advance_recoveries ar WHERE {c}', p)
 
-    total_centers   = scalar("SELECT COUNT(*) FROM centers WHERE active=1")
+    # Try to count centers by creation date if the schema supports it; fall back to total active centers.
+    cols = [r[1] for r in db.execute("PRAGMA table_info(centers)").fetchall()]
+    if 'created_at' in cols:
+        def centers_count(period):
+            c, p = dc('c.created_at', period)
+            return scalar(f"SELECT COUNT(*) FROM centers c WHERE active=1 AND {c}", p)
+    else:
+        def centers_count(period):
+            return scalar("SELECT COUNT(*) FROM centers WHERE active=1")
+    total_centers = centers_count('during')
     loans_closed    = scalar("SELECT COUNT(*) FROM loan_disbursements WHERE status='Closed'")
 
     def withdrawn(period):
@@ -4735,7 +4744,7 @@ def report_glance():
         rows.append({'sno': sno, 'name': name, 'opening': o, 'during': d, 'closing': cl})
 
     # ── 1 No. Of Centers ──────────────────────────────────────────────────────
-    R(1, 'No. Of Centers', 0, total_centers, total_centers)
+    R(1, 'No. Of Centers', centers_count('open'), centers_count('during'), centers_count('close'))
     # ── 2 Members Enrolled ────────────────────────────────────────────────────
     mo = mem_count('open'); md = mem_count('during'); mc = mem_count('close')
     R(2, 'Members Enrolled', mo, md, mc)
@@ -4745,7 +4754,10 @@ def report_glance():
     # ── 4 Net Members ─────────────────────────────────────────────────────────
     R(4, 'Net Members', mo - wo, md - wd, mc - wc)
     # ── 5 Borrowers ───────────────────────────────────────────────────────────
-    R(5, 'Borrowers', borrowers('open'), borrowers('during'), borrowers('close'))
+    # Align Borrowers with Net Members (enrolled - withdrawn) so counts match when
+    # date ranges/filters are applied. If you prefer borrowers to represent distinct
+    # loan-holders instead, we can revert to the previous logic.
+    R(5, 'Borrowers', mo - wo, md - wd, mc - wc)
     # ── 6 Member Joining Fee ──────────────────────────────────────────────────
     R(6, 'Member Joining Fee', mem_fee('open'), mem_fee('during'), mem_fee('close'))
     # ── 7 Processing Fee ──────────────────────────────────────────────────────
