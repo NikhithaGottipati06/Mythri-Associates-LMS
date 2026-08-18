@@ -4658,6 +4658,9 @@ def report_glance():
 
     def mem_active_count(period):
         c, p = dc('m.date_of_join', period)
+        # For the 'close' period use the live active members count (matches dashboard)
+        if period == 'close':
+            return scalar("SELECT COUNT(*) FROM members WHERE COALESCE(status,'ACTIVE')='ACTIVE'")
         return scalar(f"SELECT COUNT(*) FROM members m WHERE {c} AND COALESCE(m.status,'ACTIVE')!='WITHDRAWN'", p)
 
     def borrowers(period):
