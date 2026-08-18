@@ -60,7 +60,8 @@
     </thead>
     <tbody>
     {% for r in rows %}
-      {% set is_money = r.sno in [6,7,8,11,12,13,14,17,21,24,28,29,30] %}
+      {# treat principal/int due (15,16) and next period (18,19) as money too #}
+      {% set is_money = r.sno in [6,7,8,11,12,13,14,15,16,17,18,19,21,24,28,29,30] %}
       {% set is_bold = r.sno in [4,11,13,17,30] %}
       <tr {% if r.sno in [13, 30] %}style="background:#fff3cd;"{% elif r.sno in [4, 11] %}style="background:#e8f0fe;"{% endif %}>
         <td class="text-center text-muted" style="font-size:11px;">{{ r.sno }}</td>
