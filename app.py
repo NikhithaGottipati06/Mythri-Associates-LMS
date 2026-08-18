@@ -4723,6 +4723,39 @@ def report_glance():
             (start_iso, end_iso)
         )
 
+    # Compute expected due sums from loan schedules between two ISO dates (inclusive).
+    def due_sum_range(field, start_iso, end_iso):
+        if not start_iso or not end_iso:
+            return 0
+        s_iso = start_iso
+        e_iso = end_iso
+        total = 0.0
+        # Fetch disbursed loans
+        loans = db.execute("SELECT ld.id, ld.disbursed_amount, ld.disbursement_date, ld.total_installments, lt.interest_rate, lt.interest_type FROM loan_disbursements ld LEFT JOIN loan_applications la ON ld.application_id=la.id LEFT JOIN loan_types lt ON la.loan_type_id=lt.id WHERE ld.status='Disbursed'").fetchall()
+        for L in loans:
+            try:
+                disb_dt = datetime.strptime(L['disbursement_date'], '%d/%m/%Y')
+            except Exception:
+                continue
+            amount = float(L['disbursed_amount'] or 0)
+            tenure = int(L['total_installments'] or 0)
+            rate = float(L['interest_rate'] or 0)
+            itype = L['interest_type'] or 'Percent'
+            total_interest = rate if itype == 'Fixed' else round(amount * rate / 100, 2)
+            if tenure <= 0:
+                continue
+            prin_inst = round(amount / tenure, 2)
+            int_inst = round(total_interest / tenure, 2)
+            # installments are scheduled weekly: due_date = disb_dt + weeks
+            for inst in range(1, tenure + 1):
+                due_date = (disb_dt + timedelta(weeks=inst)).date().isoformat()
+                if due_date >= s_iso and due_date <= e_iso:
+                    if field == 'principal':
+                        total += prin_inst
+                    else:
+                        total += int_inst
+        return total
+
     def save_dep(period):
         c, p = dc('st.transaction_date', period)
         return scalar(f'SELECT COALESCE(SUM(st.deposit_amount),0) FROM savings_transactions st WHERE {c}', p)
@@ -4840,8 +4873,10 @@ def report_glance():
     if to_iso:
         try:
             nxt_end = (datetime.fromisoformat(to_iso) + timedelta(days=7)).date().isoformat()
-            next_prin = rp_sum_range('principal', (datetime.fromisoformat(to_iso) + timedelta(days=1)).date().isoformat(), nxt_end)
-            next_int = rp_sum_range('interest', (datetime.fromisoformat(to_iso) + timedelta(days=1)).date().isoformat(), nxt_end)
+            start_next = (datetime.fromisoformat(to_iso) + timedelta(days=1)).date().isoformat()
+            # Use scheduled due amounts (even if not yet posted)
+            next_prin = due_sum_range('principal', start_next, nxt_end)
+            next_int = due_sum_range('interest', start_next, nxt_end)
         except Exception:
             next_prin = 0
             next_int = 0
