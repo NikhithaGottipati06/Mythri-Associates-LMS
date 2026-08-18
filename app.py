@@ -4785,8 +4785,9 @@ def report_glance():
     wo = withdrawn('open'); wd = withdrawn('during'); wc = withdrawn('close')
     R(3, 'Members Withdrawn', wo, wd, wc)
     # ── 4 Net Members ─────────────────────────────────────────────────────────
-    # Use active member counts (exclude withdrawn) for Net Members
-    amo = mem_active_count('open'); amd = mem_active_count('during'); amc = mem_active_count('close')
+    # Use live active-member counts for all columns so Glance matches the dashboard
+    live_active = scalar("SELECT COUNT(*) FROM members WHERE COALESCE(status,'ACTIVE')='ACTIVE'")
+    amo = live_active; amd = live_active; amc = live_active
     R(4, 'Net Members', amo, amd, amc)
     # ── 5 Borrowers ───────────────────────────────────────────────────────────
     # Align Borrowers with Net Members (enrolled - withdrawn) so counts match when
