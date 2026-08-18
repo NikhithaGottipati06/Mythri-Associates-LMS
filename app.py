@@ -4656,6 +4656,10 @@ def report_glance():
         c, p = dc('m.date_of_join', period)
         return scalar(f'SELECT COUNT(*) FROM members m WHERE {c}', p)
 
+    def mem_active_count(period):
+        c, p = dc('m.date_of_join', period)
+        return scalar(f"SELECT COUNT(*) FROM members m WHERE {c} AND COALESCE(m.status,'ACTIVE')!='WITHDRAWN'", p)
+
     def borrowers(period):
         c, p = dc('ld.disbursement_date', period)
         c, p = apply_week_filter(c, list(p))
@@ -4778,12 +4782,15 @@ def report_glance():
     wo = withdrawn('open'); wd = withdrawn('during'); wc = withdrawn('close')
     R(3, 'Members Withdrawn', wo, wd, wc)
     # ── 4 Net Members ─────────────────────────────────────────────────────────
-    R(4, 'Net Members', mo - wo, md - wd, mc - wc)
+    # Use active member counts (exclude withdrawn) for Net Members
+    amo = mem_active_count('open'); amd = mem_active_count('during'); amc = mem_active_count('close')
+    R(4, 'Net Members', amo, amd, amc)
     # ── 5 Borrowers ───────────────────────────────────────────────────────────
     # Align Borrowers with Net Members (enrolled - withdrawn) so counts match when
     # date ranges/filters are applied. If you prefer borrowers to represent distinct
     # loan-holders instead, we can revert to the previous logic.
-    R(5, 'Borrowers', mo - wo, md - wd, mc - wc)
+    # Show Borrowers equal to Net Members (active members) to avoid off-by-one issues
+    R(5, 'Borrowers', amo, amd, amc)
     # ── 6 Member Joining Fee ──────────────────────────────────────────────────
     R(6, 'Member Joining Fee', mem_fee('open'), mem_fee('during'), mem_fee('close'))
     # ── 7 Processing Fee ──────────────────────────────────────────────────────
