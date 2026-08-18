@@ -980,6 +980,15 @@ def members_new():
             num = 1
         code = f"M{num:04d}"
         try:
+            # Validate KYC uniqueness: normalize to trimmed uppercase string
+            kyc_number = (request.form.get('kyc_number') or '').strip().upper()
+            if kyc_number:
+                existing = db.execute("SELECT id, member_code, full_name FROM members WHERE UPPER(trim(kyc_number)) = ? AND trim(kyc_number) != ''",
+                                      (kyc_number,)).fetchone()
+                if existing:
+                    flash(f'This KYC number is already used by {existing["member_code"]} - {existing["full_name"]}.', 'danger')
+                    db.close()
+                    return redirect(url_for('members_new'))
             _ensure_fee_paid_date_col(db)
             db.execute("""
                 INSERT INTO members (member_code,center_id,grp,full_name,date_of_join,date_of_birth,
@@ -1052,6 +1061,15 @@ def members_edit(mid):
             return redirect(url_for('members_list'))
         try:
             _ensure_fee_paid_date_col(db)
+            # Validate KYC uniqueness on edit: normalize to trimmed uppercase and exclude current member
+            kyc_number = (request.form.get('kyc_number') or '').strip().upper()
+            if kyc_number:
+                existing = db.execute("SELECT id, member_code, full_name FROM members WHERE UPPER(trim(kyc_number)) = ? AND trim(kyc_number) != '' AND id != ?",
+                                      (kyc_number, mid)).fetchone()
+                if existing:
+                    flash(f'This KYC number is already used by {existing["member_code"]} - {existing["full_name"]}.', 'danger')
+                    db.close()
+                    return redirect(url_for('members_edit', mid=mid))
             db.execute("""
                 UPDATE members SET center_id=?,grp=?,full_name=?,date_of_join=?,date_of_birth=?,
                 gender=?,marital_status=?,guardian_name=?,spouse_name=?,caste=?,religion=?,
