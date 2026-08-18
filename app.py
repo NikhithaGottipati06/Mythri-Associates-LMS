@@ -4779,7 +4779,9 @@ def report_glance():
     # ── 1 No. Of Centers ──────────────────────────────────────────────────────
     R(1, 'No. Of Centers', centers_count('open'), centers_count('during'), centers_count('close'))
     # ── 2 Members Enrolled ────────────────────────────────────────────────────
-    mo = mem_count('open'); md = mem_count('during'); mc = mem_count('close')
+    # Use live active-member count so "Members Enrolled" matches dashboard
+    live_members = scalar("SELECT COUNT(*) FROM members WHERE COALESCE(status,'ACTIVE')='ACTIVE'")
+    mo = live_members; md = live_members; mc = live_members
     R(2, 'Members Enrolled', mo, md, mc)
     # ── 3 Members Withdrawn ───────────────────────────────────────────────────
     wo = withdrawn('open'); wd = withdrawn('during'); wc = withdrawn('close')
